@@ -1,9 +1,18 @@
 Options -Indexes
+DirectoryIndex public/index.php
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteCond %{REQUEST_URI} ^/Dashboard/public(?:/(.*))?$
-    RewriteRule ^public/?(.*)$ /dashboard/public/$1 [R=302,L]
-    RewriteCond %{THE_REQUEST} \s/+dashboard/?[\s?] [NC]
-    RewriteRule ^$ /dashboard/public/ [R=302,L]
+
+    # Leave ACME challenges and direct /public requests untouched.
+    RewriteRule ^\.well-known/ - [L]
+    RewriteRule ^public(?:/|$) - [L]
+
+    # Protect private Symfony files when the whole project is uploaded as web root.
+    RewriteRule ^(?:bin|config|migrations|src|templates|tests|translations|var|vendor)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:\.env(?:\..*)?|composer\.(?:json|lock)|symfony\.lock|phpunit(?:\.dist)?\.xml|CLAUDE\.md|implementation_plan\.md|walkthrough\.md)$ - [F,L,NC]
+
+    # Route the domain root through Symfony's public front controller.
+    RewriteRule ^$ public/ [L]
+    RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
