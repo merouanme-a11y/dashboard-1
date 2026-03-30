@@ -7,6 +7,31 @@ use Symfony\Component\HttpKernel\HttpCache\Store;
 require_once dirname(__DIR__).'/vendor/autoload_runtime.php';
 
 return function (array $context) {
+    $projectDir = dirname(__DIR__);
+    $environment = (string) ($context['APP_ENV'] ?? 'prod');
+
+    $directories = [
+        $projectDir . '/var',
+        $projectDir . '/var/cache',
+        $projectDir . '/var/cache/' . $environment,
+        $projectDir . '/var/log',
+        $projectDir . '/var/share',
+        $projectDir . '/var/share/' . $environment,
+        $projectDir . '/var/sessions',
+        $projectDir . '/var/sessions/' . $environment,
+    ];
+
+    foreach ($directories as $directory) {
+        if (!is_dir($directory)) {
+            @mkdir($directory, 0775, true);
+        }
+    }
+
+    $sessionDir = $projectDir . '/var/sessions/' . $environment;
+    if (is_dir($sessionDir) && is_writable($sessionDir)) {
+        @ini_set('session.save_path', $sessionDir);
+    }
+
     $kernel = new Kernel($context['APP_ENV'], (bool) $context['APP_DEBUG']);
     $httpCacheEnabled = filter_var($_SERVER['APP_HTTP_CACHE'] ?? $_ENV['APP_HTTP_CACHE'] ?? true, FILTER_VALIDATE_BOOL);
 
@@ -14,7 +39,7 @@ return function (array $context) {
         return $kernel;
     }
 
-    $storeDir = dirname(__DIR__).'/var/http_cache/'.$context['APP_ENV'];
+    $storeDir = $projectDir . '/var/http_cache/' . $context['APP_ENV'];
     $parentDir = dirname($storeDir);
 
     if (

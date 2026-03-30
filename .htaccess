@@ -4,9 +4,11 @@ DirectoryIndex public/index.php
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Leave ACME challenges and direct /public requests untouched.
+    # Leave ACME challenges untouched.
     RewriteRule ^\.well-known/ - [L]
-    RewriteRule ^public(?:/|$) - [L]
+
+    # Canonicalize accidental /public URLs back to the site root.
+    RewriteRule ^public/?(.*)$ /$1 [R=302,L,NE]
 
     # Protect private Symfony files when the whole project is uploaded as web root.
     RewriteRule ^(?:bin|config|migrations|src|templates|tests|translations|var|vendor)(?:/|$) - [F,L,NC]
