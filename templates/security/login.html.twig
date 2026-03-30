@@ -99,12 +99,14 @@
             {% endif %}
         </div>
 
-        {% for message in app.flashes('success') %}
-            <div class="alert alert-success">{{ message }}</div>
-        {% endfor %}
-        {% for message in app.flashes('danger') %}
-            <div class="alert alert-danger">{{ message }}</div>
-        {% endfor %}
+        {% if session_feedback_available %}
+            {% for message in app.flashes('success') %}
+                <div class="alert alert-success">{{ message }}</div>
+            {% endfor %}
+            {% for message in app.flashes('danger') %}
+                <div class="alert alert-danger">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
 
         {% if error %}
             <div class="alert alert-danger">{{ error.messageKey|trans(error.messageData, 'security') }}</div>
@@ -124,7 +126,9 @@
             <input type="password" name="_password" id="inputPassword" autocomplete="current-password" required placeholder="********">
         </div>
 
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+        {% if login_csrf_token is not empty %}
+            <input type="hidden" name="_csrf_token" value="{{ login_csrf_token }}">
+        {% endif %}
 
         <button class="btn btn-primary btn-block" type="submit">Se connecter</button>
 
