@@ -14,8 +14,20 @@ return function (array $context) {
         return $kernel;
     }
 
-    return new AppCache(
-        $kernel,
-        new Store(dirname(__DIR__).'/var/http_cache/'.$context['APP_ENV'])
-    );
+    $storeDir = dirname(__DIR__).'/var/http_cache/'.$context['APP_ENV'];
+    $parentDir = dirname($storeDir);
+
+    if (
+        (!is_dir($parentDir) && !@mkdir($parentDir, 0775, true) && !is_dir($parentDir))
+        || (!is_dir($storeDir) && !@mkdir($storeDir, 0775, true) && !is_dir($storeDir))
+        || !is_writable($storeDir)
+    ) {
+        return $kernel;
+    }
+
+    try {
+        return new AppCache($kernel, new Store($storeDir));
+    } catch (\Throwable) {
+        return $kernel;
+    }
 };
