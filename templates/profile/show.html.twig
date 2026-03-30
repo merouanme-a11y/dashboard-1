@@ -1,0 +1,596 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mon profil{% endblock %}
+
+{% block body %}
+{% set currentRoute = app.request.attributes.get('_route')|default('app_profile') %}
+{% set profilePageTitle = page_display_service.resolveNavigationLabel(currentRoute, 'Mon profil') %}
+{% set photoUrl = file_upload_service.resolvePublicPath(user.photo|default('')) %}
+{% set currentService = user.service|default('') %}
+{% set currentDepartement = user.departement|default('') %}
+{% set currentAgence = user.agence|default('') %}
+<div class="profile-container">
+    <div class="profile-header">
+        <h1 class="page-title-heading">
+            {{ page_display_service.renderNavigationIcon(currentRoute, 'bi-person', 'bootstrap')|raw }}
+            <span>{{ profilePageTitle }}</span>
+        </h1>
+        {% if app.user and menu_service.canUserAccessRoute(app.user, 'app_profile_create') %}
+            <a href="{{ path('app_profile_create') }}" class="btn btn-primary btn-sm">+ Creer un utilisateur</a>
+        {% endif %}
+    </div>
+
+    {% if is_granted('ROLE_ADMIN') and not isCreateMode and user.id != app.user.id %}
+        <div class="alert alert-info mb-4">
+            Mode edition admin - Modification du profil de {{ user.prenom }} {{ user.nom }}
+        </div>
+    {% endif %}
+
+    <div class="profile-grid">
+        <div class="profile-card">
+            <div class="card-header">
+                <h3>Informations personnelles</h3>
+            </div>
+            <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="update_profile">
+
+                <div class="form-group">
+                    <label for="prenom">Prenom</label>
+                    <input type="text" id="prenom" name="prenom" class="form-control" value="{{ user.prenom|default('') }}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="nom">Nom</label>
+                    <input type="text" id="nom" name="nom" class="form-control" value="{{ user.nom|default('') }}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" class="form-control" value="{{ user.email|default('') }}" required>
+                </div>
+
+                <div class="form-row form-row-three">
+                    <div class="form-group">
+                        <label for="code_postal">Code postal</label>
+                        <input type="text" id="code_postal" name="code_postal" class="form-control" value="{{ user.codePostal|default('') }}">
+                        <small id="code_postal_feedback" class="form-feedback"></small>
+                    </div>
+                    <div class="form-group">
+                        <label for="departement">Departement</label>
+                        <select id="departement" name="departement" class="form-control">
+                            <option value="">-</option>
+                            {% for departement in departementOptions %}
+                                <option value="{{ departement }}" {% if currentDepartement == departement %}selected{% endif %}>{{ departement }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="agence">Agence</label>
+                        <select id="agence" name="agence" class="form-control">
+                            <option value="">-</option>
+                            {% for option in agenceOptions %}
+                                <option value="{{ option.agence }}" data-departement="{{ option.departement }}" {% if currentAgence == option.agence %}selected{% endif %}>
+                                    {{ option.agence }}{% if option.departement %} - {{ option.departement }}{% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row form-row-three">
+                    <div class="form-group">
+                        <label for="telephone">Telephone</label>
+                        <input type="tel" id="telephone" name="telephone" class="form-control" value="{{ user.telephone|default('') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="numero_court">Numero court</label>
+                        <input type="text" id="numero_court" name="numero_court" class="form-control" value="{{ user.numeroCourt|default('') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="service">Service</label>
+                        <select id="service" name="service" class="form-control">
+                            <option value="">-</option>
+                            {% for service in serviceOptions %}
+                                <option value="{{ service }}" {% if currentService == service %}selected{% endif %}>{{ service }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="profile_type">Profil</label>
+                    <select id="profile_type" name="profile_type" class="form-control" {% if not is_granted('ROLE_ADMIN') %}disabled aria-disabled="true"{% endif %}>
+                        <option value="Employe" {% if user.profileType == 'Employe' %}selected{% endif %}>Employe</option>
+                        <option value="Superviseur" {% if user.profileType == 'Superviseur' %}selected{% endif %}>Superviseur</option>
+                        <option value="Responsable" {% if user.profileType == 'Responsable' %}selected{% endif %}>Responsable</option>
+                        <option value="Admin" {% if user.profileType == 'Admin' %}selected{% endif %}>Admin</option>
+                    </select>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="profile-sidebar">
+            <div class="card profile-card">
+                <div class="card-header">
+                    <h3>Photo de profil</h3>
+                </div>
+                <div class="photo-section">
+                    {% if photoUrl %}
+                        <div class="profile-photo">
+                            <img src="{% if photoUrl starts with 'http' %}{{ photoUrl }}{% else %}{{ asset(photoUrl|trim('/')) }}{% endif %}" alt="Photo de profil">
+                        </div>
+                    {% else %}
+                        <div class="profile-photo-placeholder">
+                            <div class="initials">{{ user.prenom|first|upper }}{{ user.nom|first|upper }}</div>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <form method="POST" enctype="multipart/form-data" style="margin-bottom: 1rem;">
+                    <input type="hidden" name="action" value="update_photo">
+                    <div class="form-group">
+                        <input type="file" name="photo" class="form-control" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required>
+                        <small style="display:block; margin-top:0.5rem; color: var(--text-muted);">Formats acceptes : JPG, JPEG, PNG.</small>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Changer la photo</button>
+                </form>
+
+                {% if photoUrl %}
+                    <form method="POST" style="margin-bottom: 0;">
+                        <input type="hidden" name="action" value="delete_photo">
+                        <button type="submit" class="btn btn-sm btn-danger w-100">Supprimer la photo</button>
+                    </form>
+                {% endif %}
+            </div>
+
+            {% if user.id == app.user.id %}
+                <div class="card profile-card">
+                    <div class="card-header">
+                        <h3>Mot de passe</h3>
+                    </div>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="update_password">
+
+                        <div class="form-group">
+                            <label for="current_password">Mot de passe actuel</label>
+                            <input type="password" id="current_password" name="current_password" class="form-control" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="new_password">Nouveau mot de passe</label>
+                            <input type="password" id="new_password" name="new_password" class="form-control" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="confirm_password">Confirmer le nouveau mot de passe</label>
+                            <input type="password" id="confirm_password" name="confirm_password" class="form-control" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Changer le mot de passe</button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .profile-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    .profile-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .profile-grid {
+        display: grid;
+        grid-template-columns: 1fr 350px;
+        gap: 2rem;
+    }
+
+    .profile-card {
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--bg-primary);
+        padding: 2rem;
+        box-shadow: 0 2px 8px var(--shadow);
+    }
+
+    .card-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .card-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.95rem;
+        margin-bottom: 0.5rem;
+        color: var(--text-primary);
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 1rem;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .form-feedback {
+        display: block;
+        min-height: 1rem;
+        margin-top: 0.4rem;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .form-row-three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: var(--primary-dark);
+    }
+
+    .btn-danger {
+        background: #ef4444;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #dc2626;
+    }
+
+    .btn-sm {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .w-100 {
+        width: 100%;
+    }
+
+    .photo-section {
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .profile-photo {
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 1rem;
+        border-radius: 50%;
+        overflow: hidden;
+        background: var(--bg-secondary);
+        border: 2px solid var(--primary);
+    }
+
+    .profile-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .profile-photo-placeholder {
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 1rem;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+    }
+
+    .initials {
+        font-size: 2rem;
+        font-weight: 700;
+    }
+
+    @media (max-width: 768px) {
+        .profile-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .form-row,
+        .form-row-three {
+            grid-template-columns: 1fr;
+        }
+
+        .profile-header {
+            flex-direction: column;
+            gap: 1rem;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const codePostalInput = document.getElementById('code_postal');
+        const codePostalFeedback = document.getElementById('code_postal_feedback');
+        const departementSelect = document.getElementById('departement');
+        const agenceSelect = document.getElementById('agence');
+
+        if (!codePostalInput || !departementSelect || !agenceSelect) {
+            return;
+        }
+
+        let lookupTimeout = null;
+        let lastLookupPostalCode = '';
+
+        function normalizeValue(value) {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+        }
+
+        function setFeedback(message, isError) {
+            if (!codePostalFeedback) {
+                return;
+            }
+
+            codePostalFeedback.textContent = message || '';
+            codePostalFeedback.style.color = isError ? '#dc2626' : 'var(--text-muted)';
+        }
+
+        function syncAgenceOptions(options) {
+            const config = options || {};
+            const selectedDepartement = normalizeValue(departementSelect.value || '');
+            const visibleOptions = [];
+
+            Array.from(agenceSelect.options).forEach(function(option) {
+                if (option.value === '') {
+                    option.hidden = false;
+                    return;
+                }
+
+                const optionDepartement = normalizeValue(option.dataset.departement || '');
+                const isVisible = selectedDepartement === '' || optionDepartement === selectedDepartement;
+                option.hidden = !isVisible;
+
+                if (!isVisible && option.selected) {
+                    agenceSelect.value = '';
+                }
+
+                if (isVisible) {
+                    visibleOptions.push(option);
+                }
+            });
+
+            if (!config.autoSelect) {
+                return visibleOptions;
+            }
+
+            if (visibleOptions.length === 0) {
+                agenceSelect.value = '';
+                return visibleOptions;
+            }
+
+            if (visibleOptions.some(function(option) { return option.value === agenceSelect.value; })) {
+                return visibleOptions;
+            }
+
+            agenceSelect.value = visibleOptions[0].value;
+
+            return visibleOptions;
+        }
+
+        function syncDepartementFromAgence() {
+            const selectedOption = agenceSelect.options[agenceSelect.selectedIndex];
+            if (!selectedOption || selectedOption.value === '') {
+                return;
+            }
+
+            const optionDepartement = (selectedOption.dataset.departement || '').trim();
+            if (optionDepartement !== '') {
+                departementSelect.value = ensureDepartementOption(optionDepartement);
+            }
+        }
+
+        function findDepartementOptionValue(apiDepartement) {
+            if (!apiDepartement || !apiDepartement.code || !apiDepartement.nom) {
+                return '';
+            }
+
+            const expectedCode = normalizeValue(apiDepartement.code);
+            const expectedName = normalizeValue(apiDepartement.nom);
+            const expectedCombined = normalizeValue(apiDepartement.code + ' - ' + apiDepartement.nom);
+
+            for (const option of Array.from(departementSelect.options)) {
+                if (option.value === '') {
+                    continue;
+                }
+
+                const optionValue = normalizeValue(option.value);
+                if (
+                    optionValue === expectedCombined
+                    || optionValue === expectedCode
+                    || optionValue === expectedName
+                    || optionValue.startsWith(expectedCode + ' ')
+                    || optionValue.startsWith(expectedCode + '-')
+                    || optionValue.indexOf(expectedName) !== -1
+                ) {
+                    return option.value;
+                }
+            }
+
+            return '';
+        }
+
+        function ensureDepartementOption(label) {
+            const normalizedLabel = normalizeValue(label);
+
+            for (const option of Array.from(departementSelect.options)) {
+                if (option.value !== '' && normalizeValue(option.value) === normalizedLabel) {
+                    return option.value;
+                }
+            }
+
+            const dynamicOption = document.createElement('option');
+            dynamicOption.value = String(label || '').trim();
+            dynamicOption.textContent = dynamicOption.value;
+            dynamicOption.dataset.generated = 'true';
+            departementSelect.appendChild(dynamicOption);
+
+            return dynamicOption.value;
+        }
+
+        function resolveDepartementValue(apiDepartement) {
+            const existingValue = findDepartementOptionValue(apiDepartement);
+            if (existingValue !== '') {
+                return existingValue;
+            }
+
+            if (!apiDepartement || !apiDepartement.code || !apiDepartement.nom) {
+                return '';
+            }
+
+            return ensureDepartementOption(apiDepartement.code + ' - ' + apiDepartement.nom);
+        }
+
+        async function lookupPostalCode() {
+            const rawPostalCode = String(codePostalInput.value || '').trim();
+            const postalCode = rawPostalCode.replace(/\D/g, '');
+
+            if (postalCode.length === 0) {
+                lastLookupPostalCode = '';
+                setFeedback('', false);
+                return;
+            }
+
+            if (postalCode.length !== 5) {
+                setFeedback('Saisissez un code postal a 5 chiffres.', true);
+                return;
+            }
+
+            if (postalCode === lastLookupPostalCode) {
+                return;
+            }
+
+            setFeedback('Recherche du departement via API Gouv...', false);
+
+            try {
+                const response = await fetch('https://geo.api.gouv.fr/communes?codePostal=' + encodeURIComponent(postalCode) + '&fields=nom,departement&boost=population&format=json', {
+                    headers: {
+                        'Accept': 'application/json',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+
+                const communes = await response.json();
+                if (!Array.isArray(communes) || communes.length === 0) {
+                    throw new Error('not_found');
+                }
+
+                const departementValue = resolveDepartementValue(communes[0].departement || null);
+                if (departementValue === '') {
+                    setFeedback('Departement trouve via API Gouv, mais impossible a renseigner.', true);
+                    return;
+                }
+
+                departementSelect.value = departementValue;
+                const visibleOptions = syncAgenceOptions({ autoSelect: true });
+                lastLookupPostalCode = postalCode;
+
+                if (visibleOptions.length === 1) {
+                    setFeedback('Departement et agence renseignes automatiquement.', false);
+                } else if (visibleOptions.length > 1) {
+                    setFeedback('Departement renseigne. Agence preselectionnee a verifier.', false);
+                } else {
+                    setFeedback('Departement renseigne via API Gouv. Aucune agence locale pour ce departement.', false);
+                }
+            } catch (error) {
+                lastLookupPostalCode = '';
+                if (error instanceof Error && error.message === 'not_found') {
+                    setFeedback('Aucun resultat trouve pour ce code postal.', true);
+                } else {
+                    setFeedback('Recherche impossible pour le moment.', true);
+                }
+            }
+        }
+
+        function schedulePostalLookup() {
+            window.clearTimeout(lookupTimeout);
+            lookupTimeout = window.setTimeout(lookupPostalCode, 350);
+        }
+
+        syncDepartementFromAgence();
+        syncAgenceOptions();
+
+        agenceSelect.addEventListener('change', function() {
+            syncDepartementFromAgence();
+            syncAgenceOptions();
+        });
+
+        departementSelect.addEventListener('change', syncAgenceOptions);
+        codePostalInput.addEventListener('input', schedulePostalLookup);
+        codePostalInput.addEventListener('blur', lookupPostalCode);
+
+        if ((codePostalInput.value || '').trim() !== '' && (!departementSelect.value || !agenceSelect.value)) {
+            lookupPostalCode();
+        }
+    });
+</script>
+{% endblock %}

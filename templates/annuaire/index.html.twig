@@ -1,0 +1,300 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Annuaire des contacts{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('app_annuaire', 'Annuaire des contacts') %}
+<div class="card">
+    <div class="annuaire-toolbar">
+        <div>
+            <h1 class="annuaire-title page-title-heading">
+                {{ page_display_service.renderNavigationIcon('app_annuaire', 'bi-person-badge', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p class="annuaire-subtitle">Liste des utilisateurs avec acces rapide Appeler et Teams.</p>
+        </div>
+        <span class="annuaire-count">{{ totalCount }} contact(s)</span>
+    </div>
+
+    {% if contacts is empty %}
+        <div class="alert alert-info">Aucun contact disponible.</div>
+    {% else %}
+        <div class="annuaire-search-wrap">
+            <label for="annuaire-search">Rechercher un contact</label>
+            <input type="text" id="annuaire-search" placeholder="Nom, prenom, email, service, departement, agence..." autocomplete="off">
+            <small id="annuaire-search-meta"></small>
+        </div>
+
+        <div class="annuaire-table-wrap">
+            <table class="annuaire-table">
+                <colgroup>
+                    <col style="width: 58px;">
+                    <col style="width: 190px;">
+                    <col style="width: 260px;">
+                    <col style="width: 140px;">
+                    <col style="width: 170px;">
+                    <col style="width: 180px;">
+                    <col style="width: 140px;">
+                    <col style="width: 100px;">
+                    <col style="width: 56px;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Photo</th>
+                        <th>Nom prenom</th>
+                        <th>Email</th>
+                        <th>Service</th>
+                        <th>Departement</th>
+                        <th>Agence</th>
+                        <th>Telephone</th>
+                        <th>N° Court</th>
+                        <th>Teams</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for contact in contacts %}
+                        <tr data-search="{{ contact.searchBlob }}">
+                            <td>
+                                {% if contact.photoUrl %}
+                                    <img src="{% if contact.photoIsExternal %}{{ contact.photoUrl }}{% else %}{{ asset(contact.photoUrl) }}{% endif %}" alt="Photo {{ contact.displayNameRaw ?: 'contact' }}" class="annuaire-avatar">
+                                {% else %}
+                                    <div class="annuaire-avatar annuaire-avatar-fallback">{{ contact.initials }}</div>
+                                {% endif %}
+                            </td>
+                            <td class="annuaire-name-cell" title="{{ contact.displayNameRaw ?: contact.displayName }}">{{ contact.displayName }}</td>
+                            <td title="{{ contact.email }}">
+                                {% if contact.email %}
+                                    <a href="mailto:{{ contact.email }}">{{ contact.email }}</a>
+                                {% else %}
+                                    <span class="annuaire-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td title="{{ contact.serviceLabel }}">
+                                <span class="annuaire-badge" style="{{ contact.serviceStyle }}">{{ contact.serviceLabel }}</span>
+                            </td>
+                            <td title="{{ contact.departementLabel }}">{{ contact.departementLabel }}</td>
+                            <td title="{{ contact.agenceLabel }}">{{ contact.agenceLabel }}</td>
+                            <td title="{{ contact.telephoneLabel }}">
+                                {% if contact.telephone %}
+                                    <span>{{ contact.telephoneLabel }}</span>
+                                    {% if contact.callLink %}
+                                        <a class="annuaire-inline-icon" href="{{ contact.callLink }}" title="Appeler ce numero">
+                                            <i class="bi bi-telephone-fill"></i>
+                                        </a>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="annuaire-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td title="{{ contact.numeroCourtLabel }}">
+                                {% if contact.numeroCourt %}
+                                    <span>{{ contact.numeroCourtLabel }}</span>
+                                    {% if contact.shortCallLink %}
+                                        <a class="annuaire-inline-icon" href="{{ contact.shortCallLink }}" title="Appeler ce numero court">
+                                            <i class="bi bi-telephone-fill"></i>
+                                        </a>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="annuaire-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="annuaire-action-col">
+                                {% if contact.teamsLink %}
+                                    <a class="annuaire-icon-btn teams-deeplink" href="{{ contact.teamsLink }}" title="Ouvrir Teams">
+                                        <i class="bi bi-microsoft-teams"></i>
+                                    </a>
+                                {% else %}
+                                    <button class="annuaire-icon-btn annuaire-icon-btn-disabled" disabled title="Teams indisponible">
+                                        <i class="bi bi-microsoft-teams"></i>
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div id="annuaire-no-result" class="alert alert-info annuaire-no-result">
+            Aucun contact ne correspond a votre recherche.
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .annuaire-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .annuaire-title {
+        margin: 0;
+    }
+    .annuaire-subtitle {
+        margin: 0.35rem 0 0;
+        color: var(--text-muted);
+    }
+    .annuaire-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+    .annuaire-search-wrap {
+        margin-bottom: 1rem;
+    }
+    .annuaire-search-wrap label {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-weight: 600;
+    }
+    .annuaire-search-wrap input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+    .annuaire-search-wrap small {
+        display: block;
+        margin-top: 0.45rem;
+        color: var(--text-muted);
+    }
+    .annuaire-table-wrap {
+        overflow-x: auto;
+    }
+    .annuaire-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .annuaire-table th,
+    .annuaire-table td {
+        padding: 0.45rem 0.35rem;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    .annuaire-table th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+    }
+    .annuaire-name-cell {
+        font-weight: 600;
+    }
+    .annuaire-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid var(--border);
+        display: block;
+        margin: 0 auto;
+    }
+    .annuaire-avatar-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        font-weight: 700;
+    }
+    .annuaire-badge {
+        display: inline-block;
+        padding: 0.18rem 0.45rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+    }
+    .annuaire-inline-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        margin-left: 0.3rem;
+        color: var(--success, #16a34a);
+        text-decoration: none;
+    }
+    .annuaire-action-col {
+        text-align: center;
+    }
+    .annuaire-icon-btn {
+        width: 30px;
+        min-width: 30px;
+        height: 30px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: 8px;
+        background: var(--primary);
+        color: #fff;
+        text-decoration: none;
+    }
+    .annuaire-icon-btn-disabled {
+        background: var(--bg-tertiary);
+        color: var(--text-muted);
+    }
+    .annuaire-muted {
+        color: var(--text-muted);
+    }
+    .annuaire-no-result {
+        display: none;
+        margin-top: 1rem;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('annuaire-search');
+        const rows = Array.from(document.querySelectorAll('.annuaire-table tbody tr'));
+        const noResult = document.getElementById('annuaire-no-result');
+        const meta = document.getElementById('annuaire-search-meta');
+
+        if (searchInput && rows.length > 0) {
+            const applyFilter = function() {
+                const raw = (searchInput.value || '').toLowerCase().trim();
+                let visibleCount = 0;
+
+                rows.forEach(function(row) {
+                    const haystack = (row.getAttribute('data-search') || '').toLowerCase();
+                    const visible = raw === '' || haystack.indexOf(raw) !== -1;
+                    row.style.display = visible ? '' : 'none';
+                    if (visible) {
+                        visibleCount++;
+                    }
+                });
+
+                if (noResult) {
+                    noResult.style.display = visibleCount === 0 ? 'block' : 'none';
+                }
+
+                if (meta) {
+                    meta.textContent = visibleCount + ' contact(s) affiche(s) sur ' + rows.length;
+                }
+            };
+
+            searchInput.addEventListener('input', applyFilter);
+            applyFilter();
+        }
+
+        document.querySelectorAll('.teams-deeplink').forEach(function(link) {
+            link.addEventListener('click', function(event) {
+                event.preventDefault();
+                const href = link.getAttribute('href') || '';
+                if (href !== '') {
+                    window.location.href = href;
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

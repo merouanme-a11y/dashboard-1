@@ -1,0 +1,590 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Parametrage du theme{% endblock %}
+
+{% block body %}
+    {% set logoSize = settings.logo_size|default(40) %}
+    {% set logoPreviewSize = (logoSize * 2) %}
+    {% set previewSiteTitle = settings.site_title is defined ? settings.site_title|trim : '' %}
+    {% set previewSiteTagline = settings.site_tagline is defined ? settings.site_tagline|trim : '' %}
+    {% set previewShowUserInfo = settings.user_info|default(true) %}
+    {% set previewShowHeaderRightMenu = settings.header_right_menu|default(true) %}
+    {% set previewShowDarkModeToggle = settings.dark_mode_toggle|default(true) %}
+    {% set bodyFontCss = fontOptions[settings.body_font|default('system-ui')].css|default(fontOptions['system-ui'].css) %}
+    {% set menuFontCss = fontOptions[settings.menu_font|default('system-ui')].css|default(fontOptions['system-ui'].css) %}
+    {% set headingFontCss = fontOptions[settings.heading_font|default('system-ui')].css|default(fontOptions['system-ui'].css) %}
+    {% set buttonFontCss = fontOptions[settings.button_font|default('system-ui')].css|default(fontOptions['system-ui'].css) %}
+
+    <div class="card theme-settings-page">
+        <div class="theme-settings-header">
+            <div>
+                <h3>Theme et identite visuelle</h3>
+                <p>
+                    Choisissez le template actif du site puis ajustez l'identite visuelle globale : logo, couleurs, polices,
+                    rendu des boutons et affichage du header. Les reglages s'appliquent au layout principal et a la page de connexion.
+                </p>
+            </div>
+            <div class="theme-header-actions">
+                <a href="{{ path('admin_parametrage') }}" class="btn btn-secondary">Retour aux parametres</a>
+                <button type="submit" form="theme-settings-form" class="btn btn-primary">Enregistrer</button>
+            </div>
+        </div>
+
+        {% for message in app.flashes('success') %}
+            <div class="theme-flash theme-flash-success">{{ message }}</div>
+        {% endfor %}
+        {% for message in app.flashes('danger') %}
+            <div class="theme-flash theme-flash-danger">{{ message }}</div>
+        {% endfor %}
+
+        <div class="theme-preview" aria-hidden="true">
+            <div class="theme-preview-scope" style="background: {{ settings.app_background_color }}; font-family: {{ bodyFontCss }}; font-size: {{ settings.body_font_size }}px;">
+                <div class="theme-preview-header-bar{% if previewSiteTitle == '' %} is-logo-only{% endif %}" style="background: {{ settings.header_background_color }};">
+                    <div class="theme-preview-brand{% if previewSiteTitle == '' %} is-logo-only{% endif %}">
+                        <div class="theme-settings-logo-preview theme-settings-logo-preview-small" style="width: {{ logoSize }}px; height: {{ logoSize }}px;">
+                            {% if settings.logo_path %}
+                                <img src="{{ asset(settings.logo_path) }}" alt="Logo du site">
+                            {% else %}
+                                <span>Logo</span>
+                            {% endif %}
+                        </div>
+                        {% if previewSiteTitle != '' %}
+                            <div>
+                                <div class="theme-preview-site-title">{{ previewSiteTitle }}</div>
+                                {% if previewSiteTagline != '' %}
+                                    <div class="theme-preview-tagline">{{ previewSiteTagline }}</div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="theme-preview-header-right">
+                        {% if previewShowUserInfo %}
+                            <div class="theme-preview-user-info">
+                                <span class="theme-preview-user-avatar">M</span>
+                                <span>Merouan</span>
+                            </div>
+                        {% endif %}
+                        {% if previewShowHeaderRightMenu %}
+                            <div class="theme-preview-header-menu">
+                                <span>Admin</span>
+                                <span class="theme-preview-header-badge">2</span>
+                            </div>
+                        {% endif %}
+                        {% if previewShowDarkModeToggle %}
+                            <div class="theme-preview-dark-toggle">
+                                <i class="bi bi-moon-stars-fill" aria-hidden="true"></i>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="theme-preview-shell">
+                    <aside class="theme-preview-sidebar" style="background: {{ settings.menu_background_color }}; color: {{ settings.menu_text_color }}; font-family: {{ menuFontCss }}; font-size: {{ settings.menu_font_size }}px;">
+                        <a href="#" class="is-active" style="background: {{ menuHoverColor }}; color: {{ settings.menu_text_color }};"><span>Creer un ticket</span></a>
+                        <a href="#" style="color: {{ settings.menu_text_color }};"><span>Mes tickets</span></a>
+                        <a href="#" style="color: {{ settings.menu_text_color }};"><span>Statistiques</span></a>
+                        <a href="#" style="color: {{ settings.menu_text_color }};"><span>Profil</span></a>
+                    </aside>
+                    <div class="theme-preview-main">
+                        <h1 style="font-family: {{ headingFontCss }}; font-size: {{ settings.heading_font_size }}px; color: {{ settings.heading_color }};">Apercu du theme</h1>
+                        <p>Ce bloc illustre l'impact de vos reglages sur le fond, les titres, le texte, les boutons et le header.</p>
+                        <div class="theme-preview-buttons">
+                            <button type="button" class="btn btn-primary" style="font-family: {{ buttonFontCss }}; font-size: {{ settings.button_font_size }}px; border-radius: {{ settings.button_radius }}px; background: {{ settings.primary_button_color }}; border-color: {{ settings.primary_button_color }}; color: {{ settings.primary_button_text_color }};">Action principale</button>
+                            <button type="button" class="btn btn-secondary" style="font-family: {{ buttonFontCss }}; font-size: {{ settings.button_font_size }}px; border-radius: {{ settings.button_radius }}px;">Action secondaire</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" id="theme-settings-form">
+            <div class="theme-settings-grid">
+                <section class="theme-settings-card">
+                    <h4>Template</h4>
+                    <p>Selection du dossier actif dans <strong>/templates</strong>. Le CSS du template est servi directement par Symfony, donc les changements sur <strong>styles.css</strong> sont visibles au rechargement. Le layout principal utilise toujours <strong>templates/base.html.twig</strong>.</p>
+                    <div class="form-group">
+                        <label for="active_template">Template du site</label>
+                        <select id="active_template" name="active_template">
+                            {% for template in templates %}
+                                <option value="{{ template.key }}" {% if settings.active_template == template.key %}selected{% endif %}>{{ template.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </section>
+
+                <section class="theme-settings-card">
+                    <h4>Identite</h4>
+                    <p>Nom du site, slogan et logo affiches dans le header, la sidebar et la connexion.</p>
+                    <div class="form-group">
+                        <label for="site_title">Nom du site</label>
+                        <input type="text" id="site_title" name="site_title" maxlength="60" value="{{ settings.site_title|default('') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="site_tagline">Sous-titre</label>
+                        <input type="text" id="site_tagline" name="site_tagline" maxlength="120" value="{{ settings.site_tagline|default('') }}">
+                    </div>
+                    <div class="theme-logo-block">
+                        <div class="theme-settings-logo-preview" style="width: {{ logoPreviewSize }}px; height: {{ logoPreviewSize }}px;">
+                            {% if settings.logo_path %}
+                                <img src="{{ asset(settings.logo_path) }}" alt="Logo actuel">
+                            {% else %}
+                                <span>Logo</span>
+                            {% endif %}
+                        </div>
+                        <div class="theme-logo-fields">
+                            <div class="form-group">
+                                <label for="logo_file">Logo</label>
+                                <input type="file" id="logo_file" name="logo_file" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg">
+                            </div>
+                            <div class="form-group">
+                                <label for="logo_size">Taille du logo</label>
+                                <input type="number" id="logo_size" name="logo_size" min="24" max="96" value="{{ logoSize }}">
+                                <small>Regle la taille du logo dans le header. La page de connexion l'agrandit automatiquement.</small>
+                            </div>
+                            <label class="theme-checkbox">
+                                <input type="checkbox" name="sticky_header_enabled" value="1" {% if settings.sticky_header_enabled %}checked{% endif %}>
+                                <span>
+                                    Header sticky actif
+                                    <small>Maintient le header visible pendant le scroll sur les pages internes.</small>
+                                </span>
+                            </label>
+                            <label class="theme-checkbox">
+                                <input type="checkbox" name="clear_logo" value="1">
+                                <span>Supprimer le logo actuel</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="theme-settings-card">
+                    <h4>Header et navigation</h4>
+                    <p>Reprise de la logique de <strong>header-display-settings.php</strong> pour afficher ou masquer les elements du header.</p>
+                    <label class="theme-checkbox theme-checkbox-card">
+                        <input type="checkbox" name="user_info" value="1" {% if settings.user_info|default(true) %}checked{% endif %}>
+                        <span>
+                            Afficher user-info
+                            <small>Affiche l'avatar et le prenom de l'utilisateur connecte dans le header.</small>
+                        </span>
+                    </label>
+                    <label class="theme-checkbox theme-checkbox-card">
+                        <input type="checkbox" name="header_right_menu" value="1" {% if settings.header_right_menu|default(true) %}checked{% endif %}>
+                        <span>
+                            Afficher Menu Header droit
+                            <small>Affiche ou masque l'ensemble du menu configure dans le header a droite.</small>
+                        </span>
+                    </label>
+                    <label class="theme-checkbox theme-checkbox-card">
+                        <input type="checkbox" name="dark_mode_toggle" value="1" {% if settings.dark_mode_toggle|default(true) %}checked{% endif %}>
+                        <span>
+                            Afficher dark-mode-toggle
+                            <small>Affiche le bouton de bascule clair/sombre dans le header.</small>
+                        </span>
+                    </label>
+                </section>
+
+                <section class="theme-settings-card">
+                    <h4>Couleurs</h4>
+                    <p>Fond global, header, menu lateral, texte du menu et couleur principale des boutons.</p>
+                    {% for field, label in {
+                        'app_background_color': "Fond de l'application",
+                        'header_background_color': 'Fond du header',
+                        'menu_background_color': 'Fond du menu',
+                        'menu_text_color': 'Texte du menu',
+                        'heading_color': 'Couleur des titres',
+                        'primary_button_color': 'Bouton principal',
+                        'primary_button_text_color': 'Texte bouton principal'
+                    } %}
+                        <div class="form-group">
+                            <label for="{{ field }}">{{ label }}</label>
+                            <div class="theme-color-input-row">
+                                <input type="color" id="{{ field }}" name="{{ field }}" value="{{ attribute(settings, field) }}" data-color-source="{{ field }}">
+                                <input type="text" value="{{ attribute(settings, field) }}" class="theme-color-code" data-color-target="{{ field }}" maxlength="7" placeholder="#FFFFFF">
+                            </div>
+                        </div>
+                    {% endfor %}
+                </section>
+
+                <section class="theme-settings-card">
+                    <h4>Couleurs mode sombre</h4>
+                    <p>Definissez le rendu applique lorsque l'utilisateur bascule le site en dark mode.</p>
+                    {% for field, label in {
+                        'dark_app_background_color': "Fond de l'application",
+                        'dark_header_background_color': 'Fond du header',
+                        'dark_menu_background_color': 'Fond du menu',
+                        'dark_menu_text_color': 'Texte du menu',
+                        'dark_heading_color': 'Couleur des titres',
+                        'dark_primary_button_color': 'Bouton principal',
+                        'dark_primary_button_text_color': 'Texte bouton principal'
+                    } %}
+                        <div class="form-group">
+                            <label for="{{ field }}">{{ label }}</label>
+                            <div class="theme-color-input-row">
+                                <input type="color" id="{{ field }}" name="{{ field }}" value="{{ attribute(settings, field) }}" data-color-source="{{ field }}">
+                                <input type="text" value="{{ attribute(settings, field) }}" class="theme-color-code" data-color-target="{{ field }}" maxlength="7" placeholder="#FFFFFF">
+                            </div>
+                        </div>
+                    {% endfor %}
+                </section>
+
+                <section class="theme-settings-card">
+                    <h4>Polices</h4>
+                    <p>Choix et taille des polices pour le corps, le menu, les titres et les boutons.</p>
+                    {% for prefix, label in {'body':'Corps','menu':'Menu','heading':'Titres','button':'Boutons'} %}
+                        <div class="theme-font-row">
+                            <div class="form-group">
+                                <label for="{{ prefix }}_font">{{ label }} - Police</label>
+                                <select id="{{ prefix }}_font" name="{{ prefix }}_font">
+                                    {% for key, font in fontOptions %}
+                                        <option value="{{ key }}" {% if attribute(settings, prefix ~ '_font') == key %}selected{% endif %}>{{ font.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ prefix }}_font_size">{{ label }} - Taille</label>
+                                <input type="number" id="{{ prefix }}_font_size" name="{{ prefix }}_font_size" min="12" max="52" value="{{ attribute(settings, prefix ~ '_font_size') }}">
+                            </div>
+                        </div>
+                    {% endfor %}
+                </section>
+
+                <section class="theme-settings-card">
+                    <h4>Boutons</h4>
+                    <p>Controlez le rendu general des boutons, notamment leur rayon d'arrondi.</p>
+                    <div class="form-group">
+                        <label for="button_radius">Rayon des boutons</label>
+                        <input type="number" id="button_radius" name="button_radius" min="0" max="32" value="{{ settings.button_radius }}">
+                    </div>
+                </section>
+            </div>
+
+            <div class="theme-actions">
+                <button type="submit" name="action" value="reset_defaults" class="btn btn-secondary" onclick="return confirm('Reinitialiser tout le theme et supprimer le logo actuel ?');">Reinitialiser</button>
+                <div class="theme-actions-right">
+                    <a href="{{ path('admin_parametrage') }}" class="btn btn-secondary">Annuler</a>
+                    <button type="submit" class="btn btn-primary">Enregistrer le theme</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <style>
+        .theme-settings-page {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .theme-settings-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+        }
+        .theme-header-actions {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .theme-settings-header p {
+            margin: 0;
+            max-width: 760px;
+            color: var(--text-muted);
+        }
+        .theme-flash {
+            margin-bottom: 1rem;
+            padding: 0.9rem 1rem;
+            border-radius: 10px;
+            border: 1px solid transparent;
+        }
+        .theme-flash-success {
+            border-color: rgba(34, 197, 94, 0.35);
+            background: rgba(34, 197, 94, 0.08);
+            color: var(--success, #16a34a);
+        }
+        .theme-flash-danger {
+            border-color: rgba(239, 68, 68, 0.35);
+            background: rgba(239, 68, 68, 0.08);
+            color: var(--danger, #dc2626);
+        }
+        .theme-settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .theme-settings-card {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1rem 1.1rem;
+            background: var(--bg-secondary);
+        }
+        .theme-settings-card h4 {
+            margin: 0 0 0.35rem 0;
+        }
+        .theme-settings-card p {
+            margin: 0 0 1rem 0;
+            color: var(--text-muted);
+            font-size: 0.92rem;
+        }
+        .theme-preview {
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            background: var(--bg-primary);
+        }
+        .theme-preview-header-bar {
+            padding: 0.85rem 1.2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+        }
+        .theme-preview-header-bar.is-logo-only {
+            justify-content: space-between;
+        }
+        .theme-preview-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+        .theme-preview-brand.is-logo-only {
+            justify-content: center;
+        }
+        .theme-preview-header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            flex-wrap: wrap;
+            margin-left: auto;
+        }
+        .theme-preview-user-info,
+        .theme-preview-header-menu,
+        .theme-preview-dark-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            min-height: 38px;
+            padding: 0.45rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+        .theme-preview-user-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary);
+            color: #fff;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+        .theme-preview-header-badge {
+            min-width: 22px;
+            height: 22px;
+            padding: 0 0.35rem;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+        .theme-preview-shell {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            min-height: 300px;
+        }
+        .theme-preview-sidebar {
+            padding: 1rem 0.75rem;
+        }
+        .theme-preview-sidebar a {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.7rem 0.8rem;
+            border-radius: 10px;
+            text-decoration: none;
+            margin-bottom: 0.35rem;
+        }
+        .theme-preview-main {
+            padding: 1.4rem;
+        }
+        .theme-preview-buttons {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .theme-preview-site-title {
+            font-weight: 700;
+        }
+        .theme-preview-tagline {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .theme-settings-logo-preview {
+            width: 88px;
+            height: 88px;
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            font-size: 0.85rem;
+            text-align: center;
+            color: var(--text-muted);
+            flex: 0 0 auto;
+        }
+        .theme-settings-logo-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        .theme-settings-logo-preview-small {
+            border-radius: 12px;
+        }
+        .theme-logo-block {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            margin-bottom: 0.75rem;
+        }
+        .theme-logo-fields {
+            flex: 1;
+            min-width: 220px;
+        }
+        .theme-checkbox {
+            display: flex;
+            gap: 0.6rem;
+            align-items: flex-start;
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            margin-bottom: 0.75rem;
+        }
+        .theme-checkbox input {
+            width: auto;
+            margin-top: 0.15rem;
+        }
+        .theme-checkbox small {
+            display: block;
+            margin-top: 0.2rem;
+            color: var(--text-muted);
+        }
+        .theme-checkbox-card {
+            justify-content: space-between;
+            padding: 1rem 1.1rem;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg-primary);
+        }
+        .theme-color-input-row {
+            display: grid;
+            grid-template-columns: 64px minmax(110px, 1fr);
+            gap: 0.75rem;
+            align-items: center;
+        }
+        .theme-color-input-row input[type="color"] {
+            width: 64px;
+            min-width: 64px;
+            height: 48px;
+            padding: 0.2rem;
+        }
+        .theme-color-code {
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            font-family: "Courier New", monospace;
+        }
+        .theme-font-row {
+            display: grid;
+            grid-template-columns: 1.35fr 0.85fr;
+            gap: 0.75rem;
+            align-items: end;
+            margin-bottom: 0.85rem;
+        }
+        .theme-actions {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+            position: sticky;
+            bottom: 0;
+            padding-top: 1rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0), var(--bg-secondary) 24%);
+        }
+        .theme-actions-right {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        @media (max-width: 780px) {
+            .theme-preview-shell {
+                grid-template-columns: 1fr;
+            }
+            .theme-font-row {
+                grid-template-columns: 1fr;
+            }
+            .theme-actions {
+                position: static;
+                background: transparent;
+                padding-top: 0;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function normalizeHexColor(value) {
+                let color = String(value || '').trim().toUpperCase();
+                if (color !== '' && color.charAt(0) !== '#') {
+                    color = '#' + color;
+                }
+                return /^#[0-9A-F]{6}$/.test(color) ? color : '';
+            }
+
+            document.querySelectorAll('[data-color-source]').forEach(function(colorInput) {
+                const field = colorInput.getAttribute('data-color-source') || '';
+                if (!field) {
+                    return;
+                }
+
+                const textInput = document.querySelector('[data-color-target="' + field + '"]');
+                if (!textInput) {
+                    return;
+                }
+
+                colorInput.addEventListener('input', function() {
+                    textInput.value = String(colorInput.value || '').toUpperCase();
+                });
+
+                textInput.addEventListener('input', function() {
+                    const normalized = normalizeHexColor(textInput.value);
+                    if (normalized) {
+                        colorInput.value = normalized;
+                    }
+                });
+
+                textInput.addEventListener('blur', function() {
+                    const normalized = normalizeHexColor(textInput.value);
+                    textInput.value = normalized || String(colorInput.value || '').toUpperCase();
+                });
+            });
+        });
+    </script>
+{% endblock %}

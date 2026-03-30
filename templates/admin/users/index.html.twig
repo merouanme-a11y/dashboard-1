@@ -1,0 +1,803 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Utilisateurs{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('admin_utilisateurs', 'Utilisateurs') %}
+
+<div class="card users-admin-page">
+    <div class="users-admin-header">
+        <div>
+            <h1 class="page-title-heading" style="margin: 0 0 0.5rem 0;">
+                {{ page_display_service.renderNavigationIcon('admin_utilisateurs', 'bi-people', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p class="users-admin-subtitle">Edition directe des comptes utilisateurs, import, export et reinitialisation de mots de passe.</p>
+        </div>
+        <div class="users-admin-header-actions">
+            <span class="users-count-badge">{{ userCount }} utilisateur(s)</span>
+            <a href="{{ path('admin_parametrage') }}" class="btn btn-secondary">Retour aux parametres</a>
+        </div>
+    </div>
+
+    <div id="users-inline-feedback"></div>
+
+    <div class="annuaire-admin-toolbar">
+        <a class="btn btn-secondary" href="{{ path('admin_utilisateurs_export', {format: 'csv', csrf: csrf_token('admin_users_export')}) }}">Exporter CSV</a>
+        <a class="btn btn-secondary" href="{{ path('admin_utilisateurs_export', {format: 'xls', csrf: csrf_token('admin_users_export')}) }}">Exporter XLS</a>
+
+        <form method="post" enctype="multipart/form-data" class="annuaire-import-form" action="{{ path('admin_utilisateurs_import') }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token('admin_users_import') }}">
+            <input type="file" name="import_file" accept=".csv,.xls,.xlsx" required>
+            <button type="submit" class="btn btn-primary">Importer</button>
+        </form>
+
+        {% if app.user and menu_service.canUserAccessRoute(app.user, 'app_profile_create') %}
+            <a class="btn btn-success" href="{{ path('app_profile_create') }}">+Ajouter</a>
+        {% endif %}
+    </div>
+
+    {% if users is empty %}
+        <div class="alert alert-info">Aucun utilisateur disponible.</div>
+    {% else %}
+        <div class="form-group users-search-group">
+            <label for="annuaire-admin-search">Rechercher</label>
+            <input type="text" id="annuaire-admin-search" placeholder="Nom, prenom, email, service, departement, agence, profil..." autocomplete="off">
+            <small id="annuaire-admin-search-meta"></small>
+        </div>
+
+        <div class="users-table-wrapper">
+            <table class="table annuaire-admin-table">
+                <colgroup>
+                    <col style="width: 58px;">
+                    <col style="width: 130px;">
+                    <col style="width: 130px;">
+                    <col style="width: 250px;">
+                    <col style="width: 150px;">
+                    <col style="width: 160px;">
+                    <col style="width: 170px;">
+                    <col style="width: 150px;">
+                    <col style="width: 100px;">
+                    <col style="width: 140px;">
+                    <col style="width: 150px;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Photo</th>
+                        <th>Nom</th>
+                        <th>Prenom</th>
+                        <th>Email</th>
+                        <th>Service</th>
+                        <th>Departement</th>
+                        <th>Agence</th>
+                        <th>N Telephone</th>
+                        <th>N Court</th>
+                        <th>Type de profil</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                        <tr data-search="{{ user.searchBlob }}">
+                            <td>
+                                {% if user.hasPhoto %}
+                                    <img
+                                        src="{% if user.photoUrl starts with 'http' %}{{ user.photoUrl }}{% else %}{{ asset(user.photoUrl|trim('/')) }}{% endif %}"
+                                        alt="Photo {{ user.displayName }}"
+                                        class="annuaire-avatar"
+                                    >
+                                {% else %}
+                                    <div class="annuaire-avatar annuaire-avatar-fallback">{{ user.initials|slice(0, 1) }}</div>
+                                {% endif %}
+                            </td>
+                            <td class="editable" data-id="{{ user.id }}" data-field="nom" data-value="{{ user.nom }}">{{ user.nom }}</td>
+                            <td class="editable" data-id="{{ user.id }}" data-field="prenom" data-value="{{ user.prenom }}">{{ user.prenom }}</td>
+                            <td class="editable" data-id="{{ user.id }}" data-field="email" data-value="{{ user.email }}">{{ user.email }}</td>
+                            <td class="editable annuaire-service-cell" data-id="{{ user.id }}" data-field="service" data-value="{{ user.service }}" data-service-color="{{ user.serviceColor }}">
+                                <span class="badge" style="{{ user.serviceStyle }}">{{ user.service }}</span>
+                            </td>
+                            <td class="editable" data-id="{{ user.id }}" data-field="departement" data-value="{{ user.departement }}">{{ user.departement }}</td>
+                            <td class="editable" data-id="{{ user.id }}" data-field="agence" data-value="{{ user.agence }}">{{ user.agence }}</td>
+                            <td class="editable" data-id="{{ user.id }}" data-field="telephone" data-value="{{ user.telephone }}">{{ user.telephone }}</td>
+                            <td class="editable" data-id="{{ user.id }}" data-field="numero_court" data-value="{{ user.numeroCourt }}">{{ user.numeroCourt }}</td>
+                            <td class="editable" data-id="{{ user.id }}" data-field="profile_type" data-value="{{ user.profileType }}">{{ user.profileType }}</td>
+                            <td>
+                                <div class="annuaire-action-group">
+                                    <a
+                                        href="{{ path('app_profile_view', {id: user.id}) }}"
+                                        class="btn btn-primary btn-small annuaire-action-icon"
+                                        title="Modifier le profil"
+                                        aria-label="Modifier le profil de {{ user.displayName }}"
+                                    ><i class="bi bi-pencil-square" aria-hidden="true"></i></a>
+
+                                    <form method="post" action="{{ path('admin_utilisateurs_reset_password') }}" onsubmit="return confirm('Reinitialiser le mot de passe de cet utilisateur ?');">
+                                        <input type="hidden" name="csrf" value="{{ csrf_token('admin_users_reset_password') }}">
+                                        <input type="hidden" name="user_id" value="{{ user.id }}">
+                                        <button
+                                            type="submit"
+                                            class="btn btn-warning btn-small annuaire-action-icon"
+                                            title="Reinitialiser le mot de passe"
+                                            aria-label="Reinitialiser le mot de passe de {{ user.displayName }}"
+                                        ><i class="bi bi-arrow-repeat" aria-hidden="true"></i></button>
+                                    </form>
+
+                                    <button
+                                        type="button"
+                                        class="btn btn-danger btn-small annuaire-action-icon annuaire-delete-btn"
+                                        data-user-id="{{ user.id }}"
+                                        data-user-name="{{ user.displayName }}"
+                                        title="{% if currentUserId == user.id %}Suppression de votre propre compte interdite{% else %}Supprimer l utilisateur{% endif %}"
+                                        aria-label="Supprimer {{ user.displayName }}"
+                                        {% if currentUserId == user.id %}disabled{% endif %}
+                                    ><i class="bi bi-trash" aria-hidden="true"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div id="annuaire-admin-no-result" class="alert alert-info users-no-result">
+            Aucun utilisateur ne correspond a votre recherche.
+        </div>
+    {% endif %}
+</div>
+
+<div id="delete-user-modal" class="annuaire-modal-backdrop" style="display: none;">
+    <div class="annuaire-modal" role="dialog" aria-modal="true" aria-labelledby="delete-user-modal-title">
+        <h3 id="delete-user-modal-title">Confirmer la suppression</h3>
+        <div class="alert alert-danger" style="margin-bottom: 1rem;">
+            Cette action est irreversible. Le compte utilisateur, ses permissions specifiques et ses preferences seront supprimes.
+        </div>
+        <p class="users-delete-copy">
+            Vous allez supprimer <strong id="delete-user-target-name"></strong>.
+        </p>
+        <p class="users-delete-copy users-delete-copy-muted">
+            Saisissez le mot de passe du compte actuellement connecte pour confirmer.
+        </p>
+
+        <form method="post" id="delete-user-form" action="{{ path('admin_utilisateurs_delete') }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token('admin_users_delete') }}">
+            <input type="hidden" name="user_id" id="delete-user-id" value="">
+
+            <div class="form-group">
+                <label for="delete-user-current-password">Mot de passe de confirmation</label>
+                <input type="password" id="delete-user-current-password" name="current_password" required autocomplete="current-password">
+            </div>
+
+            <div class="annuaire-modal-actions">
+                <button type="button" class="btn btn-secondary" id="delete-user-cancel">Annuler</button>
+                <button type="submit" class="btn btn-danger">Supprimer definitivement</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var csrf = {{ csrf_token('admin_users_inline_update')|json_encode|raw }};
+    var inlineUpdateUrl = {{ path('admin_utilisateurs_inline_update')|json_encode|raw }};
+    var serviceOptions = {{ serviceOptions|json_encode(constant('JSON_UNESCAPED_UNICODE'))|raw }};
+    var serviceColors = {{ serviceColorMap|json_encode(constant('JSON_UNESCAPED_UNICODE'))|raw }};
+    var departementOptions = {{ departementOptions|json_encode(constant('JSON_UNESCAPED_UNICODE'))|raw }};
+    var agenceOptions = {{ agenceOptions|json_encode(constant('JSON_UNESCAPED_UNICODE'))|raw }};
+    var profileOptions = {{ profileOptions|json_encode(constant('JSON_UNESCAPED_UNICODE'))|raw }};
+    var searchInput = document.getElementById('annuaire-admin-search');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('.annuaire-admin-table tbody tr'));
+    var noResult = document.getElementById('annuaire-admin-no-result');
+    var searchMeta = document.getElementById('annuaire-admin-search-meta');
+    var deleteModal = document.getElementById('delete-user-modal');
+    var deleteButtons = Array.prototype.slice.call(document.querySelectorAll('.annuaire-delete-btn'));
+    var deleteUserIdInput = document.getElementById('delete-user-id');
+    var deleteUserName = document.getElementById('delete-user-target-name');
+    var deleteUserPasswordInput = document.getElementById('delete-user-current-password');
+    var deleteUserCancel = document.getElementById('delete-user-cancel');
+    var feedbackContainer = document.getElementById('users-inline-feedback');
+
+    function openDeleteModal(userId, userName) {
+        if (!deleteModal || !deleteUserIdInput || !deleteUserName) {
+            return;
+        }
+
+        deleteUserIdInput.value = userId;
+        deleteUserName.textContent = userName || userId;
+
+        if (deleteUserPasswordInput) {
+            deleteUserPasswordInput.value = '';
+        }
+
+        deleteModal.style.display = 'flex';
+
+        if (deleteUserPasswordInput) {
+            window.setTimeout(function() {
+                deleteUserPasswordInput.focus();
+            }, 10);
+        }
+    }
+
+    function closeDeleteModal() {
+        if (!deleteModal) {
+            return;
+        }
+
+        deleteModal.style.display = 'none';
+
+        if (deleteUserIdInput) {
+            deleteUserIdInput.value = '';
+        }
+
+        if (deleteUserPasswordInput) {
+            deleteUserPasswordInput.value = '';
+        }
+    }
+
+    function showInlineMessage(text, isError) {
+        if (!feedbackContainer) {
+            return;
+        }
+
+        var box = document.createElement('div');
+        box.className = isError ? 'alert alert-danger' : 'alert alert-success';
+        box.textContent = text;
+        feedbackContainer.prepend(box);
+
+        window.setTimeout(function() {
+            box.remove();
+        }, 3500);
+    }
+
+    function applyFilter() {
+        if (!searchInput || rows.length === 0) {
+            return;
+        }
+
+        var query = (searchInput.value || '').toLowerCase().trim();
+        var visibleCount = 0;
+
+        rows.forEach(function(row) {
+            var haystack = (row.getAttribute('data-search') || '').toLowerCase();
+            var visible = query === '' || haystack.indexOf(query) !== -1;
+            row.style.display = visible ? '' : 'none';
+
+            if (visible) {
+                visibleCount++;
+            }
+        });
+
+        if (searchMeta) {
+            searchMeta.textContent = visibleCount + ' utilisateur(s) affiche(s) sur ' + rows.length;
+        }
+
+        if (noResult) {
+            noResult.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+    }
+
+    function normalizeServiceColor(color) {
+        var value = String(color || '').trim();
+        return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toUpperCase() : '';
+    }
+
+    function getServiceTextColor(backgroundColor) {
+        var color = normalizeServiceColor(backgroundColor);
+        if (!color) {
+            return 'var(--text-secondary)';
+        }
+
+        var red = parseInt(color.slice(1, 3), 16);
+        var green = parseInt(color.slice(3, 5), 16);
+        var blue = parseInt(color.slice(5, 7), 16);
+        var luminance = ((0.299 * red) + (0.587 * green) + (0.114 * blue)) / 255;
+
+        return luminance > 0.62 ? '#1F2937' : '#FFFFFF';
+    }
+
+    function renderCellValue(cell, field, value) {
+        var textValue = String(value || '').trim();
+        cell.setAttribute('data-value', textValue);
+
+        if (field === 'service') {
+            var backgroundColor = normalizeServiceColor(serviceColors[textValue] || '');
+            cell.setAttribute('data-service-color', backgroundColor);
+
+            var badge = document.createElement('span');
+            badge.className = 'badge';
+
+            if (backgroundColor) {
+                badge.style.background = backgroundColor;
+                badge.style.color = getServiceTextColor(backgroundColor);
+                badge.style.border = '1px solid ' + backgroundColor;
+            } else {
+                badge.style.background = 'var(--bg-tertiary)';
+                badge.style.color = 'var(--text-secondary)';
+                badge.style.border = '1px solid var(--border)';
+            }
+
+            badge.textContent = textValue;
+            cell.textContent = '';
+            cell.appendChild(badge);
+
+            return;
+        }
+
+        cell.textContent = textValue;
+    }
+
+    function saveCell(cell, userId, field, value, fallbackValue) {
+        var formData = new FormData();
+        formData.append('csrf', csrf);
+        formData.append('user_id', userId);
+        formData.append('field', field);
+        formData.append('value', value);
+
+        fetch(inlineUpdateUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function(response) {
+            return response.json().catch(function() {
+                return {};
+            }).then(function(data) {
+                if (!response.ok) {
+                    throw new Error(data.message || 'Erreur de sauvegarde');
+                }
+
+                return data;
+            });
+        }).then(function(data) {
+            if (!data || data.ok !== true) {
+                throw new Error(data && data.message ? data.message : 'Erreur de sauvegarde');
+            }
+
+            renderCellValue(cell, field, String(data.value || ''));
+
+            var row = cell.closest('tr');
+            if (row && data.updatedFields && typeof data.updatedFields === 'object') {
+                Object.keys(data.updatedFields).forEach(function(updatedField) {
+                    var targetCell = row.querySelector('td[data-field="' + updatedField + '"]');
+                    if (targetCell) {
+                        renderCellValue(targetCell, updatedField, String(data.updatedFields[updatedField] || ''));
+                    }
+                });
+            }
+
+            if (row) {
+                var searchable = Array.prototype.map.call(row.querySelectorAll('td[data-value]'), function(td) {
+                    return (td.getAttribute('data-value') || td.textContent || '').trim();
+                }).join(' ').toLowerCase();
+                row.setAttribute('data-search', searchable);
+            }
+
+            showInlineMessage('Mise a jour enregistree.', false);
+        }).catch(function(error) {
+            renderCellValue(cell, field, fallbackValue);
+            showInlineMessage(error.message || 'Erreur de sauvegarde.', true);
+        }).finally(function() {
+            cell.classList.remove('is-editing');
+        });
+    }
+
+    function getCellValue(row, field) {
+        var cell = row.querySelector('td[data-field="' + field + '"]');
+        if (!cell) {
+            return '';
+        }
+
+        return (cell.getAttribute('data-value') || cell.textContent || '').trim();
+    }
+
+    function buildSelect(field, row, original) {
+        var select = document.createElement('select');
+        select.className = 'inline-input';
+
+        var options = [];
+        if (field === 'service') {
+            options = serviceOptions.slice();
+        } else if (field === 'departement') {
+            options = departementOptions.slice();
+        } else if (field === 'profile_type') {
+            options = profileOptions.slice();
+        } else if (field === 'agence') {
+            var currentDepartement = getCellValue(row, 'departement');
+            options = agenceOptions.filter(function(item) {
+                return item.departement === currentDepartement;
+            }).map(function(item) {
+                return item.agence;
+            });
+        }
+
+        var emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = field === 'agence' ? 'Selectionner une agence' : 'Selectionner';
+        select.appendChild(emptyOption);
+
+        options.forEach(function(optionValue) {
+            var option = document.createElement('option');
+            option.value = optionValue;
+            option.textContent = optionValue;
+            select.appendChild(option);
+        });
+
+        select.value = original;
+        return select;
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFilter);
+        applyFilter();
+    }
+
+    deleteButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+            openDeleteModal(button.getAttribute('data-user-id') || '', button.getAttribute('data-user-name') || '');
+        });
+    });
+
+    if (deleteUserCancel) {
+        deleteUserCancel.addEventListener('click', closeDeleteModal);
+    }
+
+    if (deleteModal) {
+        deleteModal.addEventListener('click', function(event) {
+            if (event.target === deleteModal) {
+                closeDeleteModal();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape' && deleteModal && deleteModal.style.display === 'flex') {
+            closeDeleteModal();
+        }
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('td.editable'), function(cell) {
+        cell.addEventListener('click', function() {
+            if (cell.classList.contains('is-editing')) {
+                return;
+            }
+
+            cell.classList.add('is-editing');
+
+            var userId = cell.getAttribute('data-id') || '';
+            var field = cell.getAttribute('data-field') || '';
+            var original = cell.getAttribute('data-value') || '';
+            var useSelect = ['service', 'departement', 'agence', 'profile_type'].indexOf(field) !== -1;
+            var input = useSelect ? buildSelect(field, cell.closest('tr'), original) : document.createElement('input');
+
+            if (!useSelect) {
+                input.type = field === 'email' ? 'email' : 'text';
+                input.className = 'inline-input';
+                input.value = original;
+                input.setAttribute('maxlength', '255');
+            }
+
+            cell.textContent = '';
+            cell.appendChild(input);
+            input.focus();
+
+            if (!useSelect && typeof input.select === 'function') {
+                input.select();
+            }
+
+            var done = false;
+
+            function cleanup(shouldSave) {
+                if (done) {
+                    return;
+                }
+
+                done = true;
+                var nextValue = (input.value || '').trim();
+
+                if (!shouldSave || nextValue === original) {
+                    renderCellValue(cell, field, original);
+                    cell.classList.remove('is-editing');
+                    return;
+                }
+
+                saveCell(cell, userId, field, nextValue, original);
+            }
+
+            input.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    cleanup(true);
+                }
+
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cleanup(false);
+                }
+            });
+
+            input.addEventListener('blur', function() {
+                cleanup(true);
+            });
+
+            if (useSelect) {
+                input.addEventListener('change', function() {
+                    cleanup(true);
+                });
+            }
+        });
+    });
+});
+</script>
+
+<style>
+    .users-admin-page {
+        max-width: 1440px;
+        margin: 0 auto;
+    }
+
+    .users-admin-header,
+    .annuaire-admin-toolbar,
+    .annuaire-import-form,
+    .annuaire-action-group,
+    .annuaire-modal-actions,
+    .users-admin-header-actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .users-admin-header {
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+
+    .users-admin-subtitle,
+    #annuaire-admin-search-meta,
+    .users-delete-copy-muted {
+        color: var(--text-muted);
+    }
+
+    .users-admin-subtitle {
+        margin: 0;
+        max-width: 900px;
+    }
+
+    .users-count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 0.55rem 0.9rem;
+        border-radius: 999px;
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--primary);
+        font-weight: 700;
+        border: 1px solid rgba(59, 130, 246, 0.22);
+    }
+
+    #users-inline-feedback {
+        display: grid;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .annuaire-import-form {
+        margin-left: auto;
+    }
+
+    .users-search-group {
+        margin-bottom: 1rem;
+    }
+
+    .users-search-group label {
+        display: block;
+        margin-bottom: 0.4rem;
+        font-weight: 600;
+    }
+
+    .users-search-group input {
+        width: 100%;
+        max-width: 520px;
+    }
+
+    #annuaire-admin-search-meta {
+        display: block;
+        margin-top: 0.45rem;
+    }
+
+    .users-table-wrapper {
+        overflow-x: auto;
+        width: 100%;
+    }
+
+    .annuaire-admin-table {
+        display: table !important;
+        width: 100%;
+        table-layout: auto;
+    }
+
+    .annuaire-admin-table thead {
+        display: table-header-group;
+    }
+
+    .annuaire-admin-table tbody {
+        display: table-row-group;
+    }
+
+    .annuaire-admin-table tr {
+        display: table-row;
+    }
+
+    .annuaire-admin-table th,
+    .annuaire-admin-table td {
+        display: table-cell;
+        vertical-align: middle;
+        white-space: nowrap;
+        overflow: visible;
+        text-overflow: initial;
+        padding: 0.4rem 0.45rem;
+        line-height: 1.2;
+    }
+
+    .annuaire-admin-table th {
+        font-size: 0.76rem;
+        letter-spacing: 0.01em;
+    }
+
+    .annuaire-admin-table td {
+        font-size: 0.84rem;
+    }
+
+    .annuaire-admin-table .editable {
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .annuaire-admin-table .editable:hover,
+    .annuaire-admin-table .editable.is-editing {
+        background: var(--bg-tertiary);
+    }
+
+    .annuaire-service-cell .badge {
+        display: inline-block;
+        max-width: 100%;
+        padding: 0.14rem 0.4rem;
+        font-size: 0.68rem;
+        line-height: 1.05;
+        overflow: visible;
+        text-overflow: initial;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .inline-input {
+        width: 100%;
+        min-width: 220px;
+        border-radius: 6px;
+        padding: 0.25rem 0.35rem;
+        font: inherit;
+        color: var(--text-primary);
+        background: var(--bg-primary);
+        border: 1px solid var(--border);
+    }
+
+    .app-content .annuaire-avatar {
+        width: 50px !important;
+        height: 50px !important;
+        max-width: 50px !important;
+        max-height: 50px !important;
+        min-width: 50px !important;
+        min-height: 50px !important;
+        border-radius: 50%;
+        overflow: hidden;
+        clip-path: circle(50%);
+        object-fit: cover;
+        object-position: center;
+        border: 1px solid var(--border);
+        box-shadow: 0 2px 6px var(--shadow);
+        display: block;
+        box-sizing: border-box;
+        flex: 0 0 50px;
+        vertical-align: middle;
+        margin: 0 auto;
+    }
+
+    .app-content .annuaire-avatar-fallback {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        width: 50px !important;
+        height: 50px !important;
+        min-width: 50px !important;
+        min-height: 50px !important;
+        max-width: 50px !important;
+        max-height: 50px !important;
+        margin: 0 auto;
+    }
+
+    .annuaire-admin-table .btn {
+        padding: 0.3rem 0.45rem;
+        font-size: 0.76rem;
+        line-height: 1.1;
+    }
+
+    .annuaire-action-group {
+        flex-wrap: nowrap;
+    }
+
+    .annuaire-action-group form {
+        margin: 0;
+    }
+
+    .annuaire-action-icon {
+        min-width: 32px;
+        padding: 0.3rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+
+    .annuaire-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        z-index: 1000;
+    }
+
+    .annuaire-modal {
+        width: min(100%, 520px);
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.28);
+        padding: 1.5rem;
+    }
+
+    .annuaire-modal h3 {
+        margin-top: 0;
+    }
+
+    .users-delete-copy {
+        margin-bottom: 0.75rem;
+        color: var(--text-secondary);
+    }
+
+    .annuaire-modal-actions {
+        justify-content: flex-end;
+        margin-top: 1rem;
+    }
+
+    .annuaire-admin-table th:last-child,
+    .annuaire-admin-table td:last-child {
+        min-width: 150px;
+    }
+
+    .users-no-result {
+        display: none;
+        margin-top: 1rem;
+    }
+
+    @media (max-width: 900px) {
+        .annuaire-import-form {
+            margin-left: 0;
+        }
+
+        .users-admin-header-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+    }
+</style>
+{% endblock %}

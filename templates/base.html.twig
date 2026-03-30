@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    {% set settings = theme_service.getAll %}
+    {% set currentRoute = app.request.attributes.get('_managed_page_path')|default(app.request.attributes.get('_route')|default('')) %}
+    {% set siteTitle = settings['site_title'] is defined ? settings['site_title']|trim : '' %}
+    {% set siteTagline = settings['site_tagline'] is defined ? settings['site_tagline']|trim : '' %}
+    {% set showBrandCopy = siteTitle != '' %}
+    {% set activeTemplate = settings['active_template']|default('template2') %}
+    {% set activeStylesheetVersion = theme_service.getTemplateStylesheetVersion(activeTemplate) %}
+    {% set googleFontUrls = theme_service.getGoogleFontStylesheets(settings) %}
+    {% set pageIconStylesheets = page_display_service.getIconLibraryStylesheets() %}
+    {% set bootstrapIconsStylesheet = 'assets/bootstrap-icons/bootstrap-icons.css' %}
+    {% set logoPath = settings['logo_path']|default('') %}
+    {% set logoSize = settings['logo_size']|default(40) %}
+    {% set stickyHeaderEnabled = settings['sticky_header_enabled']|default(false) %}
+    {% set showUserInfo = settings['user_info']|default(true) %}
+    {% set showHeaderRightMenu = settings['header_right_menu']|default(true) %}
+    {% set showDarkModeToggle = settings['dark_mode_toggle']|default(true) %}
+    {% set sidebarMenuItems = app.user ? menu_service.getSidebarMenuTreeForUser(app.user, currentRoute) : [] %}
+    {% set homeUrl = sidebarMenuItems[0].url|default(path('app_dashboard')) %}
+    {% set headerMenuItems = app.user and showHeaderRightMenu ? menu_service.getHeaderRightMenuTreeForUser(app.user, currentRoute) : [] %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_display_service.resolveRuntimeTitle(currentRoute, block('title')) }}</title>
+
+    {% if googleFontUrls is not empty %}
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        {% for googleFontUrl in googleFontUrls %}
+            <link href="{{ googleFontUrl }}" rel="stylesheet">
+        {% endfor %}
+    {% endif %}
+
+    <link href="{{ asset(theme_service.getPublishedTemplateStylesheetAssetPath(activeTemplate)) }}?v={{ activeStylesheetVersion }}" rel="stylesheet">
+    <link href="{{ asset(bootstrapIconsStylesheet) }}" rel="stylesheet">
+    {% for pageIconStylesheet in pageIconStylesheets %}
+        {% if pageIconStylesheet != bootstrapIconsStylesheet %}
+            <link href="{% if pageIconStylesheet starts with 'http' %}{{ pageIconStylesheet }}{% else %}{{ asset(pageIconStylesheet) }}{% endif %}" rel="stylesheet">
+        {% endif %}
+    {% endfor %}
+
+    <style id="site-theme-overrides">
+        {{ theme_service.buildCssOverrides(settings)|raw }}
+    </style>
+
+    {% block stylesheets %}{% endblock %}
+
+    <script>
+        (function () {
+            const isDark = localStorage.getItem('darkmode') === 'true';
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            const isDark = html.classList.toggle('dark');
+            localStorage.setItem('darkmode', isDark ? 'true' : 'false');
+        }
+    </script>
+</head>
+<body>
+    <div class="app-container{% if stickyHeaderEnabled %} has-sticky-header{% endif %}">
+        <style>
+            .site-brand-logo {
+                width: calc(var(--theme-logo-size, {{ logoSize }}px) + 4px);
+                height: calc(var(--theme-logo-size, {{ logoSize }}px) + 4px);
+            }
+            .site-brand-logo img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                display: block;
+            }
+            .page-title-heading {
+                display: flex;
+                align-items: center;
+                gap: 0.65rem;
+                flex-wrap: wrap;
+            }
+        </style>
+
+        <header class="app-header">
+            <div class="header-left-spacer" aria-hidden="true"></div>
+            <div class="header-right">
+                {% if app.user and showUserInfo %}
+                    {% set userPhoto = file_upload_service.resolvePublicPath(app.user.photo|default('')) %}
+                    <a class="user-info user-info-link" href="{{ path('app_profile') }}">
+                        <div class="user-avatar{% if userPhoto %} has-photo{% endif %}">
+                            {% if userPhoto %}
+                                <img src="{% if userPhoto starts with 'http' %}{{ userPhoto }}{% else %}{{ asset(userPhoto|trim('/')) }}{% endif %}" alt="Photo de profil de {{ app.user.prenom|default(app.user.userIdentifier) }}">
+                            {% else %}
+                                {{ app.user.prenom|default(app.user.userIdentifier)|slice(0, 1)|upper }}
+                            {% endif %}
+                        </div>
+                        <div class="user-identity">
+                            <div class="user-name">{{ app.user.prenom|default(app.user.userIdentifier) }}</div>
+                        </div>
+                    </a>
+                {% endif %}
+
+                {% if headerMenuItems is not empty %}
+                    <div class="header-admin-links">
+                        {{ include('_partials/menu/header_items.html.twig', {items: headerMenuItems}) }}
+                    </div>
+                {% endif %}
+
+                {% if showDarkModeToggle %}
+                    <button class="dark-mode-toggle" onclick="toggleDarkMode()" title="Basculer le dark mode" aria-label="Basculer le dark mode">
+                        <i id="theme-icon" class="bi bi-moon-stars-fill" aria-hidden="true"></i>
+                    </button>
+                {% endif %}
+            </div>
+        </header>
+
+        <aside class="app-sidebar">
+            <div class="sidebar-shell">
+                <a class="sidebar-brand{% if not showBrandCopy %} is-logo-only{% endif %}" href="{{ homeUrl }}" aria-label="{{ siteTitle != '' ? siteTitle : 'Accueil' }}">
+                    <div class="site-brand-logo{% if logoPath %} has-image-logo{% endif %}">
+                        {% if logoPath %}
+                            <img src="{{ asset(logoPath) }}" alt="Logo du site">
+                        {% else %}
+                            <i class="bi bi-grid-1x2-fill" aria-hidden="true"></i>
+                        {% endif %}
+                    </div>
+                    {% if showBrandCopy %}
+                        <div class="sidebar-brand-copy">
+                            <span class="sidebar-brand-title">{{ siteTitle }}</span>
+                            {% if siteTagline != '' %}
+                                <small class="sidebar-brand-tagline">{{ siteTagline }}</small>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </a>
+
+                <nav class="sidebar-nav">
+                    <ul class="nav-menu">
+                        {% if sidebarMenuItems is not empty %}
+                            {{ include('_partials/menu/sidebar_items.html.twig', {items: sidebarMenuItems}) }}
+                        {% endif %}
+                    </ul>
+                </nav>
+
+                <div class="sidebar-footer">
+                    <a href="{{ path('app_logout') }}" class="nav-link sidebar-footer-link sidebar-logout-link" title="Se deconnecter">
+                        <span class="nav-icon"><i class="bi bi-box-arrow-right" aria-hidden="true"></i></span>
+                        <span class="nav-label">Se deconnecter</span>
+                    </a>
+                    <button type="button" class="sidebar-collapse-toggle" id="sidebarCollapseToggle" aria-pressed="false" aria-label="Reduire le menu" title="Reduire le menu">
+                        <span class="sidebar-collapse-toggle-icon"><i class="bi bi-layout-sidebar-inset" aria-hidden="true"></i></span>
+                        <span class="sidebar-collapse-toggle-label">Reduire le menu</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="app-main">
+            <div class="app-content">
+                {% for message in app.flashes('success') %}
+                    <div class="alert alert-success">{{ message }}</div>
+                {% endfor %}
+                {% for message in app.flashes('danger') %}
+                    <div class="alert alert-danger">{{ message }}</div>
+                {% endfor %}
+                {% for message in app.flashes('error') %}
+                    <div class="alert alert-danger">{{ message }}</div>
+                {% endfor %}
+                {% block body %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <div id="image-lightbox" class="image-lightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Zoom image">
+        <button type="button" class="image-lightbox-close" id="image-lightbox-close" aria-label="Fermer">&times;</button>
+        <img id="image-lightbox-img" src="" alt="">
+    </div>
+
+    <script>
+        (function initImageLightbox() {
+            const overlay = document.getElementById('image-lightbox');
+            const overlayImg = document.getElementById('image-lightbox-img');
+            const closeBtn = document.getElementById('image-lightbox-close');
+            const content = document.querySelector('.app-content');
+            const excludedSelectors = [
+                '.user-avatar',
+                '.site-brand-logo',
+                '[data-lightbox-disabled="true"]',
+                '#image-lightbox',
+            ].join(', ');
+
+            if (!overlay || !overlayImg || !closeBtn || !content) {
+                return;
+            }
+
+            function closeLightbox() {
+                overlay.classList.remove('is-open');
+                overlay.setAttribute('aria-hidden', 'true');
+                overlayImg.removeAttribute('src');
+                overlayImg.setAttribute('alt', '');
+                document.body.classList.remove('lightbox-open');
+            }
+
+            content.addEventListener('click', function(event) {
+                const target = event.target;
+                if (!(target instanceof HTMLImageElement)) {
+                    return;
+                }
+
+                if (target.closest(excludedSelectors)) {
+                    return;
+                }
+
+                const src = target.getAttribute('src');
+                if (!src) {
+                    return;
+                }
+
+                if (target.closest('a')) {
+                    event.preventDefault();
+                }
+
+                overlayImg.src = src;
+                overlayImg.alt = target.getAttribute('alt') || 'Image agrandie';
+                overlay.classList.add('is-open');
+                overlay.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('lightbox-open');
+                closeBtn.focus();
+            });
+
+            closeBtn.addEventListener('click', closeLightbox);
+
+            overlay.addEventListener('click', function(event) {
+                if (event.target === overlay) {
+                    closeLightbox();
+                }
+            });
+
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && overlay.classList.contains('is-open')) {
+                    closeLightbox();
+                }
+            });
+        })();
+
+        (function initDashboardLayout() {
+            const icon = document.getElementById('theme-icon');
+            const container = document.querySelector('.app-container');
+            const sidebar = document.querySelector('.app-sidebar');
+            const collapseButton = document.getElementById('sidebarCollapseToggle');
+            const storageKey = 'dashboard-sidebar-collapsed-v2';
+            const legacyStorageKeys = ['dashboard-sidebar-collapsed-v1'];
+            const mobileMedia = window.matchMedia('(max-width: 768px)');
+            const canHover = window.matchMedia('(hover: hover)').matches;
+            const navParents = Array.from(document.querySelectorAll('.nav-item-parent'));
+            const submenuToggles = Array.from(document.querySelectorAll('.nav-submenu-toggle'));
+            const headerMenuItems = Array.from(document.querySelectorAll('.header-admin-item-parent'));
+            const headerMenuToggles = Array.from(document.querySelectorAll('.header-admin-toggle'));
+
+            function updateIcon() {
+                if (!icon) {
+                    return;
+                }
+                const isDark = document.documentElement.classList.contains('dark');
+                icon.className = `bi ${isDark ? 'bi-sun-fill' : 'bi-moon-stars-fill'}`;
+            }
+
+            function syncCollapseButton(collapsed) {
+                if (!collapseButton) {
+                    return;
+                }
+
+                const label = collapsed ? 'Agrandir le menu' : 'Reduire le menu';
+                const labelNode = collapseButton.querySelector('.sidebar-collapse-toggle-label');
+                const iconNode = collapseButton.querySelector('.bi');
+
+                collapseButton.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+                collapseButton.setAttribute('aria-label', label);
+                collapseButton.title = label;
+
+                if (labelNode) {
+                    labelNode.textContent = label;
+                }
+
+                if (iconNode) {
+                    iconNode.className = `bi ${collapsed ? 'bi-layout-sidebar' : 'bi-layout-sidebar-inset'}`;
+                }
+            }
+
+            function closeHeaderMenus(exceptItem = null) {
+                headerMenuItems.forEach(function(item) {
+                    const shouldStayOpen = !!exceptItem && item === exceptItem;
+                    item.classList.toggle('is-open', shouldStayOpen);
+                    const button = item.querySelector('.header-admin-toggle');
+                    if (button) {
+                        button.setAttribute('aria-expanded', shouldStayOpen ? 'true' : 'false');
+                    }
+                });
+            }
+
+            function closeSidebarSubmenus(exceptItem = null) {
+                navParents.forEach(function(item) {
+                    const shouldStayOpen = !!exceptItem && item === exceptItem;
+                    item.classList.toggle('is-open', shouldStayOpen);
+                    const button = item.querySelector('.nav-submenu-toggle');
+                    if (button) {
+                        button.setAttribute('aria-expanded', shouldStayOpen ? 'true' : 'false');
+                    }
+                });
+            }
+
+            function setCollapsed(collapsed, persist) {
+                if (!container) {
+                    return;
+                }
+
+                container.classList.toggle('is-sidebar-collapsed', collapsed);
+                syncCollapseButton(collapsed);
+                closeSidebarSubmenus();
+
+                if (persist) {
+                    localStorage.setItem(storageKey, collapsed ? 'true' : 'false');
+                }
+            }
+
+            legacyStorageKeys.forEach(function(key) {
+                if (key !== storageKey) {
+                    localStorage.removeItem(key);
+                }
+            });
+
+            const savedState = localStorage.getItem(storageKey);
+            const initialCollapsed = savedState === null ? mobileMedia.matches : savedState === 'true';
+            setCollapsed(initialCollapsed, false);
+
+            if (collapseButton) {
+                collapseButton.addEventListener('click', function() {
+                    const nextState = !container.classList.contains('is-sidebar-collapsed');
+                    setCollapsed(nextState, true);
+                });
+            }
+
+            headerMenuToggles.forEach(function(button) {
+                button.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const parentItem = button.closest('.header-admin-item-parent');
+                    const willOpen = parentItem && !parentItem.classList.contains('is-open');
+                    closeHeaderMenus(willOpen ? parentItem : null);
+                });
+            });
+
+            submenuToggles.forEach(function(button) {
+                button.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const navItem = button.closest('.nav-item-parent');
+                    if (!navItem) {
+                        return;
+                    }
+
+                    if (canHover) {
+                        closeSidebarSubmenus(navItem);
+                        return;
+                    }
+
+                    const willOpen = !navItem.classList.contains('is-open');
+                    closeSidebarSubmenus(willOpen ? navItem : null);
+                });
+            });
+
+            if (canHover) {
+                headerMenuItems.forEach(function(item) {
+                    item.addEventListener('mouseenter', function() {
+                        closeHeaderMenus(item);
+                    });
+                    item.addEventListener('mouseleave', function() {
+                        closeHeaderMenus();
+                    });
+                });
+
+                navParents.forEach(function(item) {
+                    item.addEventListener('mouseenter', function() {
+                        closeSidebarSubmenus(item);
+                    });
+                    item.addEventListener('mouseleave', function() {
+                        closeSidebarSubmenus();
+                    });
+                });
+            }
+
+            document.addEventListener('click', function(event) {
+                if (!(event.target instanceof Element)) {
+                    return;
+                }
+
+                if (!event.target.closest('.header-admin-item-parent')) {
+                    closeHeaderMenus();
+                }
+
+                if (sidebar && !event.target.closest('.app-sidebar')) {
+                    closeSidebarSubmenus();
+                }
+            });
+
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                    closeHeaderMenus();
+                    closeSidebarSubmenus();
+                }
+            });
+
+            if (typeof mobileMedia.addEventListener === 'function') {
+                mobileMedia.addEventListener('change', function(event) {
+                    if (localStorage.getItem(storageKey) === null) {
+                        setCollapsed(event.matches, false);
+                    }
+                });
+            }
+
+            updateIcon();
+        })();
+    </script>
+
+    {% block javascripts %}{% endblock %}
+</body>
+</html>

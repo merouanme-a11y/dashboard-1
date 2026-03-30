@@ -1,0 +1,12 @@
+twig:
+    file_name_pattern: '*.twig'
+    globals:
+        module_service: '@App\Service\ModuleService'
+        theme_service: '@App\Service\ThemeService'
+        page_display_service: '@App\Service\PageDisplayService'
+        menu_service: '@App\Service\MenuConfigService'
+        file_upload_service: '@App\Service\FileUploadService'
+
+when@test:
+    twig:
+        strict_variables: true

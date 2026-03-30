@@ -1,0 +1,803 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Icones des pages{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    {% for stylesheet in page_display_service.getIconLibraryStylesheets(true) %}
+        {% if stylesheet != 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css' %}
+            <link href="{{ stylesheet }}" rel="stylesheet">
+        {% endif %}
+    {% endfor %}
+{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('admin_page_icons', 'Icones des pages') %}
+
+<div class="card" style="max-width: 1280px; margin: 0 auto;">
+    <div class="page-icons-header">
+        <div>
+            <h1 class="page-title-heading" style="margin:0 0 0.5rem 0;">
+                {{ page_display_service.renderNavigationIcon('admin_page_icons', 'bi-images', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p class="page-icons-header-text">
+                Choisissez une librairie globale pour les icones de page, puis affectez une icone et une couleur a chaque route configurable.
+            </p>
+        </div>
+        <a href="{{ path('admin_parametrage') }}" class="btn btn-secondary">Retour aux parametres</a>
+    </div>
+
+    <form method="post" id="page-icons-form">
+        <section class="page-icons-card">
+            <div class="page-icons-toolbar">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="library">Librairie d icones</label>
+                    <select id="library" name="library">
+                        {% for libraryKey, library in iconLibraries %}
+                            <option value="{{ libraryKey }}" {% if currentLibrary == libraryKey %}selected{% endif %}>{{ library.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="zone-filter">Filtre zone</label>
+                    <select id="zone-filter">
+                        <option value="">Toutes les zones</option>
+                        {% for group in availableGroups %}
+                            <option value="{{ group }}">{{ group }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="page-search">Recherche page</label>
+                    <input type="text" id="page-search" placeholder="Titre, route ou chemin">
+                </div>
+            </div>
+        </section>
+
+        <section class="page-icons-card">
+            <div class="page-icons-table-wrap">
+                <table class="page-icons-table">
+                    <colgroup>
+                        <col class="page-icons-col-page">
+                        <col class="page-icons-col-zone">
+                        <col class="page-icons-col-preview">
+                        <col class="page-icons-col-icon">
+                        <col class="page-icons-col-color">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>Page</th>
+                            <th>Zone</th>
+                            <th>Apercu</th>
+                            <th>Icone</th>
+                            <th>Couleur</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for page in configurablePages %}
+                            {% set pagePath = page.page_path %}
+                            {% set selectedConfig = savedIcons[pagePath]|default({'value': '', 'color': ''}) %}
+                            {% set selectedValue = selectedConfig.value is defined and selectedConfig.value != '' ? selectedConfig.value : defaultsByPage[pagePath][currentLibrary]|default('') %}
+                            {% set selectedColor = selectedConfig.color|default('') %}
+                            <tr data-page-row data-page-path="{{ pagePath }}" data-page-group="{{ page.group }}" data-page-search="{{ (page.page_name ~ ' ' ~ page.route_path ~ ' ' ~ pagePath)|lower }}">
+                                <td>
+                                    <strong>{{ page.page_name }}</strong>
+                                    <div class="page-icons-path">{{ page.route_path }}</div>
+                                    <div class="page-icons-route">{{ pagePath }}</div>
+                                </td>
+                                <td><span class="page-icons-group">{{ page.group }}</span></td>
+                                <td>
+                                    <span class="page-icons-preview" data-icon-preview="{{ pagePath }}"></span>
+                                </td>
+                                <td>
+                                    <input type="hidden" name="icons[{{ pagePath }}][value]" class="page-icon-hidden-input" value="{{ selectedValue }}" data-icon-input data-selected-value="{{ selectedValue }}">
+                                    <div class="page-icons-dropdown" data-icon-dropdown>
+                                        <button type="button" class="page-icons-dropdown-trigger" data-icon-dropdown-trigger aria-expanded="false">
+                                            <span class="page-icons-dropdown-value">
+                                                <span class="page-icons-dropdown-icon" data-icon-dropdown-current></span>
+                                                <span class="page-icons-dropdown-label" data-icon-dropdown-label>Choisir une icone</span>
+                                            </span>
+                                            <span class="page-icons-dropdown-chevron">&#9662;</span>
+                                        </button>
+                                        <div class="page-icons-dropdown-menu">
+                                            <input type="text" class="page-icons-dropdown-search" data-icon-search placeholder="Rechercher une icone" autocomplete="off" spellcheck="false">
+                                            <div class="page-icons-picker" data-icon-grid></div>
+                                            <div class="page-icons-dropdown-empty-state" data-icon-empty-state>Aucune icone</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <input type="color" class="page-icon-color" value="{{ selectedColor != '' ? selectedColor : '#3B82F6' }}" data-icon-color-input>
+                                    <input type="hidden" name="icons[{{ pagePath }}][color]" value="{{ selectedColor }}" data-icon-color-hidden-input>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div class="page-icons-empty-state" id="page-icons-empty-state">Aucune page ne correspond aux filtres appliques.</div>
+            </div>
+        </section>
+
+        <div class="page-icons-actions">
+            <a href="{{ path('admin_parametrage') }}" class="btn btn-secondary">Annuler</a>
+            <button type="submit" class="btn btn-primary">Enregistrer les icones</button>
+        </div>
+    </form>
+</div>
+
+<style>
+    .page-icons-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        margin-bottom: 1.5rem;
+    }
+
+    .page-icons-header-text {
+        margin: 0;
+        color: var(--text-muted);
+        max-width: 860px;
+    }
+
+    .page-icons-card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg-secondary);
+        padding: 1rem 1.1rem;
+        margin-bottom: 1rem;
+    }
+
+    .page-icons-toolbar {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.85rem;
+    }
+
+    .page-icons-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg-secondary);
+    }
+
+    .page-icons-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .page-icons-col-page {
+        width: 34%;
+    }
+
+    .page-icons-col-zone {
+        width: 14%;
+    }
+
+    .page-icons-col-preview {
+        width: 10%;
+    }
+
+    .page-icons-col-icon {
+        width: 30%;
+    }
+
+    .page-icons-col-color {
+        width: 12%;
+    }
+
+    .page-icons-table th,
+    .page-icons-table td {
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: middle;
+        width: 118px;
+    }
+
+    .page-icons-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .page-icons-table th {
+        font-size: 0.84rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        background: rgba(148, 163, 184, 0.08);
+    }
+
+    .page-icons-path,
+    .page-icons-route {
+        color: var(--text-muted);
+        font-size: 0.84rem;
+        overflow-wrap: anywhere;
+    }
+
+    .page-icons-route {
+        margin-top: 0.15rem;
+        font-family: "Courier New", monospace;
+    }
+
+    .page-icons-group {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.28rem 0.55rem;
+        border-radius: 999px;
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--primary);
+        font-size: 0.78rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .page-icons-preview {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 42px;
+        min-height: 42px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--bg-primary);
+        font-size: 1.2rem;
+    }
+
+    .page-icons-preview.is-font {
+        font-size: 1rem;
+    }
+
+    .page-icon-hidden-input {
+        display: none;
+    }
+
+    .page-icons-dropdown {
+        position: relative;
+    }
+
+    .page-icons-dropdown-menu {
+        position: absolute;
+        top: calc(100% + 0.5rem);
+        left: 0;
+        z-index: 30;
+        width: min(360px, calc(100vw - 4rem));
+        padding: 0.85rem;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg-secondary);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+        max-height: min(420px, 70vh);
+        overflow-y: auto;
+        display: none;
+    }
+
+    .page-icons-dropdown.is-open .page-icons-dropdown-menu {
+        display: block;
+    }
+
+    .page-icons-dropdown-search {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        width: 100%;
+        margin-bottom: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        padding: 0.65rem 0.8rem;
+    }
+
+    .page-icons-dropdown-search:focus-visible {
+        border-color: var(--primary);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+
+    .page-icons-dropdown-trigger {
+        width: 100%;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        padding: 0.65rem 0.85rem;
+        cursor: pointer;
+    }
+
+    .page-icons-dropdown-trigger:hover,
+    .page-icons-dropdown-trigger:focus-visible {
+        border-color: var(--primary);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+
+    .page-icons-dropdown-value {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        min-width: 0;
+        flex: 1 1 auto;
+        position: relative;
+    }
+
+    .page-icons-dropdown-icon {
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        background: rgba(148, 163, 184, 0.12);
+        font-size: 1.05rem;
+        flex: 0 0 30px;
+    }
+
+    .page-icons-dropdown-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .page-icons-dropdown-chevron {
+        color: var(--text-muted);
+        flex: 0 0 auto;
+        transition: transform 0.18s ease;
+    }
+
+    .page-icons-dropdown.is-open .page-icons-dropdown-chevron {
+        transform: rotate(180deg);
+    }
+
+    .page-icons-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        min-width: 280px;
+        align-content: flex-start;
+    }
+
+    .page-icon-choice {
+        width: 42px;
+        height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--bg-primary);
+        cursor: pointer;
+        transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+        font-size: 1.15rem;
+        color: var(--text-primary);
+    }
+
+    .page-icon-choice:hover,
+    .page-icon-choice:focus-visible {
+        transform: translateY(-1px);
+        border-color: var(--primary);
+        box-shadow: 0 8px 18px rgba(59, 130, 246, 0.18);
+        outline: none;
+    }
+
+    .page-icon-choice.is-active {
+        border-color: var(--primary);
+        background: rgba(59, 130, 246, 0.14);
+        color: var(--primary);
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+    }
+
+    .page-icon-choice.is-font,
+    .page-icons-dropdown-icon.is-font {
+        font-size: 1rem;
+    }
+
+    .page-icon-color {
+        width: 40px;
+        min-width: 40px;
+        height: 40px;
+        aspect-ratio: 1;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--bg-primary);
+        padding: 0.15rem;
+        display: block;
+    }
+
+    .page-icons-dropdown-empty-state {
+        display: none;
+        padding: 0.9rem 0.5rem 0.3rem;
+        color: var(--text-muted);
+        text-align: center;
+        font-size: 0.9rem;
+    }
+
+    .page-icons-dropdown-empty-state.is-visible {
+        display: block;
+    }
+
+    .page-icons-empty-state {
+        display: none;
+        padding: 1rem;
+        color: var(--text-muted);
+        text-align: center;
+    }
+
+    .page-icons-empty-state.is-visible {
+        display: block;
+    }
+
+    .page-icons-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    @media (max-width: 980px) {
+        .page-icons-toolbar {
+            grid-template-columns: 1fr;
+        }
+
+        .page-icons-table {
+            min-width: 980px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        (function() {
+            const libraries = {{ iconLibraries|json_encode|raw }};
+            const defaultIcons = {{ defaultsByPage|json_encode|raw }};
+            const currentLibrary = {{ currentLibrary|json_encode|raw }};
+            const savedIcons = {{ savedIcons|json_encode|raw }};
+            const librarySelect = document.getElementById('library');
+            const zoneFilterSelect = document.getElementById('zone-filter');
+            const pageSearchInput = document.getElementById('page-search');
+            const emptyState = document.getElementById('page-icons-empty-state');
+            const rows = Array.from(document.querySelectorAll('[data-page-row]'));
+            const dropdowns = Array.from(document.querySelectorAll('[data-icon-dropdown]'));
+            const workingSelections = Object.keys(libraries).reduce(function(state, libraryKey) {
+                state[libraryKey] = {};
+                return state;
+            }, {});
+
+            function escapeHtml(value) {
+                return String(value || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function normalizeClassIconValue(library, value) {
+                const iconValue = String(value || '').trim().replace(/\s+/g, ' ');
+                if (iconValue === '') {
+                    return '';
+                }
+
+                if (library === 'bootstrap' && /^bi-[a-z0-9-]+$/i.test(iconValue)) {
+                    return 'bi ' + iconValue;
+                }
+
+                if (library === 'boxicons' && /^bx-[a-z0-9-]+$/i.test(iconValue)) {
+                    return 'bx ' + iconValue;
+                }
+
+                if (library === 'tabler' && /^ti-[a-z0-9-]+$/i.test(iconValue)) {
+                    return 'ti ' + iconValue;
+                }
+
+                return iconValue;
+            }
+
+            function renderIconMarkup(library, value) {
+                const mode = String((libraries[library] || {}).render_mode || 'emoji');
+                if (mode === 'class') {
+                    const className = normalizeClassIconValue(library, value);
+                    return className !== '' ? '<i class="' + escapeHtml(className) + '"></i>' : '';
+                }
+                if (mode === 'ligature') {
+                    return '<span class="material-symbols-outlined">' + escapeHtml(value) + '</span>';
+                }
+                return escapeHtml(value);
+            }
+
+            function hasOption(library, value) {
+                const libraryDef = libraries[library] || { options: [] };
+                return libraryDef.options.some(function(option) {
+                    return String(option.value || '') === String(value || '');
+                });
+            }
+
+            function getOptionLabel(library, value) {
+                const libraryDef = libraries[library] || { options: [] };
+                const match = libraryDef.options.find(function(option) {
+                    return String(option.value || '') === String(value || '');
+                });
+
+                return match ? String(match.label || value || '') : String(value || '');
+            }
+
+            function updatePreview(row, library, value, color) {
+                const preview = row.querySelector('[data-icon-preview]');
+                if (!preview) {
+                    return;
+                }
+
+                preview.classList.toggle('is-font', library !== 'emoji');
+                if (!value) {
+                    preview.innerHTML = '';
+                    preview.style.color = '';
+                    return;
+                }
+
+                preview.innerHTML = renderIconMarkup(library, value);
+                preview.style.color = color || '';
+            }
+
+            function updateDropdownTrigger(row, library, value, color) {
+                const trigger = row.querySelector('[data-icon-dropdown-trigger]');
+                const dropdownIcon = row.querySelector('[data-icon-dropdown-current]');
+                const dropdownLabel = row.querySelector('[data-icon-dropdown-label]');
+                if (!trigger || !dropdownIcon || !dropdownLabel) {
+                    return;
+                }
+
+                const optionLabel = getOptionLabel(library, value);
+                dropdownIcon.classList.toggle('is-font', library !== 'emoji');
+                dropdownIcon.innerHTML = value ? renderIconMarkup(library, value) : '';
+                dropdownIcon.style.color = color || '';
+                dropdownLabel.textContent = optionLabel;
+
+                const accessibleLabel = optionLabel !== ''
+                    ? 'Icone selectionnee : ' + optionLabel
+                    : 'Choisir une icone';
+                trigger.setAttribute('aria-label', accessibleLabel);
+                trigger.title = optionLabel || 'Choisir une icone';
+            }
+
+            function setDropdownState(dropdown, isOpen) {
+                if (!dropdown) {
+                    return;
+                }
+
+                dropdown.classList.toggle('is-open', !!isOpen);
+                const trigger = dropdown.querySelector('[data-icon-dropdown-trigger]');
+                if (trigger) {
+                    trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                }
+
+                if (!isOpen) {
+                    resetDropdownSearch(dropdown);
+                }
+            }
+
+            function closeAllDropdowns(exceptDropdown) {
+                dropdowns.forEach(function(dropdown) {
+                    if (exceptDropdown && dropdown === exceptDropdown) {
+                        return;
+                    }
+                    setDropdownState(dropdown, false);
+                });
+            }
+
+            function filterPickerOptions(row) {
+                const searchInput = row.querySelector('[data-icon-search]');
+                const emptyIconState = row.querySelector('[data-icon-empty-state]');
+                const choices = Array.from(row.querySelectorAll('.page-icon-choice'));
+                const query = String(searchInput ? searchInput.value || '' : '').trim().toLowerCase();
+                let visibleCount = 0;
+
+                choices.forEach(function(choice) {
+                    const label = String(choice.dataset.iconLabel || '').toLowerCase();
+                    const value = String(choice.dataset.iconValue || '').toLowerCase();
+                    const isVisible = query === '' || label.indexOf(query) !== -1 || value.indexOf(query) !== -1;
+                    choice.hidden = !isVisible;
+                    choice.style.display = isVisible ? '' : 'none';
+                    if (isVisible) {
+                        visibleCount += 1;
+                    }
+                });
+
+                if (emptyIconState) {
+                    emptyIconState.classList.toggle('is-visible', visibleCount === 0);
+                }
+            }
+
+            function resetDropdownSearch(dropdown) {
+                if (!dropdown) {
+                    return;
+                }
+
+                const row = dropdown.closest('[data-page-row]');
+                const searchInput = dropdown.querySelector('[data-icon-search]');
+                if (searchInput) {
+                    searchInput.value = '';
+                }
+
+                if (row) {
+                    filterPickerOptions(row);
+                }
+            }
+
+            function buildPicker(row, library) {
+                const pagePath = row.dataset.pagePath || '';
+                const input = row.querySelector('[data-icon-input]');
+                const colorInput = row.querySelector('[data-icon-color-input]');
+                const colorHiddenInput = row.querySelector('[data-icon-color-hidden-input]');
+                const dropdown = row.querySelector('[data-icon-dropdown]');
+                const grid = row.querySelector('[data-icon-grid]');
+                const libraryDef = libraries[library] || { options: [] };
+                const selectedCandidate = workingSelections[library][pagePath]
+                    || (input && hasOption(library, input.dataset.selectedValue || '') ? input.dataset.selectedValue || '' : '')
+                    || ((defaultIcons[pagePath] || {})[library] || '');
+                let resolvedSelection = selectedCandidate;
+
+                if (!hasOption(library, resolvedSelection) && libraryDef.options.length > 0) {
+                    resolvedSelection = String(libraryDef.options[0].value || '');
+                }
+
+                if (grid) {
+                    grid.innerHTML = '';
+                    libraryDef.options.forEach(function(option) {
+                        const value = String(option.value || '');
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'page-icon-choice' + (library !== 'emoji' ? ' is-font' : '');
+                        button.dataset.iconValue = value;
+                        button.dataset.iconLabel = String(option.label || value);
+                        button.title = String(option.label || value);
+                        button.setAttribute('aria-label', String(option.label || value));
+                        button.innerHTML = renderIconMarkup(library, value);
+                        button.classList.toggle('is-active', value === resolvedSelection);
+                        button.addEventListener('click', function() {
+                            workingSelections[library][pagePath] = value;
+                            if (input) {
+                                input.value = value;
+                            }
+
+                            Array.from(grid.querySelectorAll('.page-icon-choice')).forEach(function(choice) {
+                                choice.classList.toggle('is-active', choice === button);
+                            });
+
+                            updatePreview(row, library, value, colorHiddenInput ? colorHiddenInput.value || '' : '');
+                            updateDropdownTrigger(row, library, value, colorHiddenInput ? colorHiddenInput.value || '' : '');
+                            setDropdownState(dropdown, false);
+                        });
+                        grid.appendChild(button);
+                    });
+                }
+
+                if (input) {
+                    input.value = resolvedSelection;
+                }
+                if (colorInput) {
+                    colorInput.value = String(colorInput.value || '#3B82F6').toUpperCase();
+                }
+                workingSelections[library][pagePath] = resolvedSelection;
+                updatePreview(row, library, resolvedSelection, colorHiddenInput ? colorHiddenInput.value || '' : '');
+                updateDropdownTrigger(row, library, resolvedSelection, colorHiddenInput ? colorHiddenInput.value || '' : '');
+                filterPickerOptions(row);
+            }
+
+            function rebuildAll() {
+                const activeLibrary = librarySelect ? librarySelect.value || currentLibrary : currentLibrary;
+                closeAllDropdowns();
+                rows.forEach(function(row) {
+                    buildPicker(row, activeLibrary);
+                });
+                applyFilters();
+            }
+
+            function applyFilters() {
+                const selectedZone = zoneFilterSelect ? String(zoneFilterSelect.value || '') : '';
+                const searchValue = pageSearchInput ? String(pageSearchInput.value || '').trim().toLowerCase() : '';
+                let visibleCount = 0;
+
+                rows.forEach(function(row) {
+                    const rowZone = String(row.dataset.pageGroup || '');
+                    const rowSearch = String(row.dataset.pageSearch || '').toLowerCase();
+                    const matchesZone = selectedZone === '' || rowZone === selectedZone;
+                    const matchesSearch = searchValue === '' || rowSearch.indexOf(searchValue) !== -1;
+                    const isVisible = matchesZone && matchesSearch;
+                    row.style.display = isVisible ? '' : 'none';
+                    if (isVisible) {
+                        visibleCount += 1;
+                    }
+                });
+
+                if (emptyState) {
+                    emptyState.classList.toggle('is-visible', visibleCount === 0);
+                }
+            }
+
+            Object.keys(savedIcons).forEach(function(pagePath) {
+                const iconConfig = savedIcons[pagePath] || {};
+                if (hasOption(currentLibrary, iconConfig.value || '')) {
+                    workingSelections[currentLibrary][pagePath] = iconConfig.value || '';
+                }
+            });
+
+            rows.forEach(function(row) {
+                const colorInput = row.querySelector('[data-icon-color-input]');
+                const colorHiddenInput = row.querySelector('[data-icon-color-hidden-input]');
+                const input = row.querySelector('[data-icon-input]');
+                const dropdown = row.querySelector('[data-icon-dropdown]');
+                const trigger = row.querySelector('[data-icon-dropdown-trigger]');
+                const iconSearchInput = row.querySelector('[data-icon-search]');
+
+                if (colorInput && colorHiddenInput) {
+                    colorInput.value = String(colorInput.value || '#3B82F6').toUpperCase();
+                    colorInput.addEventListener('input', function() {
+                        const normalizedColor = String(colorInput.value || '#3B82F6').toUpperCase();
+                        colorInput.value = normalizedColor;
+                        colorHiddenInput.value = normalizedColor === '#3B82F6' ? '' : normalizedColor;
+
+                        const activeLibrary = librarySelect ? librarySelect.value || currentLibrary : currentLibrary;
+                        updatePreview(row, activeLibrary, input ? input.value || '' : '', colorHiddenInput.value || '');
+                        updateDropdownTrigger(row, activeLibrary, input ? input.value || '' : '', colorHiddenInput.value || '');
+                    });
+                }
+
+                if (dropdown && trigger) {
+                    trigger.addEventListener('click', function(event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const willOpen = !dropdown.classList.contains('is-open');
+                        closeAllDropdowns(willOpen ? dropdown : null);
+                        setDropdownState(dropdown, willOpen);
+                        if (willOpen && iconSearchInput) {
+                            iconSearchInput.focus();
+                        }
+                    });
+                }
+
+                if (iconSearchInput) {
+                    iconSearchInput.addEventListener('input', function() {
+                        filterPickerOptions(row);
+                    });
+                }
+            });
+
+            document.addEventListener('click', function(event) {
+                if (!event.target.closest('[data-icon-dropdown]')) {
+                    closeAllDropdowns();
+                }
+            });
+
+            if (librarySelect) {
+                librarySelect.addEventListener('change', rebuildAll);
+            }
+            if (zoneFilterSelect) {
+                zoneFilterSelect.addEventListener('change', applyFilters);
+            }
+            if (pageSearchInput) {
+                pageSearchInput.addEventListener('input', applyFilters);
+            }
+
+            rebuildAll();
+        })();
+    </script>
+{% endblock %}

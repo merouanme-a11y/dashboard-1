@@ -1,0 +1,16 @@
+framework:
+    cache:
+        prefix_seed: adep_dashboard
+        app: cache.adapter.filesystem
+        system: cache.adapter.system
+        pools:
+            app.theme_cache_pool:
+                adapter: cache.app
+            app.page_display_cache_pool:
+                adapter: cache.app
+            app.directory_cache_pool:
+                adapter: cache.app
+            app.api_result_cache_pool:
+                adapter: cache.adapter.filesystem
+            app.youtrack_cache_pool:
+                adapter: cache.app

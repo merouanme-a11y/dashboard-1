@@ -1,0 +1,292 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Libelles des pages{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('admin_page_titles', 'Libelles des pages') %}
+
+<div class="card" style="max-width: 1360px; margin: 0 auto;">
+    <div style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; flex-wrap:wrap; margin-bottom:1.5rem;">
+        <div>
+            <h1 class="page-title-heading" style="margin:0 0 0.5rem 0;">
+                {{ page_display_service.renderNavigationIcon('admin_page_titles', 'bi-pencil-square', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p style="margin:0; color:var(--text-muted); max-width:900px;">
+                Modifiez le libelle visible de chaque page sans renommer la route Symfony.
+                Le nouveau titre est applique au navigateur, au lien de parametrage et aux modules affiches sur le site.
+            </p>
+        </div>
+        <a href="{{ path('admin_parametrage') }}" class="btn btn-secondary">Retour aux parametres</a>
+    </div>
+
+    <form method="post">
+        <section class="page-titles-card">
+            <h4>Filtres</h4>
+            <p>Recherchez une page par titre, chemin ou zone, puis saisissez un libelle personnalise.</p>
+            <div class="page-titles-toolbar">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="zone-filter">Filtre zone</label>
+                    <select id="zone-filter">
+                        <option value="">Toutes les zones</option>
+                        {% for group in availableGroups %}
+                            <option value="{{ group }}">{{ group }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="page-search">Recherche page</label>
+                    <input type="text" id="page-search" placeholder="Titre, chemin ou libelle actuel">
+                </div>
+            </div>
+        </section>
+
+        <section class="page-titles-card">
+            <h4>Affectation des libelles</h4>
+            <p>Laissez le champ vide pour revenir automatiquement au titre d origine.</p>
+            <div class="page-titles-table-wrap">
+                <table class="page-titles-table">
+                    <thead>
+                        <tr>
+                            <th>Page</th>
+                            <th>Zone</th>
+                            <th>Chemin</th>
+                            <th>Titre personnalise</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for page in configurablePages %}
+                            {% set pagePath = page.page_path %}
+                            {% set defaultTitle = page.default_title %}
+                            {% set customTitle = savedTitles[pagePath]|default('') %}
+                            {% set currentTitle = page.current_title %}
+                            <tr data-page-row data-page-group="{{ page.group }}" data-page-search="{{ (defaultTitle ~ ' ' ~ currentTitle ~ ' ' ~ page.route_path ~ ' ' ~ pagePath)|lower }}">
+                                <td>
+                                    <strong>{{ defaultTitle }}</strong>
+                                    {% if currentTitle != defaultTitle %}
+                                        <div class="page-titles-current">Affiche actuellement : {{ currentTitle }}</div>
+                                    {% endif %}
+                                </td>
+                                <td><span class="page-titles-group">{{ page.group }}</span></td>
+                                <td>
+                                    <span class="page-titles-path">{{ page.route_path }}</span>
+                                    <div class="page-titles-route">{{ pagePath }}</div>
+                                </td>
+                                <td>
+                                    <input
+                                        type="text"
+                                        class="page-titles-input"
+                                        name="titles[{{ pagePath }}]"
+                                        value="{{ customTitle }}"
+                                        placeholder="{{ defaultTitle }}"
+                                        data-title-input
+                                    >
+                                </td>
+                                <td>
+                                    <div class="page-titles-actions">
+                                        <button type="submit" class="btn btn-primary btn-sm page-titles-icon-button" name="save_page_path" value="{{ pagePath }}" title="Valider" aria-label="Valider">
+                                            OK
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-sm page-titles-icon-button" data-reset-title title="Reinitialiser" aria-label="Reinitialiser">
+                                            Reset
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div class="page-titles-empty-state" id="page-titles-empty-state">Aucune page ne correspond aux filtres appliques.</div>
+            </div>
+        </section>
+
+        <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem; flex-wrap:wrap;">
+            <a href="{{ path('admin_parametrage') }}" class="btn btn-secondary">Annuler</a>
+            <button type="submit" class="btn btn-primary">Enregistrer les libelles</button>
+        </div>
+    </form>
+</div>
+
+<style>
+    .page-titles-toolbar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.85rem;
+    }
+
+    .page-titles-card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg-secondary);
+        padding: 1rem 1.1rem;
+        margin-bottom: 1rem;
+    }
+
+    .page-titles-card h4 {
+        margin: 0 0 0.4rem 0;
+    }
+
+    .page-titles-card p {
+        margin: 0 0 1rem 0;
+        color: var(--text-muted);
+        font-size: 0.92rem;
+    }
+
+    .page-titles-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg-secondary);
+    }
+
+    .page-titles-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .page-titles-table th,
+    .page-titles-table td {
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    .page-titles-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .page-titles-table th {
+        font-size: 0.84rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        background: rgba(148, 163, 184, 0.08);
+    }
+
+    .page-titles-group {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.28rem 0.55rem;
+        border-radius: 999px;
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--primary);
+        font-size: 0.78rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .page-titles-path,
+    .page-titles-current,
+    .page-titles-route {
+        color: var(--text-muted);
+        font-size: 0.84rem;
+    }
+
+    .page-titles-current {
+        margin-top: 0.2rem;
+    }
+
+    .page-titles-route {
+        margin-top: 0.15rem;
+        font-family: "Courier New", monospace;
+    }
+
+    .page-titles-input {
+        width: 100%;
+        min-width: 280px;
+    }
+
+    .page-titles-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .page-titles-icon-button {
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        line-height: 1;
+    }
+
+    .page-titles-empty-state {
+        display: none;
+        padding: 1rem;
+        color: var(--text-muted);
+        text-align: center;
+    }
+
+    .page-titles-empty-state.is-visible {
+        display: block;
+    }
+
+    @media (max-width: 980px) {
+        .page-titles-toolbar {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        (function() {
+            const zoneFilterSelect = document.getElementById('zone-filter');
+            const pageSearchInput = document.getElementById('page-search');
+            const emptyState = document.getElementById('page-titles-empty-state');
+            const pageRows = Array.from(document.querySelectorAll('[data-page-row]'));
+
+            function applyFilters() {
+                const selectedZone = zoneFilterSelect ? String(zoneFilterSelect.value || '') : '';
+                const searchValue = pageSearchInput ? String(pageSearchInput.value || '').trim().toLowerCase() : '';
+                let visibleCount = 0;
+
+                pageRows.forEach(function(row) {
+                    const rowZone = String(row.dataset.pageGroup || '');
+                    const rowSearch = String(row.dataset.pageSearch || '').toLowerCase();
+                    const matchesZone = selectedZone === '' || rowZone === selectedZone;
+                    const matchesSearch = searchValue === '' || rowSearch.indexOf(searchValue) !== -1;
+                    const isVisible = matchesZone && matchesSearch;
+                    row.style.display = isVisible ? '' : 'none';
+                    if (isVisible) {
+                        visibleCount += 1;
+                    }
+                });
+
+                if (emptyState) {
+                    emptyState.classList.toggle('is-visible', visibleCount === 0);
+                }
+            }
+
+            document.querySelectorAll('[data-reset-title]').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const row = button.closest('[data-page-row]');
+                    const input = row ? row.querySelector('[data-title-input]') : null;
+                    if (input) {
+                        input.value = '';
+                        input.focus();
+                    }
+                });
+            });
+
+            if (zoneFilterSelect) {
+                zoneFilterSelect.addEventListener('change', applyFilters);
+            }
+            if (pageSearchInput) {
+                pageSearchInput.addEventListener('input', applyFilters);
+            }
+
+            applyFilters();
+        })();
+    </script>
+{% endblock %}

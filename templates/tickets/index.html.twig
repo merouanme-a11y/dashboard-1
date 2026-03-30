@@ -1,0 +1,903 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Tickets{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('app_tickets', 'Tickets') %}
+<div class="tickets-page">
+    <div class="card tickets-hero">
+        <div>
+            <h1 class="page-title-heading tickets-title">
+                {{ page_display_service.renderNavigationIcon('app_tickets', 'bi-ticket-perforated', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p class="tickets-subtitle">Vue rapide des tickets YouTrack, optimisee pour l affichage immediat et le filtrage local.</p>
+        </div>
+        <div class="tickets-hero-actions">
+            <span class="tickets-count-pill" id="tickets-count-pill">Chargement...</span>
+            <button type="button" class="btn btn-primary" id="tickets-reload-button">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                <span>Actualiser</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="card tickets-filters">
+        <div class="tickets-filter-grid tickets-filter-grid-top">
+            <div class="tickets-filter-field tickets-filter-search">
+                <label for="tickets-search">Recherche</label>
+                <input type="text" id="tickets-search" placeholder="ID, resume, service, responsable, priorite..." autocomplete="off">
+            </div>
+            <div class="tickets-filter-field">
+                <label for="tickets-state-filter">Etat</label>
+                <select id="tickets-state-filter">
+                    <option value="all">Tous les etats</option>
+                </select>
+            </div>
+            <div class="tickets-filter-field">
+                <label for="tickets-service-filter">Service</label>
+                <select id="tickets-service-filter">
+                    <option value="all">Tous les services</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="tickets-filter-grid tickets-filter-grid-bottom">
+            <div class="tickets-filter-field">
+                <label for="tickets-responsable-filter">Responsable</label>
+                <select id="tickets-responsable-filter">
+                    <option value="all">Tous les responsables</option>
+                </select>
+            </div>
+            <div class="tickets-filter-field">
+                <label for="tickets-action-filter">Type action</label>
+                <select id="tickets-action-filter">
+                    <option value="all">Tous les types</option>
+                </select>
+            </div>
+            <div class="tickets-status-panel">
+                <div class="tickets-status-line">
+                    <span class="tickets-status-label">Etat du chargement</span>
+                    <span class="tickets-status-text" id="tickets-status-text">Initialisation...</span>
+                </div>
+                <small id="tickets-status-meta">Le cache navigateur est utilise en priorite pour accelerer l affichage.</small>
+            </div>
+        </div>
+    </div>
+
+    <div id="tickets-error" class="alert alert-danger tickets-error" hidden></div>
+
+    <div id="tickets-container" class="tickets-list">
+        <div class="card tickets-empty">
+            <p>Chargement des tickets...</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .tickets-page {
+        display: grid;
+        gap: 1rem;
+    }
+    .tickets-hero,
+    .tickets-filters {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .tickets-title {
+        margin: 0;
+    }
+    .tickets-subtitle {
+        margin: 0.35rem 0 0;
+        color: var(--text-muted);
+    }
+    .tickets-hero-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .tickets-count-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 0.45rem 0.9rem;
+        border-radius: 999px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 0.88rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .tickets-filter-grid {
+        display: grid;
+        gap: 1rem;
+        width: 100%;
+    }
+    .tickets-filter-grid-top {
+        grid-template-columns: minmax(240px, 2fr) repeat(2, minmax(180px, 1fr));
+    }
+    .tickets-filter-grid-bottom {
+        grid-template-columns: repeat(2, minmax(180px, 1fr)) minmax(260px, 1.2fr);
+        margin-top: 1rem;
+    }
+    .tickets-filter-field label,
+    .tickets-status-label {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+    }
+    .tickets-filter-field input,
+    .tickets-filter-field select {
+        width: 100%;
+        min-height: 46px;
+        padding: 0.8rem 0.95rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+    .tickets-status-panel {
+        min-height: 46px;
+        padding: 0.8rem 0.95rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(6, 182, 212, 0.05));
+    }
+    .tickets-status-line {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: baseline;
+    }
+    .tickets-status-text {
+        color: var(--text-primary);
+        font-weight: 600;
+        text-align: right;
+    }
+    #tickets-status-meta {
+        display: block;
+        margin-top: 0.35rem;
+        color: var(--text-muted);
+    }
+    .tickets-error {
+        margin: 0;
+    }
+    .tickets-error[hidden] {
+        display: none !important;
+    }
+    .tickets-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+    }
+    .tickets-page-card {
+        display: block;
+        cursor: pointer;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 18px;
+        padding: 0.95rem 1rem;
+        background: var(--bg-primary);
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+        text-decoration: none;
+        transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .tickets-page-card:hover {
+        transform: scale(1.012);
+        border-color: rgba(59, 130, 246, 0.55);
+        box-shadow: 0 16px 38px rgba(37, 99, 235, 0.14);
+        text-decoration: none;
+    }
+    .tickets-page-card:focus-visible {
+        outline: 2px solid rgba(37, 99, 235, 0.7);
+        outline-offset: 2px;
+    }
+    .tickets-card-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        margin-bottom: 0.75rem;
+    }
+    .tickets-card-heading {
+        display: flex;
+        gap: 0.55rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .tickets-card-id {
+        font-weight: 800;
+        color: #2563eb;
+        letter-spacing: 0.02em;
+    }
+    .tickets-card-summary {
+        color: var(--text-primary);
+        font-weight: 700;
+    }
+    .tickets-card-links {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .tickets-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        padding: 0.2rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: #fff;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .tickets-detail-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        min-height: 28px;
+        padding: 0.2rem 0.65rem;
+        border-radius: 999px;
+        background: rgba(59, 130, 246, 0.08);
+        color: var(--primary-dark);
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-decoration: none;
+    }
+    .tickets-detail-link:hover {
+        background: rgba(59, 130, 246, 0.14);
+        text-decoration: none;
+    }
+    .tickets-card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.7rem;
+    }
+    .tickets-meta {
+        padding: 0.55rem 0.65rem;
+        border-radius: 14px;
+        background: var(--bg-secondary);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .tickets-meta-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        margin-bottom: 0.2rem;
+    }
+    .tickets-meta-value {
+        color: var(--text-primary);
+        font-size: 0.92rem;
+        line-height: 1.35;
+        word-break: break-word;
+    }
+    .tickets-color-line {
+        height: 4px;
+        border-radius: 999px;
+        margin-top: 0.45rem;
+        background: var(--border);
+    }
+    .tickets-empty {
+        text-align: center;
+    }
+    .tickets-empty p {
+        margin: 0;
+    }
+    .tickets-load-more {
+        display: flex;
+        justify-content: center;
+    }
+    .tickets-load-more .btn {
+        min-width: 240px;
+    }
+    @media (max-width: 1024px) {
+        .tickets-filter-grid-top,
+        .tickets-filter-grid-bottom {
+            grid-template-columns: repeat(2, minmax(180px, 1fr));
+        }
+        .tickets-status-panel {
+            grid-column: 1 / -1;
+        }
+    }
+    @media (max-width: 768px) {
+        .tickets-filter-grid-top,
+        .tickets-filter-grid-bottom {
+            grid-template-columns: 1fr;
+        }
+        .tickets-card-top {
+            flex-direction: column;
+            align-items: stretch;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ticketsDataUrl = {{ ticketsDataUrl|json_encode|raw }};
+        const ticketDetailUrlPattern = {{ path(ticketDetailRouteName, {id: '__ID__'})|json_encode|raw }};
+        const ticketsCacheKey = {{ ticketsCacheKey|json_encode|raw }};
+        const preloadedPayload = {{ preloadedTicketsPayload|default(null)|json_encode|raw }};
+        const cacheTtlMs = 5 * 60 * 1000;
+        const statsSelectionTtlMs = 15 * 60 * 1000;
+        const ticketsPerPage = 50;
+        const renderDebounceMs = 250;
+        const searchDebounceMs = 350;
+        const queryParams = new URLSearchParams(window.location.search);
+        const initialFilters = {
+            project: String(queryParams.get('project') || '').trim(),
+            state: String(queryParams.get('state') || '').trim(),
+            service: String(queryParams.get('service') || '').trim(),
+            responsable: String(queryParams.get('responsable') || '').trim(),
+            action: String(queryParams.get('action') || '').trim()
+        };
+        const statsSelectionKey = String(queryParams.get('statsSelection') || '').trim();
+
+        const reloadButton = document.getElementById('tickets-reload-button');
+        const countPill = document.getElementById('tickets-count-pill');
+        const statusText = document.getElementById('tickets-status-text');
+        const statusMeta = document.getElementById('tickets-status-meta');
+        const errorBox = document.getElementById('tickets-error');
+        const container = document.getElementById('tickets-container');
+        const searchInput = document.getElementById('tickets-search');
+        const stateFilter = document.getElementById('tickets-state-filter');
+        const serviceFilter = document.getElementById('tickets-service-filter');
+        const responsableFilter = document.getElementById('tickets-responsable-filter');
+        const actionFilter = document.getElementById('tickets-action-filter');
+
+        let allTickets = [];
+        let serviceColors = {};
+        let currentPage = 0;
+        let renderTimeout = null;
+        let searchTimeout = null;
+        let hasRenderedFromCache = false;
+        let isUsingStatsSelection = false;
+
+        reloadButton.addEventListener('click', function() {
+            loadTickets(true);
+        });
+
+        [stateFilter, serviceFilter, responsableFilter, actionFilter].forEach(function(element) {
+            element.addEventListener('change', scheduleRender);
+        });
+
+        searchInput.addEventListener('input', function() {
+            window.clearTimeout(searchTimeout);
+            searchTimeout = window.setTimeout(function() {
+                currentPage = 0;
+                renderTickets();
+            }, searchDebounceMs);
+        });
+
+        const statsSelectionPayload = getStatsSelectionPayload(statsSelectionKey);
+        if (statsSelectionPayload && Array.isArray(statsSelectionPayload.tickets)) {
+            isUsingStatsSelection = true;
+            hasRenderedFromCache = true;
+            applyPayload({
+                tickets: statsSelectionPayload.tickets,
+                serviceColors: statsSelectionPayload.serviceColors || {},
+                defaultFilters: statsSelectionPayload.filters || initialFilters,
+                service: statsSelectionPayload.label ? 'Source Stats : ' + statsSelectionPayload.label : 'Source Stats',
+                statusText: 'Selection Stats chargee',
+                statusMeta: 'Liste filtree ouverte depuis la page Statistiques.'
+            }, true);
+        } else {
+            loadTickets(false);
+        }
+
+        function scheduleRender() {
+            window.clearTimeout(renderTimeout);
+            renderTimeout = window.setTimeout(function() {
+                currentPage = 0;
+                renderTickets();
+            }, renderDebounceMs);
+        }
+
+        function loadTickets(forceRefresh) {
+            if (isUsingStatsSelection && !forceRefresh) {
+                return;
+            }
+
+            setError('');
+            setStatus(forceRefresh ? 'Actualisation en cours...' : 'Chargement des tickets...', forceRefresh ? 'Interrogation directe de YouTrack.' : 'Cache local prioritaire pour un affichage instantane.');
+
+            if (!forceRefresh) {
+                const cached = getCachedPayload();
+                if (cached && Array.isArray(cached.tickets)) {
+                    hasRenderedFromCache = true;
+                    applyPayload(withCachePresentation(cached, 'Cache navigateur charge', 'Le dernier resultat local valide est reutilise sans relancer l API.'), true);
+                    return;
+                }
+
+                if (preloadedPayload && Array.isArray(preloadedPayload.tickets)) {
+                    hasRenderedFromCache = true;
+                    savePayloadToCache(preloadedPayload);
+                    applyPayload(withCachePresentation(preloadedPayload, 'Cache serveur charge', 'Le resultat deja en cache sur le serveur est utilise sans nouvel appel YouTrack.'), true);
+                    return;
+                }
+            }
+
+            fetchTickets(forceRefresh);
+        }
+
+        function fetchTickets(forceRefresh) {
+            const url = forceRefresh ? ticketsDataUrl + '?refresh=1' : ticketsDataUrl;
+
+            fetch(url, {
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(function(response) {
+                    return response.json().catch(function() {
+                        return {
+                            _error: 'Reponse JSON invalide.'
+                        };
+                    });
+                })
+                .then(function(payload) {
+                    if (payload && payload._error) {
+                        throw new Error(payload._detail || payload._error);
+                    }
+
+                    savePayloadToCache(payload);
+                    applyPayload(payload, false);
+                })
+                .catch(function(error) {
+                    if (!hasRenderedFromCache) {
+                        container.innerHTML = '<div class="card tickets-empty"><p>Impossible de charger les tickets.</p></div>';
+                    }
+
+                    setError(error && error.message ? error.message : 'Erreur reseau.');
+                    setStatus('Erreur de chargement', 'Le dernier cache local reste utilise s il est disponible.');
+                });
+        }
+
+        function applyPayload(payload, fromCache) {
+            allTickets = Array.isArray(payload.tickets) ? payload.tickets : [];
+            serviceColors = payload.serviceColors && typeof payload.serviceColors === 'object' ? payload.serviceColors : {};
+
+            rebuildStateFilter(payload.defaultFilters || {});
+            rebuildServiceFilter(payload.defaultFilters || {});
+            rebuildResponsableFilter(payload.defaultFilters || {});
+            rebuildActionFilter(payload.defaultFilters || {});
+
+            currentPage = 0;
+            renderTickets();
+
+            const suffix = fromCache ? ' (cache navigateur)' : '';
+            setStatus(
+                payload.statusText || (allTickets.length + ' ticket(s) charges' + suffix),
+                payload.statusMeta || (payload.service ? 'Perimetre actif : ' + payload.service : 'Aucun service utilisateur rattache.')
+            );
+        }
+
+        function withCachePresentation(payload, statusTextValue, statusMetaValue) {
+            return Object.assign({}, payload, {
+                statusText: payload && payload.statusText ? payload.statusText : statusTextValue,
+                statusMeta: payload && payload.statusMeta ? payload.statusMeta : statusMetaValue
+            });
+        }
+
+        function rebuildStateFilter(defaultFilters) {
+            rebuildSelect(stateFilter, buildUniqueValues('state'), 'Tous les etats', defaultFilters.state || 'all');
+        }
+
+        function rebuildServiceFilter(defaultFilters) {
+            rebuildSelect(serviceFilter, buildUniqueValues('service'), 'Tous les services', defaultFilters.service || 'all');
+        }
+
+        function rebuildResponsableFilter(defaultFilters) {
+            const values = [];
+            allTickets.forEach(function(ticket) {
+                const value = String(ticket.assignee || ticket.reporter || '').trim();
+                if (value && values.indexOf(value) === -1) {
+                    values.push(value);
+                }
+            });
+            values.sort(localeSort);
+            rebuildSelect(responsableFilter, values, 'Tous les responsables', defaultFilters.responsable || 'all');
+        }
+
+        function rebuildActionFilter(defaultFilters) {
+            rebuildSelect(actionFilter, buildUniqueValues('action'), 'Tous les types', defaultFilters.typeAction || 'all');
+        }
+
+        function rebuildSelect(select, values, allLabel, defaultValue) {
+            const previousValue = select.value || 'all';
+            const options = ['<option value="all">' + escapeHtml(allLabel) + '</option>'];
+
+            values.forEach(function(value) {
+                options.push('<option value="' + escapeHtml(value) + '">' + escapeHtml(value) + '</option>');
+            });
+
+            select.innerHTML = options.join('');
+
+            const queryValue = getInitialFilterValue(select.id);
+            if (queryValue !== 'all' && values.indexOf(queryValue) !== -1) {
+                select.value = queryValue;
+                return;
+            }
+
+            if (previousValue !== 'all' && values.indexOf(previousValue) !== -1) {
+                select.value = previousValue;
+                return;
+            }
+
+            if (defaultValue !== 'all' && values.indexOf(defaultValue) !== -1) {
+                select.value = defaultValue;
+                return;
+            }
+
+            select.value = 'all';
+        }
+
+        function buildUniqueValues(field) {
+            const values = [];
+            allTickets.forEach(function(ticket) {
+                const value = String(ticket[field] || '').trim();
+                if (value && values.indexOf(value) === -1) {
+                    values.push(value);
+                }
+            });
+            values.sort(localeSort);
+            return values;
+        }
+
+        function renderTickets() {
+            const rows = filterTickets();
+            const total = rows.length;
+            countPill.textContent = total + ' ticket(s)';
+
+            if (!rows.length) {
+                container.innerHTML = '<div class="card tickets-empty"><p>Aucun ticket ne correspond aux filtres actifs.</p></div>';
+                return;
+            }
+
+            const end = Math.min((currentPage + 1) * ticketsPerPage, total);
+            const visibleRows = rows.slice(0, end);
+            let html = '';
+
+            visibleRows.forEach(function(ticket) {
+                html += buildTicketCard(ticket);
+            });
+
+            if (end < total) {
+                html += '<div class="tickets-load-more"><button type="button" class="btn btn-secondary" id="tickets-load-more-button">Charger plus (' + end + '/' + total + ')</button></div>';
+            }
+
+            container.innerHTML = html;
+            bindTicketCardInteractions();
+
+            const loadMoreButton = document.getElementById('tickets-load-more-button');
+            if (loadMoreButton) {
+                loadMoreButton.addEventListener('click', function() {
+                    currentPage += 1;
+                    renderTickets();
+                    window.setTimeout(function() {
+                        window.scrollBy({ top: 180, behavior: 'smooth' });
+                    }, 50);
+                });
+            }
+        }
+
+        function filterTickets() {
+            const stateValue = stateFilter.value || 'all';
+            const serviceValue = serviceFilter.value || 'all';
+            const responsableValue = responsableFilter.value || 'all';
+            const actionValue = actionFilter.value || 'all';
+            const searchValue = String(searchInput.value || '').trim().toLowerCase();
+            const projectValue = initialFilters.project || 'all';
+
+            const rows = [];
+            allTickets.forEach(function(ticket) {
+                if (projectValue !== 'all') {
+                    const ticketProject = String(ticket.project || extractProjectFromId(ticket.idReadable || '')).trim();
+                    if (ticketProject !== projectValue) {
+                        return;
+                    }
+                }
+
+                if (stateValue !== 'all' && String(ticket.state || '').trim() !== stateValue) {
+                    return;
+                }
+
+                if (serviceValue !== 'all' && String(ticket.service || '').trim() !== serviceValue) {
+                    return;
+                }
+
+                if (responsableValue !== 'all') {
+                    const responsable = String(ticket.assignee || ticket.reporter || '').trim();
+                    if (responsable !== responsableValue) {
+                        return;
+                    }
+                }
+
+                if (actionValue !== 'all' && String(ticket.action || '').trim() !== actionValue) {
+                    return;
+                }
+
+                if (searchValue) {
+                    const haystack = [
+                        ticket.idReadable,
+                        ticket.summary,
+                        ticket.service,
+                        ticket.state,
+                        ticket.priority,
+                        ticket.reporter,
+                        ticket.assignee,
+                        ticket.action
+                    ].join(' ').toLowerCase();
+
+                    if (haystack.indexOf(searchValue) === -1) {
+                        return;
+                    }
+                }
+
+                rows.push(ticket);
+            });
+
+            rows.sort(function(left, right) {
+                return Number(right.issueNumber || 0) - Number(left.issueNumber || 0);
+            });
+
+            return rows;
+        }
+
+        function buildTicketCard(ticket) {
+            const statusColor = getStatusColor(ticket.state || '');
+            const priorityColor = getPriorityColor(ticket.priority || '');
+            const serviceColor = getServiceColor(ticket.service || '');
+            const responsable = String(ticket.assignee || ticket.reporter || '-').trim() || '-';
+            const detailUrl = ticketDetailUrlPattern.replace('__ID__', encodeURIComponent(ticket.idReadable || ''));
+            const rmLabel = formatRmLabel(ticket.lienRm || '');
+
+            return '' +
+                '<article class="ticket-card tickets-page-card" tabindex="0" role="link" data-detail-url="' + escapeHtml(detailUrl) + '">' +
+                    '<div class="tickets-card-top">' +
+                        '<div>' +
+                            '<div class="tickets-card-heading">' +
+                                '<span class="tickets-card-id">' + escapeHtml(ticket.idReadable || '') + '</span>' +
+                                '<span class="tickets-card-summary">' + escapeHtml(ticket.summary || '') + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="tickets-card-links">' +
+                            '<span class="tickets-badge" style="background:' + escapeHtml(statusColor) + ';">' + escapeHtml(ticket.state || 'Sans etat') + '</span>' +
+                            '<a class="tickets-detail-link" href="' + escapeHtml(detailUrl) + '">' +
+                                '<i class="bi bi-arrow-right-circle" aria-hidden="true"></i>' +
+                                '<span>Detail</span>' +
+                            '</a>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="tickets-card-grid">' +
+                        buildMetaBlock('Priorite', ticket.priority || '-', priorityColor) +
+                        buildMetaBlock('Date creation', ticket.created || '-') +
+                        buildMetaBlock('Service', ticket.service || '-', serviceColor) +
+                        buildMetaBlock('Responsable', responsable) +
+                        buildMetaBlock('Date echeance', ticket.dueDate || '-') +
+                        buildMetaBlock('Lien RM', ticket.lienRm ? '<a href="' + escapeHtml(ticket.lienRm) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(rmLabel) + '</a>' : '-') +
+                    '</div>' +
+                '</article>';
+        }
+
+        function buildMetaBlock(label, value, colorLine) {
+            return '' +
+                '<div class="tickets-meta">' +
+                    '<div class="tickets-meta-label">' + escapeHtml(label) + '</div>' +
+                    '<div class="tickets-meta-value">' + value + '</div>' +
+                    (colorLine ? '<div class="tickets-color-line" style="background:' + escapeHtml(colorLine) + ';"></div>' : '') +
+                '</div>';
+        }
+
+        function getCachedPayload() {
+            const raw = window.localStorage.getItem(ticketsCacheKey);
+            if (!raw) {
+                return null;
+            }
+
+            try {
+                const parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.tickets)) {
+                    return null;
+                }
+
+                if (Date.now() - Number(parsed.cachedAt || 0) > cacheTtlMs) {
+                    return null;
+                }
+
+                return parsed;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function savePayloadToCache(payload) {
+            if (isUsingStatsSelection) {
+                return;
+            }
+
+            try {
+                const copy = Object.assign({}, payload, { cachedAt: Date.now() });
+                window.localStorage.setItem(ticketsCacheKey, JSON.stringify(copy));
+            } catch (error) {
+                /* no-op */
+            }
+        }
+
+        function setStatus(text, meta) {
+            statusText.textContent = text;
+            statusMeta.textContent = meta;
+        }
+
+        function setError(message) {
+            if (!message) {
+                errorBox.hidden = true;
+                errorBox.textContent = '';
+                return;
+            }
+
+            errorBox.hidden = false;
+            errorBox.textContent = message;
+        }
+
+        function getStatusColor(status) {
+            const value = normalizeValue(status);
+            if (value === 'fait' || value.indexOf('termine') !== -1 || value.indexOf('done') !== -1) {
+                return '#10b981';
+            }
+            if (value.indexOf('cours') !== -1 || value.indexOf('progress') !== -1) {
+                return '#f59e0b';
+            }
+            if (value.indexOf('bloque') !== -1 || value.indexOf('rejet') !== -1) {
+                return '#ef4444';
+            }
+            return '#3b82f6';
+        }
+
+        function getPriorityColor(priority) {
+            const value = normalizeValue(priority);
+            if (value.indexOf('faible') !== -1 || value.indexOf('low') !== -1) {
+                return '#14b8a6';
+            }
+            if (value.indexOf('moderee') !== -1 || value.indexOf('medium') !== -1 || value.indexOf('moyenne') !== -1) {
+                return '#facc15';
+            }
+            if (value.indexOf('elevee') !== -1 || value.indexOf('high') !== -1) {
+                return '#f97316';
+            }
+            if (value.indexOf('urgent') !== -1 || value.indexOf('prio') !== -1 || value.indexOf('p1') !== -1) {
+                return '#dc2626';
+            }
+            return '#6c757d';
+        }
+
+        function getServiceColor(service) {
+            const label = String(service || '').trim();
+            if (!label) {
+                return '#94a3b8';
+            }
+
+            return serviceColors[label] || '#64748b';
+        }
+
+        function formatRmLabel(url) {
+            const match = String(url || '').match(/issues\/(\d+)(?:\D|$)/);
+            return match && match[1] ? 'RM#' + match[1] : 'Ouvrir';
+        }
+
+        function localeSort(left, right) {
+            return left.localeCompare(right, 'fr', { sensitivity: 'base' });
+        }
+
+        function bindTicketCardInteractions() {
+            container.querySelectorAll('.tickets-page-card[data-detail-url]').forEach(function(card) {
+                card.addEventListener('click', function(event) {
+                    const interactiveTarget = event.target.closest('a, button, input, select, textarea');
+                    if (interactiveTarget) {
+                        return;
+                    }
+
+                    const detailUrl = card.getAttribute('data-detail-url') || '';
+                    if (detailUrl) {
+                        window.location.href = detailUrl;
+                    }
+                });
+
+                card.addEventListener('keydown', function(event) {
+                    if (event.key !== 'Enter' && event.key !== ' ') {
+                        return;
+                    }
+
+                    const detailUrl = card.getAttribute('data-detail-url') || '';
+                    if (!detailUrl) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    window.location.href = detailUrl;
+                });
+            });
+        }
+
+        function normalizeValue(value) {
+            return String(value || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        }
+
+        function getStatsSelectionPayload(key) {
+            if (!key) {
+                return null;
+            }
+
+            try {
+                const raw = window.localStorage.getItem(key);
+                if (!raw) {
+                    return null;
+                }
+
+                const parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.tickets)) {
+                    return null;
+                }
+
+                if (Date.now() - Number(parsed.cachedAt || 0) > statsSelectionTtlMs) {
+                    window.localStorage.removeItem(key);
+                    return null;
+                }
+
+                return parsed;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function getInitialFilterValue(selectId) {
+            switch (selectId) {
+                case 'tickets-state-filter':
+                    return initialFilters.state || 'all';
+                case 'tickets-service-filter':
+                    return initialFilters.service || 'all';
+                case 'tickets-responsable-filter':
+                    return initialFilters.responsable || 'all';
+                case 'tickets-action-filter':
+                    return initialFilters.action || 'all';
+                default:
+                    return 'all';
+            }
+        }
+
+        function extractProjectFromId(idReadable) {
+            const match = String(idReadable || '').match(/^([A-Za-z0-9_]+)-\d+$/);
+            return match && match[1] ? match[1] : '';
+        }
+
+        function escapeHtml(text) {
+            return String(text || '').replace(/[&<>"']/g, function(character) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    '\'': '&#039;'
+                }[character];
+            });
+        }
+    });
+</script>
+{% endblock %}

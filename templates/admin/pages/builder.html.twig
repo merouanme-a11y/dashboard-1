@@ -1,0 +1,587 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ isEdit ? 'Edition de page' : 'Nouvelle page' }}{% endblock %}
+
+{% block body %}
+{% set pageTitle = isEdit ? (pageEntity.title ?? 'Edition de page') : 'Nouvelle page' %}
+{% set fallbackIcon = 'bi-file-earmark-richtext' %}
+
+<form method="post" class="page-builder page-builder-form">
+    <input type="hidden" name="_token" value="{{ csrf_token('save_page') }}">
+
+        <div class="page-builder-main">
+            <div class="page-builder-header">
+                <div>
+                    <h1 class="page-title-heading">
+                        {{ page_display_service.renderNavigationIcon(isEdit ? managedPagePath : '', fallbackIcon, 'bootstrap')|raw }}
+                        <span>{{ pageTitle }}</span>
+                    </h1>
+                    <p>Conservez le style du dashboard, puis activez la page pour la rendre disponible dans les menus et permissions.</p>
+                </div>
+                <div class="page-builder-header-actions">
+                    <a href="{{ path('admin_pages') }}" class="btn btn-secondary">Retour à la liste</a>
+                    {% if publicUrl %}
+                        <a href="{{ publicUrl }}" target="_blank" rel="noopener" class="btn btn-primary">Ouvrir la page</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="page-builder-card">
+                <div class="page-builder-grid">
+                    <div class="form-group">
+                        <label for="page-title">Titre</label>
+                        <input id="page-title" name="title" type="text" maxlength="255" required value="{{ formData.title }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="page-keywords">Mots-clés</label>
+                        <input id="page-keywords" name="keywords" type="text" maxlength="500" value="{{ formData.keywords }}">
+                    </div>
+                </div>
+
+                <div class="page-builder-editor-tools">
+                    <input type="file" id="editor-image-upload" accept="image/*" hidden>
+                    <input type="file" id="editor-file-upload" hidden>
+                    <button type="button" class="btn btn-secondary btn-sm" id="editor-add-image">Ajouter une image</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="editor-add-file">Ajouter une pièce jointe</button>
+                    <span id="editor-upload-status" class="page-builder-upload-status"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="page-content">Contenu</label>
+                    <textarea id="page-content" name="content">{{ formData.content }}</textarea>
+                </div>
+            </div>
+
+            <div class="page-builder-submit">
+                <button type="submit" class="btn btn-primary">{{ isEdit ? 'Enregistrer les modifications' : 'Créer la page' }}</button>
+            </div>
+        </div>
+
+        <aside class="page-builder-side">
+            <div class="page-builder-card page-builder-summary">
+                <h3>Informations</h3>
+                <dl>
+                    <div>
+                        <dt>Statut</dt>
+                        <dd id="page-builder-status-text">{% if formData.is_active %}Active{% else %}Inactive{% endif %}</dd>
+                    </div>
+                    {% if pageEntity %}
+                        <div>
+                            <dt>Slug public</dt>
+                            <dd>/pages/{{ pageEntity.slug }}</dd>
+                        </div>
+                        <div>
+                            <dt>Page gérée</dt>
+                            <dd>{{ managedPagePath }}</dd>
+                        </div>
+                        <div>
+                            <dt>Création</dt>
+                            <dd>{{ pageEntity.createdAt ? pageEntity.createdAt|date('d/m/Y H:i') : '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Dernière mise à jour</dt>
+                            <dd>{{ pageEntity.updatedAt ? pageEntity.updatedAt|date('d/m/Y H:i') : '-' }}</dd>
+                        </div>
+                    {% else %}
+                        <div>
+                            <dt>Publication</dt>
+                            <dd>Le slug est généré automatiquement à la création.</dd>
+                        </div>
+                    {% endif %}
+                </dl>
+                <p class="page-builder-note">
+                    Après enregistrement, la page devient disponible dans <strong>Gestion du menu</strong> pour les autorisations et l’affichage.
+                </p>
+            </div>
+
+            <label class="page-builder-card page-builder-activation-card" for="page-is-active">
+                <div class="page-builder-activation-copy">
+                    <span class="page-builder-activation-eyebrow">Publication</span>
+                    <strong>Activer la page</strong>
+                    <small>Une page active peut être ajoutée aux menus et ouverte sur le site.</small>
+                </div>
+                <div class="page-builder-activation-toggle">
+                    <span class="page-builder-activation-state" id="page-builder-activation-state">{% if formData.is_active %}Active{% else %}Inactive{% endif %}</span>
+                    <span class="page-builder-switch">
+                        <input id="page-is-active" class="page-builder-switch-input" type="checkbox" name="is_active" value="1" {% if formData.is_active %}checked{% endif %}>
+                        <span class="page-builder-switch-track">
+                            <span class="page-builder-switch-thumb"></span>
+                        </span>
+                    </span>
+                </div>
+            </label>
+            <div class="page-builder-card page-builder-visibility-card">
+                <div class="page-builder-visibility-header">
+                    <span class="page-builder-activation-eyebrow">Affichage</span>
+                    <strong>Masquer des elements</strong>
+                    <small>Choisissez si le titre et le fil d'ariane doivent rester visibles sur le front.</small>
+                </div>
+
+                <label class="page-builder-option-row" for="page-show-title">
+                    <div class="page-builder-option-copy">
+                        <strong>Afficher le titre</strong>
+                        <small>Controle le bandeau de titre en haut de la page dynamique.</small>
+                    </div>
+                    <span class="page-builder-switch">
+                        <input id="page-show-title" class="page-builder-switch-input" type="checkbox" name="show_title" value="1" {% if formData.show_title %}checked{% endif %}>
+                        <span class="page-builder-switch-track">
+                            <span class="page-builder-switch-thumb"></span>
+                        </span>
+                    </span>
+                </label>
+
+                <label class="page-builder-option-row" for="page-show-breadcrumb">
+                    <div class="page-builder-option-copy">
+                        <strong>Afficher le fil d'ariane</strong>
+                        <small>Affiche la ligne secondaire sous le titre avec le chemin public et les mots-cles.</small>
+                    </div>
+                    <span class="page-builder-switch">
+                        <input id="page-show-breadcrumb" class="page-builder-switch-input" type="checkbox" name="show_breadcrumb" value="1" {% if formData.show_breadcrumb %}checked{% endif %}>
+                        <span class="page-builder-switch-track">
+                            <span class="page-builder-switch-thumb"></span>
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </aside>
+</form>
+
+<style>
+    .page-builder {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    .page-builder-main {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .page-builder-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .page-builder-header p {
+        margin: 0.35rem 0 0;
+        color: var(--text-muted);
+        max-width: 72ch;
+    }
+
+    .page-builder-header-actions {
+        display: flex;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+    }
+
+    .page-builder-form {
+        margin: 0;
+    }
+
+    .page-builder-card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg-primary);
+        box-shadow: 0 2px 8px var(--shadow);
+        padding: 1.35rem;
+    }
+
+    .page-builder-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .page-builder-side {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .page-builder-activation-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        cursor: pointer;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .page-builder-activation-card:hover {
+        border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+        box-shadow: 0 10px 24px color-mix(in srgb, var(--primary) 12%, transparent);
+        transform: translateY(-1px);
+    }
+
+    .page-builder-activation-copy {
+        display: grid;
+        gap: 0.25rem;
+    }
+
+    .page-builder-activation-copy strong,
+    .page-builder-activation-copy small,
+    .page-builder-activation-eyebrow {
+        display: block;
+    }
+
+    .page-builder-activation-eyebrow {
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--primary);
+    }
+
+    .page-builder-activation-copy small {
+        color: var(--text-muted);
+        max-width: 28ch;
+    }
+
+    .page-builder-activation-toggle {
+        display: grid;
+        justify-items: end;
+        gap: 0.55rem;
+        flex-shrink: 0;
+    }
+
+    .page-builder-activation-state {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+    }
+
+    .page-builder-switch {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .page-builder-switch-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .page-builder-switch-track {
+        width: 62px;
+        height: 34px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--text-muted) 28%, var(--bg-secondary, #e5e7eb));
+        border: 1px solid color-mix(in srgb, var(--text-muted) 26%, var(--border));
+        padding: 3px;
+        display: inline-flex;
+        align-items: center;
+        transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12);
+    }
+
+    .page-builder-switch-thumb {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+        transition: transform 0.2s ease;
+    }
+
+    .page-builder-switch-input:checked + .page-builder-switch-track {
+        background: color-mix(in srgb, var(--primary) 76%, #ffffff);
+        border-color: color-mix(in srgb, var(--primary) 68%, var(--border));
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent);
+    }
+
+    .page-builder-switch-input:checked + .page-builder-switch-track .page-builder-switch-thumb {
+        transform: translateX(28px);
+    }
+
+    .page-builder-switch-input:focus-visible + .page-builder-switch-track {
+        outline: 2px solid color-mix(in srgb, var(--primary) 48%, transparent);
+        outline-offset: 2px;
+    }
+
+    .page-builder-editor-tools {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+
+    .page-builder-upload-status {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    .page-builder-submit {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .page-builder-summary h3 {
+        margin-top: 0;
+        margin-bottom: 1rem;
+    }
+
+    .page-builder-summary dl {
+        display: grid;
+        gap: 0.85rem;
+        margin: 0;
+    }
+
+    .page-builder-summary dt {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+    }
+
+    .page-builder-summary dd {
+        margin: 0.25rem 0 0;
+        color: var(--text-primary);
+        font-weight: 600;
+        word-break: break-word;
+    }
+
+    .page-builder-note {
+        margin: 1.25rem 0 0;
+        color: var(--text-secondary);
+    }
+
+    .page-builder-visibility-card {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .page-builder-visibility-header {
+        display: grid;
+        gap: 0.25rem;
+    }
+
+    .page-builder-visibility-header strong,
+    .page-builder-visibility-header small {
+        display: block;
+    }
+
+    .page-builder-visibility-header small {
+        color: var(--text-muted);
+    }
+
+    .page-builder-option-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        cursor: pointer;
+        padding-top: 1rem;
+        border-top: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+    }
+
+    .page-builder-option-copy {
+        display: grid;
+        gap: 0.2rem;
+    }
+
+    .page-builder-option-copy strong,
+    .page-builder-option-copy small {
+        display: block;
+    }
+
+    .page-builder-option-copy small {
+        color: var(--text-muted);
+        max-width: 28ch;
+    }
+
+    @media (max-width: 1024px) {
+        .page-builder {
+            grid-template-columns: 1fr;
+        }
+
+        .page-builder-activation-card {
+            align-items: flex-start;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .page-builder-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .page-builder-activation-card {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .page-builder-activation-toggle {
+            width: 100%;
+            justify-items: start;
+        }
+
+        .page-builder-option-row {
+            flex-direction: column;
+            align-items: stretch;
+        }
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+    (function initPageBuilder() {
+        const uploadImageInput = document.getElementById('editor-image-upload');
+        const uploadFileInput = document.getElementById('editor-file-upload');
+        const addImageButton = document.getElementById('editor-add-image');
+        const addFileButton = document.getElementById('editor-add-file');
+        const uploadStatus = document.getElementById('editor-upload-status');
+        const activeInput = document.getElementById('page-is-active');
+        const statusText = document.getElementById('page-builder-status-text');
+        const activationState = document.getElementById('page-builder-activation-state');
+        const uploadUrl = {{ path('admin_pages_upload')|json_encode|raw }};
+        const csrfToken = {{ csrf_token('admin_pages_upload')|json_encode|raw }};
+        const isDarkMode = document.documentElement.classList.contains('dark');
+
+        function syncActiveState() {
+            const isActive = !!(activeInput && activeInput.checked);
+            const label = isActive ? 'Active' : 'Inactive';
+
+            if (statusText) {
+                statusText.textContent = label;
+            }
+
+            if (activationState) {
+                activationState.textContent = label;
+            }
+        }
+
+        if (activeInput) {
+            activeInput.addEventListener('change', syncActiveState);
+            syncActiveState();
+        }
+
+        function setStatus(message, isError) {
+            if (!uploadStatus) {
+                return;
+            }
+
+            uploadStatus.textContent = message || '';
+            uploadStatus.style.color = isError ? 'var(--danger)' : 'var(--text-muted)';
+        }
+
+        function uploadAsset(file, kind) {
+            if (!file) {
+                return Promise.reject(new Error('Aucun fichier sélectionné.'));
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('kind', kind);
+            formData.append('_token', csrfToken);
+
+            return fetch(uploadUrl, {
+                method: 'POST',
+                body: formData,
+            })
+            .then(function(response) {
+                return response.json().then(function(data) {
+                    if (!response.ok || data._error) {
+                        throw new Error(data._error || 'Erreur de téléversement');
+                    }
+
+                    return data;
+                });
+            });
+        }
+
+        function insertAttachment(data, kind) {
+            const editor = tinymce.get('page-content');
+            if (!editor) {
+                return;
+            }
+
+            if (kind === 'image') {
+                editor.insertContent('<p><img src="' + String(data.url || '') + '" alt="' + String(data.name || 'image') + '"></p>');
+                return;
+            }
+
+            editor.insertContent('<p><a href="' + String(data.url || '') + '" target="_blank" rel="noopener">' + String(data.name || 'Pièce jointe') + '</a></p>');
+        }
+
+        tinymce.init({
+            selector: '#page-content',
+            height: 460,
+            menubar: false,
+            branding: false,
+            skin: isDarkMode ? 'oxide-dark' : 'oxide',
+            content_css: isDarkMode ? 'dark' : 'default',
+            convert_urls: false,
+            relative_urls: false,
+            plugins: 'link lists table code image charmap autoresize',
+            toolbar: 'undo redo | blocks | bold italic underline | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link image table | charmap code',
+            image_uploadtab: false,
+            images_upload_handler: function(blobInfo, progress) {
+                progress(20);
+                return uploadAsset(blobInfo.blob(), 'image').then(function(data) {
+                    progress(100);
+                    return data.url;
+                });
+            }
+        });
+
+        if (addImageButton && uploadImageInput) {
+            addImageButton.addEventListener('click', function() {
+                uploadImageInput.click();
+            });
+
+            uploadImageInput.addEventListener('change', function() {
+                const file = uploadImageInput.files && uploadImageInput.files[0];
+                if (!file) {
+                    return;
+                }
+
+                setStatus('Téléversement de l’image...', false);
+                uploadAsset(file, 'image')
+                    .then(function(data) {
+                        insertAttachment(data, 'image');
+                        setStatus('Image ajoutée à l’éditeur.', false);
+                    })
+                    .catch(function(error) {
+                        setStatus(error.message || 'Erreur de téléversement.', true);
+                    })
+                    .finally(function() {
+                        uploadImageInput.value = '';
+                    });
+            });
+        }
+
+        if (addFileButton && uploadFileInput) {
+            addFileButton.addEventListener('click', function() {
+                uploadFileInput.click();
+            });
+
+            uploadFileInput.addEventListener('change', function() {
+                const file = uploadFileInput.files && uploadFileInput.files[0];
+                if (!file) {
+                    return;
+                }
+
+                setStatus('Téléversement du fichier...', false);
+                uploadAsset(file, 'file')
+                    .then(function(data) {
+                        insertAttachment(data, 'file');
+                        setStatus('Pièce jointe ajoutée à l’éditeur.', false);
+                    })
+                    .catch(function(error) {
+                        setStatus(error.message || 'Erreur de téléversement.', true);
+                    })
+                    .finally(function() {
+                        uploadFileInput.value = '';
+                    });
+            });
+        }
+    })();
+</script>
+{% endblock %}

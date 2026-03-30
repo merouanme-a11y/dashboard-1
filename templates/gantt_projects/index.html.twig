@@ -1,0 +1,390 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Planning projets{% endblock %}
+
+{% block stylesheets %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+    <link href="{{ asset('modules/gantt-projects/css/style.dashboard.css') }}?v={{ 'now'|date('U') }}" rel="stylesheet">
+    <style>
+        .app-content {
+            max-width: none;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: visible;
+            overflow-wrap: normal;
+        }
+
+        .app-main {
+            overflow-x: auto;
+        }
+
+        .gantt-dashboard-page {
+            margin-top: 0;
+            width: 100%;
+        }
+
+        .gantt-dashboard-page .gantt-dashboard-shell {
+            margin-top: 28px;
+        }
+    </style>
+{% endblock %}
+
+{% block body %}
+    <script>
+        window.__GANTT_AUTH_USER__ = {{ ganttAuthUser|json_encode|raw }};
+        window.__GANTT_CONFIG__ = {{ ganttConfig|json_encode|raw }};
+    </script>
+
+    <div class="gantt-dashboard-page" id="ganttDashboardPage">
+        <div class="gantt-dashboard-shell page-shell">
+            <header class="hero-panel">
+                <div class="hero-copy">
+                    <p class="eyebrow">Planification projets</p>
+                    <h1>Projets Adep</h1>
+                    <p class="hero-text">Vue Gantt des projets Adep</p>
+                    <div class="hero-auth">
+                        <button class="icon-toggle-button header-toggle-button is-active permission-gated" id="toggleSettingsPanelButton" type="button" aria-label="Masquer les réglages" title="Masquer les réglages" aria-pressed="true" hidden style="display:none;">
+                            <i class="bi bi-gear-fill" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="hero-summary" id="heroSummary">
+                    <div class="summary-pill">
+                        <span class="summary-label">
+                            <i class="bi bi-diagram-3-fill" aria-hidden="true"></i>
+                            Planifiés
+                        </span>
+                        <strong id="scheduledCount">0</strong>
+                    </div>
+                    <div class="summary-pill">
+                        <span class="summary-label">
+                            <i class="bi bi-list-task" aria-hidden="true"></i>
+                            À planifier
+                        </span>
+                        <strong id="backlogCount">0</strong>
+                    </div>
+                    <div class="summary-pill accent">
+                        <span class="summary-label">
+                            <i class="bi bi-calendar3-range-fill" aria-hidden="true"></i>
+                            Horizon
+                        </span>
+                        <strong id="rangeSummary">12 mois</strong>
+                    </div>
+                </div>
+            </header>
+
+            <main class="workspace">
+                <section class="panel controls-panel permission-gated" id="controlsPanel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="section-kicker">Réglages</p>
+                            <h2>Personnaliser la timeline</h2>
+                        </div>
+                        <div class="panel-actions">
+                            <input id="importSourceInput" type="file" accept=".xlsx" hidden>
+                            <button class="ghost-button" id="importSourceButton" type="button">Importer source Excel</button>
+                            <button class="icon-toggle-button header-toggle-button permission-gated-admin" id="toggleSettingsAccessVisibilityButton" type="button" aria-label="Masquer le bouton paramétrage pour le profil autorisé" title="Masquer le bouton paramétrage pour le profil autorisé" aria-pressed="false">
+                                <i class="bi bi-gear-fill" aria-hidden="true"></i>
+                            </button>
+                            <button class="icon-toggle-button planning-progress-button permission-gated-admin" id="toggleTimelineProgressVisibilityButton" type="button" aria-label="Masquer le bouton avancement pour le profil autorisé" title="Masquer le bouton avancement pour le profil autorisé" aria-pressed="false">
+                                <i class="bi bi-bar-chart-line" aria-hidden="true"></i>
+                            </button>
+                            <button class="icon-toggle-button planning-cursor-button permission-gated-admin" id="toggleTodayMarkerVisibilityButton" type="button" aria-label="Masquer le bouton repère du jour pour le profil autorisé" title="Masquer le bouton repère du jour pour le profil autorisé" aria-pressed="false">
+                                <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                            </button>
+                            <button class="ghost-button" id="todayButton" type="button">Aller au mois courant</button>
+                            <button class="ghost-button" id="exportButton" type="button">Exporter le planning</button>
+                            <button class="danger-button" id="resetButton" type="button">Réinitialiser</button>
+                        </div>
+                    </div>
+
+                    <div class="controls-grid">
+                        <label class="field">
+                            <span>Début de la timeline</span>
+                            <input id="timelineStart" type="month">
+                        </label>
+
+                        <label class="field">
+                            <span>Nombre de mois visibles</span>
+                            <input id="visibleMonths" type="range" min="6" max="24" step="1">
+                            <strong id="visibleMonthsValue">12 mois</strong>
+                        </label>
+
+                        <label class="field">
+                            <span>Largeur d'un mois</span>
+                            <input id="monthWidth" type="range" min="110" max="220" step="10">
+                            <strong id="monthWidthValue">150 px</strong>
+                        </label>
+
+                        <div class="field service-color-field">
+                            <span>Couleur du service</span>
+                            <label class="service-color-select-wrap" for="serviceColorSelect">
+                                <select id="serviceColorSelect"></select>
+                            </label>
+                            <div class="service-color-inline">
+                                <label class="service-color-picker-label" for="serviceColorInput">
+                                    <span>Couleur</span>
+                                    <input id="serviceColorInput" class="card-color" type="color">
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="field service-visibility-settings permission-gated-admin">
+                            <label class="service-visibility-select" for="profileAccessSelect">
+                                <span>Profil autorisé</span>
+                                <select id="profileAccessSelect"></select>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel timeline-panel" id="timelinePanel">
+                    <div class="panel-heading planning-heading">
+                        <div>
+                            <p class="section-kicker">Planning</p>
+                            <h2>Timeline</h2>
+                        </div>
+                        <div class="timeline-heading-actions">
+                            <div class="panel-actions">
+                                <button class="icon-toggle-button" id="togglePlanningSidebarButton" type="button" aria-label="Masquer la colonne projet" title="Masquer la colonne projet">
+                                    <i class="bi bi-chevron-bar-left" aria-hidden="true"></i>
+                                </button>
+                                <div class="timeline-zoom-controls" aria-label="Zoom timeline">
+                                    <button class="icon-toggle-button" id="timelineZoomOutButton" type="button" aria-label="Réduire le zoom de la timeline" title="Dézoomer">
+                                        <i class="bi bi-zoom-out" aria-hidden="true"></i>
+                                    </button>
+                                    <span class="timeline-zoom-value" id="timelineZoomValue">100%</span>
+                                    <button class="icon-toggle-button" id="timelineZoomInButton" type="button" aria-label="Augmenter le zoom de la timeline" title="Zoomer">
+                                        <i class="bi bi-zoom-in" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <button class="icon-toggle-button planning-cursor-button permission-gated" id="toggleTodayMarkerButton" type="button" aria-label="Masquer le repère du jour" title="Masquer le repère du jour" aria-pressed="true" hidden style="display:none;">
+                                    <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                                </button>
+                                <button class="icon-toggle-button planning-progress-button is-active permission-gated" id="toggleTimelineProgressButton" type="button" aria-label="Masquer l'avancement sur la timeline" title="Masquer l'avancement sur la timeline" aria-pressed="true" hidden style="display:none;">
+                                    <i class="bi bi-bar-chart-line" aria-hidden="true"></i>
+                                </button>
+                                <button class="icon-toggle-button planning-focus-button" id="focusPlanningButton" type="button" aria-label="Agrandir le planning" title="Agrandir le planning">
+                                    <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+                                </button>
+                                <button class="ghost-button exit-focus-button" id="exitPlanningFocusButton" type="button" hidden>Revenir à la vue initiale</button>
+                            </div>
+                            <p class="panel-note">
+                                Déposez un projet sur la ligne d'ajout, puis déplacez la barre ou redimensionnez-la.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="timeline-scroll" id="timelineScroll">
+                        <div class="timeline-board" id="timelineBoard">
+                            <div class="timeline-years">
+                                <div class="timeline-sticky timeline-corner">Vue planning</div>
+                                <div class="timeline-track" id="timelineYears"></div>
+                            </div>
+                            <div class="timeline-months">
+                                <div class="timeline-sticky timeline-corner subtle">Projets planifiés</div>
+                                <div class="timeline-track" id="timelineMonths"></div>
+                            </div>
+                            <div class="timeline-rows" id="timelineRows"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel backlog-panel">
+                    <div class="panel-heading">
+                        <div class="backlog-heading-copy">
+                            <div class="backlog-title-row">
+                                <button class="icon-toggle-button planning-focus-button backlog-view-toggle-button" id="toggleBacklogViewButton" type="button" aria-label="Afficher les projets en tableau" title="Afficher les projets en tableau" aria-pressed="false">
+                                    <i class="bi bi-table" aria-hidden="true"></i>
+                                </button>
+                                <h2>Projets à planifier</h2>
+                            </div>
+                        </div>
+                        <div class="backlog-heading-actions">
+                            <button class="ghost-button" id="addProjectButton" type="button">Ajouter un projet</button>
+                            <label class="field backlog-filter-field backlog-search-field">
+                                <span>Recherche</span>
+                                <input id="searchInput" type="search" placeholder="Référence, projet, service...">
+                            </label>
+                            <label class="field backlog-filter-field">
+                                <span>Filtrer par service</span>
+                                <select id="serviceFilter"></select>
+                            </label>
+                            <label class="field backlog-filter-field">
+                                <span>Filtrer par état</span>
+                                <select id="statusFilter"></select>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="project-pool" id="projectPool"></div>
+                </section>
+            </main>
+        </div>
+
+        <div class="project-modal" id="projectModal" hidden>
+            <div class="project-modal-backdrop" data-close-project-modal></div>
+            <div class="project-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="projectModalTitle">
+                <span class="project-modal-youtrack-pill" id="projectModalYouTrackBadge" hidden>Projet YouTrack</span>
+                <button class="project-modal-close" id="projectModalClose" type="button" aria-label="Fermer le détail projet">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+                <p class="section-kicker" id="projectModalKicker">Détail projet</p>
+                <form class="project-modal-form" id="projectModalForm">
+                    <div class="project-modal-heading">
+                        <label class="project-modal-title-edit project-modal-editable" data-editable-item for="projectModalTitleInput">
+                            <h3 id="projectModalTitle">Projet</h3>
+                            <input id="projectModalTitleInput" class="project-modal-editor project-modal-title-input" type="text" autocomplete="off" spellcheck="false">
+                        </label>
+                        <div class="project-modal-youtrack permission-gated" id="projectModalYouTrackBlock" hidden>
+                            <label class="project-modal-youtrack-toggle" for="projectModalCreateInYouTrack">
+                                <input id="projectModalCreateInYouTrack" type="checkbox">
+                                <span>Projet YouTrack</span>
+                            </label>
+                            <p class="project-modal-youtrack-note" id="projectModalYouTrackNote">Le projet sera créé dans YouTrack avec le titre, l'ID, la description, puis rattaché à l'organisation PROJETS.</p>
+                        </div>
+                        <button class="project-modal-description-toggle" id="projectModalDescriptionToggle" type="button" aria-expanded="false" aria-controls="projectModalDescriptionBlock">
+                            <span class="project-modal-description-toggle-icon" id="projectModalDescriptionToggleIcon" aria-hidden="true">+</span>
+                            <span>Description</span>
+                        </button>
+                    </div>
+                    <div class="project-modal-description project-modal-editable" id="projectModalDescriptionBlock" data-editable-item hidden>
+                        <p id="projectModalDescription"></p>
+                        <textarea id="projectModalDescriptionInput" class="project-modal-editor" rows="3" placeholder="Ajouter une description..."></textarea>
+                    </div>
+                    <div class="project-modal-grid">
+                        <label class="project-modal-item project-modal-editable" data-editable-item for="projectModalRefInput">
+                            <span>ID</span>
+                            <strong id="projectModalRefDisplay"></strong>
+                            <input id="projectModalRefInput" class="project-modal-editor" type="text" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="project-modal-item project-modal-editable" data-editable-item for="projectModalServiceInput">
+                            <span>Service</span>
+                            <strong id="projectModalServiceDisplay"></strong>
+                            <input id="projectModalServiceInput" class="project-modal-editor" type="text" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="project-modal-item project-modal-editable" data-editable-item for="projectModalStartInput">
+                            <span>Date de début</span>
+                            <strong id="projectModalStartDisplay"></strong>
+                            <input id="projectModalStartInput" class="project-modal-editor" type="date">
+                        </label>
+                        <label class="project-modal-item project-modal-editable" data-editable-item for="projectModalEndInput">
+                            <span>Date de fin</span>
+                            <strong id="projectModalEndDisplay"></strong>
+                            <input id="projectModalEndInput" class="project-modal-editor" type="date">
+                        </label>
+                        <label class="project-modal-item project-modal-item-color project-modal-editable" data-editable-item for="projectModalColorHexInput">
+                            <span>Couleur</span>
+                            <strong id="projectModalColorDisplay"></strong>
+                            <div class="project-modal-color-editor project-modal-editor">
+                                <input id="projectModalColorInput" type="color">
+                                <input id="projectModalColorHexInput" class="project-modal-color-hex" type="text" autocomplete="off" spellcheck="false">
+                            </div>
+                        </label>
+                    </div>
+                    <div class="project-modal-insights">
+                        <label class="project-modal-item project-modal-editable" data-editable-item for="projectModalRiskGainInput">
+                            <span>Risque / Gain</span>
+                            <strong id="projectModalRiskGainDisplay">-</strong>
+                            <input id="projectModalRiskGainInput" class="project-modal-editor" type="text" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="project-modal-item project-modal-item-emphasis project-modal-editable" data-editable-item for="projectModalBudgetInput">
+                            <span>Budget estimatif</span>
+                            <strong id="projectModalBudgetDisplay">-</strong>
+                            <input id="projectModalBudgetInput" class="project-modal-editor" type="text" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="project-modal-item project-modal-editable" data-editable-item for="projectModalPrioritizationInput">
+                            <span>Priorisation</span>
+                            <strong id="projectModalPrioritizationDisplay">-</strong>
+                            <input id="projectModalPrioritizationInput" class="project-modal-editor" type="text" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="project-modal-item project-modal-editable project-modal-item-status" data-editable-item for="projectModalStatusInput">
+                            <span>État</span>
+                            <strong id="projectModalStatusDisplay">A planifier</strong>
+                            <select id="projectModalStatusInput" class="project-modal-editor project-modal-status-select">
+                                <option value="A planifier">A planifier</option>
+                                <option value="Planifié">Planifié</option>
+                                <option value="En cours">En cours</option>
+                                <option value="Terminé">Terminé</option>
+                                <option value="Standby">Standby</option>
+                            </select>
+                        </label>
+                        <label class="project-modal-item project-modal-item-progress" for="projectModalProgressInput">
+                            <span>Avancement</span>
+                            <div class="project-progress-live">
+                                <div id="projectModalProgressDisplay"></div>
+                                <input id="projectModalProgressInput" class="project-modal-progress-input" type="range" min="0" max="100" step="10">
+                            </div>
+                            <div class="project-progress-scale" aria-hidden="true">
+                                <span>0%</span>
+                                <span>10%</span>
+                                <span>20%</span>
+                                <span>30%</span>
+                                <span>40%</span>
+                                <span>50%</span>
+                                <span>60%</span>
+                                <span>70%</span>
+                                <span>80%</span>
+                                <span>90%</span>
+                                <span>100%</span>
+                            </div>
+                        </label>
+                    </div>
+                    <section class="project-modal-youtrack-tasks" id="projectModalYouTrackTasks" hidden aria-live="polite">
+                        <div class="project-modal-youtrack-tasks-header">
+                            <div>
+                                <p class="section-kicker">YouTrack</p>
+                                <h4>Tâches du projet</h4>
+                            </div>
+                            <div class="project-modal-youtrack-tasks-tools">
+                                <section class="project-modal-team project-modal-team-inline">
+                                    <details class="project-modal-team-dropdown">
+                                        <summary class="project-modal-team-summary">Equipe</summary>
+                                        <div class="project-modal-team-menu" id="projectModalTeamMenu"></div>
+                                    </details>
+                                    <div class="project-modal-team-badges" id="projectModalTeamBadges"></div>
+                                </section>
+                                <span class="project-modal-youtrack-tasks-count" id="projectModalYouTrackTasksCount"></span>
+                                <button class="ghost-button project-modal-youtrack-add-button" id="projectModalYouTrackTaskToggle" type="button">Ajouter une tâche</button>
+                            </div>
+                        </div>
+                        <div class="project-modal-youtrack-tasks-body" id="projectModalYouTrackTasksBody"></div>
+                    </section>
+                    <p class="project-modal-help" id="projectModalHelp">
+                        La timeline reste alignée sur des demi-mois, mais vous pouvez piloter ici les dates de début et de fin du projet.
+                    </p>
+                    <p class="project-modal-error" id="projectModalError" hidden></p>
+                    <div class="project-modal-actions">
+                        <button class="danger-button" id="projectModalDeleteButton" type="button">Supprimer le projet</button>
+                        <button class="ghost-button" id="projectModalClearButton" type="button" hidden>Retirer de la timeline</button>
+                        <button class="auth-submit" id="projectModalSubmitButton" type="submit">Valider</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="auth-overlay" id="authOverlay" hidden>
+            <div class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+                <p class="eyebrow">Accès sécurisé</p>
+                <h2 id="loginTitle">Connexion</h2>
+                <p class="auth-copy">Connectez-vous pour accéder au planning des projets Adep.</p>
+                <form class="auth-form" id="loginForm">
+                    <label class="field auth-field">
+                        <span>Identifiant</span>
+                        <input id="loginUsername" name="username" type="text" autocomplete="username" required>
+                    </label>
+                    <label class="field auth-field">
+                        <span>Mot de passe</span>
+                        <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+                    </label>
+                    <p class="auth-error" id="loginError" hidden>Identifiant ou mot de passe incorrect.</p>
+                    <button class="auth-submit" type="submit">Se connecter</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ asset('modules/gantt-projects/js/app.js') }}?v={{ 'now'|date('U') }}" defer></script>
+{% endblock %}

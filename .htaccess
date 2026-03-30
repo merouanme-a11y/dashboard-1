@@ -1,0 +1,9 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} ^/Dashboard/public(?:/(.*))?$
+    RewriteRule ^public/?(.*)$ /dashboard/public/$1 [R=302,L]
+    RewriteCond %{THE_REQUEST} \s/+dashboard/?[\s?] [NC]
+    RewriteRule ^$ /dashboard/public/ [R=302,L]
+</IfModule>

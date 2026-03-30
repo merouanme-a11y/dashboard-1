@@ -1,0 +1,139 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Parametrage{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('admin_parametrage', 'Parametrage') %}
+
+<div class="settings-page">
+    <div class="settings-header">
+        <div>
+            <h1 class="page-title-heading">
+                {{ page_display_service.renderNavigationIcon('admin_parametrage', 'bi-gear', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p>Gerez les parametres centraux du dashboard et les outils d administration.</p>
+        </div>
+    </div>
+
+    <div class="settings-cards">
+        {% for link in settingsLinks %}
+            {% if link.module is not defined or module_service.isActive(link.module) %}
+                <div class="settings-card{% if link.disabled|default(false) %} disabled{% endif %}">
+                    <div class="settings-card-icon">
+                        {% if link.disabled|default(false) %}
+                            {{ page_display_service.renderNavigationIcon('', link.fallback_icon|default('bi-grid-1x2'), link.fallback_icon_library|default('bootstrap'))|raw }}
+                        {% else %}
+                            {{ page_display_service.renderNavigationIcon(link.page, link.fallback_icon|default('bi-grid-1x2'), link.fallback_icon_library|default('bootstrap'))|raw }}
+                        {% endif %}
+                    </div>
+                    <h3>
+                        {% if link.disabled|default(false) %}
+                            {{ link.label }}
+                        {% else %}
+                            {{ page_display_service.resolveNavigationLabel(link.page, link.label) }}
+                        {% endif %}
+                    </h3>
+                    <p>{{ link.desc }}</p>
+                    {% if link.disabled|default(false) %}
+                        <button class="btn btn-primary" disabled>A venir</button>
+                    {% else %}
+                        <a href="{{ path(link.page) }}" class="btn btn-primary">Configurer</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+    .settings-page {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .settings-header p {
+        margin: 0.35rem 0 0;
+        color: var(--text-muted);
+    }
+
+    .settings-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .settings-card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 1.5rem;
+        background: var(--bg-primary);
+        box-shadow: 0 2px 8px var(--shadow);
+        display: flex;
+        flex-direction: column;
+        transition: all 0.2s ease;
+        min-height: 220px;
+    }
+
+    .settings-card:hover:not(.disabled) {
+        border-color: var(--primary);
+        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.12);
+        transform: translateY(-1px);
+    }
+
+    .settings-card.disabled {
+        opacity: 0.6;
+    }
+
+    .settings-card-icon {
+        width: 46px;
+        height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 14px;
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--primary);
+        font-size: 1.2rem;
+        margin-bottom: 1rem;
+    }
+
+    .settings-card h3 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.1rem;
+    }
+
+    .settings-card p {
+        color: var(--text-secondary);
+        margin: 0 0 1rem 0;
+        flex: 1;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        border: none;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: var(--primary-dark);
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}

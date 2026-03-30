@@ -1,0 +1,111 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ pageEntity.title }}{% endblock %}
+
+{% block body %}
+{% set showTitle = pageEntity.showTitle %}
+{% set showBreadcrumb = pageEntity.showBreadcrumb %}
+<article class="dynamic-page">
+    {% if showTitle or showBreadcrumb %}
+        <header class="dynamic-page-header">
+            {% if showTitle %}
+                <h1 class="page-title-heading">
+                    {{ page_display_service.renderNavigationIcon(managedPagePath, 'bi-file-earmark-text', 'bootstrap')|raw }}
+                    <span>{{ page_display_service.resolveNavigationLabel(managedPagePath, pageEntity.title) }}</span>
+                </h1>
+            {% endif %}
+            {% if showBreadcrumb %}
+                <div class="dynamic-page-meta">
+                    <span>/pages/{{ pageEntity.slug }}</span>
+                    {% if pageEntity.keywords %}
+                        <span>{{ pageEntity.keywords }}</span>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </header>
+    {% endif %}
+
+    <div class="dynamic-page-card">
+        {{ pageEntity.content|raw }}
+    </div>
+</article>
+
+<style>
+    .dynamic-page {
+        display: grid;
+        gap: 1.25rem;
+    }
+
+    .dynamic-page-meta {
+        display: flex;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+        color: var(--text-muted);
+        font-size: 0.92rem;
+    }
+
+    .dynamic-page-card {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--bg-primary);
+        box-shadow: 0 2px 8px var(--shadow);
+        padding: 1.5rem;
+    }
+
+    .dynamic-page-card > :first-child {
+        margin-top: 0;
+    }
+
+    .dynamic-page-card > :last-child {
+        margin-bottom: 0;
+    }
+
+    .dynamic-page-card img {
+        max-width: 100%;
+        border-radius: 12px;
+    }
+
+    .dynamic-page-card img:not([height]):not([style*="height"]) {
+        height: auto;
+    }
+
+    .dynamic-page-card table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .dynamic-page-card table th,
+    .dynamic-page-card table td {
+        border: 1px solid var(--border);
+        padding: 0.75rem;
+    }
+</style>
+
+<script>
+    (function forceDynamicPageImageSize() {
+        const images = document.querySelectorAll('.dynamic-page-card img');
+
+        images.forEach(function(image) {
+            const widthAttr = parseInt(image.getAttribute('width') || '', 10);
+            const heightAttr = parseInt(image.getAttribute('height') || '', 10);
+            const inlineWidth = image.style.width ? image.style.width.trim() : '';
+            const inlineHeight = image.style.height ? image.style.height.trim() : '';
+
+            image.style.setProperty('max-width', '100%', 'important');
+
+            if (inlineWidth !== '') {
+                image.style.setProperty('width', inlineWidth, 'important');
+            } elseif (Number.isFinite(widthAttr) && widthAttr > 0) {
+                image.style.setProperty('width', 'min(100%, ' + widthAttr + 'px)', 'important');
+            }
+
+            if (inlineHeight !== '') {
+                image.style.setProperty('height', inlineHeight, 'important');
+            } elseif (Number.isFinite(widthAttr) && widthAttr > 0 && Number.isFinite(heightAttr) && heightAttr > 0) {
+                image.style.setProperty('height', 'auto', 'important');
+                image.style.setProperty('aspect-ratio', widthAttr + ' / ' + heightAttr);
+            }
+        });
+    })();
+</script>
+{% endblock %}

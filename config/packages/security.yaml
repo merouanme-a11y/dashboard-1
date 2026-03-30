@@ -1,0 +1,52 @@
+security:
+    password_hashers:
+        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
+
+    providers:
+        app_user_provider:
+            entity:
+                class: App\Entity\Utilisateur
+                property: email
+    
+    role_hierarchy:
+        ROLE_SUPERVISEUR: [ROLE_EMPLOYE]
+        ROLE_RESPONSABLE: [ROLE_SUPERVISEUR]
+        ROLE_ADMIN:       [ROLE_RESPONSABLE]
+
+    firewalls:
+        dev:
+            # Ensure dev tools and static assets are always allowed
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+        main:
+            lazy: true
+            provider: app_user_provider
+            custom_authenticator: App\Security\LoginFormAuthenticator
+            logout:
+                path: app_logout
+                target: app_login
+
+    # Note: Only the *first* matching rule is applied
+    access_control:
+        - { path: ^/login, roles: PUBLIC_ACCESS }
+        - { path: ^/forgot-password, roles: PUBLIC_ACCESS }
+        - { path: ^/reset-password, roles: PUBLIC_ACCESS }
+        - { path: ^/admin/parametrage, roles: ROLE_ADMIN }
+        - { path: ^/admin/theme, roles: ROLE_ADMIN }
+        - { path: ^/admin/modules, roles: ROLE_ADMIN }
+        - { path: ^/admin/menus, roles: ROLE_ADMIN }
+        - { path: ^/admin/services, roles: ROLE_ADMIN }
+        - { path: ^/admin/utilisateurs, roles: ROLE_ADMIN }
+        - { path: ^/profile/create, roles: ROLE_ADMIN }
+        - { path: ^/annuaire, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/profile, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/, roles: IS_AUTHENTICATED_FULLY }
+
+when@test:
+    security:
+        password_hashers:
+            Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
+                algorithm: auto
+                cost: 4 # Lowest possible value for bcrypt
+                time_cost: 3 # Lowest possible value for argon
+                memory_cost: 10 # Lowest possible value for argon

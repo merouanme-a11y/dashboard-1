@@ -1,0 +1,102 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Statistiques{% endblock %}
+
+{% block stylesheets %}
+    <link href="{{ asset('modules/stats/css/stats.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+    <script>
+        window.__STATS_CONFIG__ = {{ {
+            projectsUrl: statsProjectsUrl,
+            ticketsUrl: statsTicketsUrl,
+            preferencesUrl: statsPreferencesUrl,
+            preferencesCsrfToken: csrf_token('stats_preferences'),
+            ticketsPageUrl: ticketsPageUrl,
+            cacheScope: statsBrowserCacheKey,
+            preloadedProjects: preloadedProjectsPayload,
+            preloadedProjectId: preloadedProjectId,
+            preloadedProjectTickets: preloadedProjectTicketsPayload,
+            preferences: statsPreferencesPayload
+        }|json_encode|raw }};
+    </script>
+
+    <div class="stats-container">
+        <div class="stats-toolbar">
+            <div class="stats-toolbar-field">
+                <label>Selectionner un projet :</label>
+                <div id="projectDropdownContainer" class="stats-dropdown">
+                    <button id="projectDropdownBtn" type="button" class="stats-dropdown-button">
+                        <span id="projectDropdownText">Chargement des projets...</span>
+                        <span class="stats-dropdown-caret">▼</span>
+                    </button>
+                    <div id="projectDropdownMenu" class="stats-dropdown-menu" hidden>
+                        <div id="projectDropdownItems"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-toolbar-field">
+                <label for="assigneeFilter">Filtrer par responsable :</label>
+                <select id="assigneeFilter" class="stats-select">
+                    <option value="">Tous les responsables (global)</option>
+                </select>
+            </div>
+
+            <button id="editModeBtn" type="button" class="stats-edit-button" title="Activer le mode de modification">
+                Modifier
+            </button>
+
+            <button id="statsRefreshBtn" type="button" class="stats-edit-button" title="Actualiser les donnees depuis l API">
+                Actualiser
+            </button>
+
+            <span id="statsSaveStatus" class="stats-save-status" hidden></span>
+        </div>
+
+        <div class="stats-loading" id="statsLoading">
+            <p>Chargement des statistiques...</p>
+        </div>
+
+        <div id="statsError" class="alert alert-danger" hidden></div>
+
+        <div id="statsContent" hidden>
+            <div id="cardsGrid" class="cards-grid-flex">
+                <div class="card stats-card is-clickable" data-card-id="card-total">
+                    <div id="totalTickets" class="stats-card-value">0</div>
+                    <div class="stats-card-label">Total</div>
+                </div>
+
+                <div class="card card-resizable" data-card-id="card-states">
+                    <h3>Etat des Tickets</h3>
+                    <div class="stats-chart-shell">
+                        <canvas id="chartStates"></canvas>
+                    </div>
+                </div>
+
+                <div class="card card-resizable" data-card-id="card-services">
+                    <h3>Tickets par Service</h3>
+                    <div class="stats-chart-shell">
+                        <canvas id="chartServices"></canvas>
+                    </div>
+                </div>
+
+                <div class="card card-resizable" data-card-id="card-users">
+                    <h3>Tickets par Utilisateur</h3>
+                    <div class="stats-chart-shell is-large">
+                        <canvas id="chartUsers"></canvas>
+                    </div>
+                </div>
+
+                <div class="card card-resizable" data-card-id="card-table">
+                    <h3>Detail par Service</h3>
+                    <div id="tableServices" class="stats-table-wrap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3/dist/chart.min.js"></script>
+    <script src="{{ asset('modules/stats/js/stats.js') }}"></script>
+{% endblock %}

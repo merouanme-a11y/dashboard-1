@@ -1,0 +1,149 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Modules{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('admin_modules', 'Modules') %}
+
+<div class="modules-page">
+    <div class="modules-page-header">
+        <div>
+            <h1 class="page-title-heading">
+                {{ page_display_service.renderNavigationIcon('admin_modules', 'bi-grid-1x2', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p>Activez ou desactivez les modules disponibles dans votre dashboard.</p>
+        </div>
+    </div>
+
+    <div class="modules-grid">
+        {% for module in modules %}
+            <div class="module-card">
+                <div class="module-header">
+                    <h3>
+                        {{ page_display_service.renderNavigationIcon(module.routeName, module.icon, 'bootstrap')|raw }}
+                        <span>{{ page_display_service.resolveNavigationLabel(module.routeName, module.label) }}</span>
+                    </h3>
+                    <label class="toggle-switch">
+                        <input type="checkbox" class="module-toggle" data-module-id="{{ module.id }}" {% if module.isActive() %}checked{% endif %}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <p class="module-name">{{ module.name }}</p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+    .modules-page {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .modules-page-header p {
+        margin: 0.35rem 0 0;
+        color: var(--text-muted);
+    }
+
+    .modules-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .module-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        background: var(--bg-primary);
+        box-shadow: 0 2px 8px var(--shadow);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .module-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .module-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+    }
+
+    .module-name {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        margin: 0;
+    }
+
+    .toggle-switch {
+        position: relative;
+        display: inline-flex;
+        width: 50px;
+        height: 28px;
+        background: var(--border);
+        border-radius: 14px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .module-toggle {
+        display: none;
+    }
+
+    .module-toggle:checked + .slider {
+        background: var(--primary);
+    }
+
+    .slider {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 24px;
+        height: 24px;
+        background: white;
+        border-radius: 50%;
+        transition: left 0.2s ease;
+    }
+
+    .module-toggle:checked + .slider {
+        left: 24px;
+    }
+</style>
+
+<script>
+    document.querySelectorAll('.module-toggle').forEach(toggle => {
+        toggle.addEventListener('change', async function() {
+            const moduleId = this.dataset.moduleId;
+            const isActive = this.checked;
+
+            try {
+                const response = await fetch(`{{ path('admin_modules_toggle', {id: '__ID__'}) }}`.replace('__ID__', moduleId), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    },
+                });
+
+                const data = await response.json();
+                if (!data.success) {
+                    this.checked = !isActive;
+                }
+            } catch (error) {
+                this.checked = !isActive;
+                console.error('Error toggling module:', error);
+            }
+        });
+    });
+</script>
+{% endblock %}

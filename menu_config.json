@@ -1,0 +1,310 @@
+{
+    "menus": {
+        "sidebar": {
+            "default": [
+                {
+                    "page": "app_dashboard",
+                    "url": "/dashboard/public/",
+                    "label": "Accueil",
+                    "icon": "bi-house",
+                    "folder": "pages",
+                    "parent_page": null,
+                    "icon_only": false
+                },
+                {
+                    "page": "app_annuaire",
+                    "url": "/dashboard/public/annuaire",
+                    "label": "Annuaire des contacts",
+                    "icon": "bi bi-person-lines-fill",
+                    "folder": "pages",
+                    "parent_page": null,
+                    "icon_only": false
+                },
+                {
+                    "page": "app_profile",
+                    "url": "/dashboard/public/profile",
+                    "label": "Mon profil",
+                    "icon": "bi bi-person-circle",
+                    "folder": "pages",
+                    "parent_page": null,
+                    "icon_only": false
+                },
+                {
+                    "page": "app_stats",
+                    "url": "/dashboard/public/stats",
+                    "label": "Statistiques",
+                    "icon": "bi-bar-chart",
+                    "folder": "pages",
+                    "parent_page": null,
+                    "icon_only": false
+                },
+                {
+                    "page": "app_gantt_projects",
+                    "url": "/dashboard/public/projets/gantt",
+                    "label": "Planning projets",
+                    "icon": "bi-diagram-3",
+                    "folder": "pages",
+                    "parent_page": null,
+                    "icon_only": false
+                }
+            ],
+            "profiles": {
+                "Admin": [
+                    {
+                        "page": "app_dashboard",
+                        "url": "/dashboard/public/",
+                        "label": "Accueil",
+                        "icon": "bi-house",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_annuaire",
+                        "url": "/dashboard/public/annuaire",
+                        "label": "Annuaire des contacts",
+                        "icon": "bi bi-person-lines-fill",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_profile",
+                        "url": "/dashboard/public/profile",
+                        "label": "Mon profil",
+                        "icon": "bi bi-person-circle",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_stats",
+                        "url": "/dashboard/public/stats",
+                        "label": "Statistiques",
+                        "icon": "bi-bar-chart",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_gantt_projects",
+                        "url": "/dashboard/public/projets/gantt",
+                        "label": "Planning projets",
+                        "icon": "bi-diagram-3",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "admin_menus",
+                        "url": "/dashboard/public/admin/menus",
+                        "label": "Gestion du menu",
+                        "icon": "bi-folder",
+                        "folder": "admin",
+                        "parent_page": null,
+                        "icon_only": false
+                    }
+                ]
+            },
+            "users": {
+                "1": [
+                    {
+                        "page": "app_dashboard",
+                        "url": "/dashboard/public/",
+                        "label": "Accueil",
+                        "icon": "bi-house",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_annuaire",
+                        "url": "/dashboard/public/annuaire",
+                        "label": "Annuaire des contacts",
+                        "icon": "bi bi-person-lines-fill",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "admin_utilisateurs",
+                        "url": "/dashboard/public/admin/utilisateurs",
+                        "label": "Utilisateurs",
+                        "icon": "bi-people",
+                        "folder": "admin",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_profile_create",
+                        "url": "/dashboard/public/profile/create",
+                        "label": "Creer un utilisateur",
+                        "icon": "bi-people",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "admin_menus",
+                        "url": "/dashboard/public/admin/menus",
+                        "label": "Gestion du menu",
+                        "icon": "bi-folder",
+                        "folder": "admin",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "admin_theme",
+                        "url": "/dashboard/public/admin/theme",
+                        "label": "Theme du site",
+                        "icon": "bi-palette",
+                        "folder": "admin",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "admin_parametrage",
+                        "url": "/dashboard/public/admin/parametrage",
+                        "label": "Parametrage",
+                        "icon": "bi-gear",
+                        "folder": "admin",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_profile",
+                        "url": "/dashboard/public/profile",
+                        "label": "Mon profil",
+                        "icon": "bi bi-person-circle",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_tickets",
+                        "url": "/dashboard/public/tickets",
+                        "label": "Tickets",
+                        "icon": "bi-ticket-perforated",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_stats",
+                        "url": "/dashboard/public/stats",
+                        "label": "Statistiques",
+                        "icon": "bi-bar-chart",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "admin_pages",
+                        "url": "/dashboard/public/admin/pages",
+                        "label": "Pages",
+                        "icon": "bi-window-stack",
+                        "folder": "admin",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_gantt_projects",
+                        "url": "/dashboard/public/projets/gantt",
+                        "label": "Planning projets",
+                        "icon": "bi-diagram-3",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    }
+                ],
+                "2": [
+                    {
+                        "page": "app_dashboard",
+                        "url": "/dashboard/public/",
+                        "label": "Accueil",
+                        "icon": "bi-house",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_profile",
+                        "url": "/dashboard/public/profile",
+                        "label": "Mon profil",
+                        "icon": "bi bi-person-circle",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_tickets",
+                        "url": "/dashboard/public/tickets",
+                        "label": "Tickets",
+                        "icon": "bi-ticket-perforated",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_stats",
+                        "url": "/dashboard/public/stats",
+                        "label": "Statistiques",
+                        "icon": "bi-bar-chart",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_gantt_projects",
+                        "url": "/dashboard/public/projets/gantt",
+                        "label": "Planning projets",
+                        "icon": "bi-diagram-3",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    }
+                ]
+            }
+        },
+        "header_right": {
+            "default": [
+                {
+                    "page": "admin_parametrage",
+                    "url": "/dashboard/public/admin/parametrage",
+                    "label": "Parametrage",
+                    "icon": "bi-gear",
+                    "folder": "admin",
+                    "parent_page": null,
+                    "icon_only": false
+                }
+            ],
+            "profiles": {
+                "Admin": [
+                    {
+                        "page": "admin_parametrage",
+                        "url": "/dashboard/public/admin/parametrage",
+                        "label": "Parametrage",
+                        "icon": "bi-gear",
+                        "folder": "admin",
+                        "parent_page": null,
+                        "icon_only": true
+                    }
+                ]
+            },
+            "users": {
+                "2": [],
+                "1": [
+                    {
+                        "page": "admin_parametrage",
+                        "url": "/dashboard/public/admin/parametrage",
+                        "label": "Parametrage",
+                        "icon": "bi-gear",
+                        "folder": "admin",
+                        "parent_page": null,
+                        "icon_only": true
+                    }
+                ]
+            }
+        }
+    }
+}

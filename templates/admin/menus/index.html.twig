@@ -1,0 +1,1447 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Gestion du menu{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('admin_menus', 'Gestion du menu') %}
+
+<div class="card" style="max-width: 1440px; margin: 0 auto;">
+    <div class="menus-page-header">
+        <div>
+            <h1 class="page-title-heading" style="margin:0 0 0.5rem 0;">
+                {{ page_display_service.renderNavigationIcon('admin_menus', 'bi-folder', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p class="menus-page-subtitle">
+                Configurez le menu vertical, le menu header droit et les permissions par profil ou utilisateur.
+            </p>
+        </div>
+        <a href="{{ path('admin_parametrage') }}" class="btn btn-secondary">Retour aux parametres</a>
+    </div>
+
+    <div class="unified-selector">
+        <div class="sel-group">
+            <label for="sel-menu-type">Menu a parametrer</label>
+            <select id="sel-menu-type">
+                {% for menuDefinition in menuDefinitions %}
+                    <option value="{{ menuDefinition.key }}">{{ menuDefinition.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="sel-group">
+            <label for="sel-type">Configurer pour</label>
+            <select id="sel-type">
+                <option value="">Choisir...</option>
+                <option value="profile">Type Profil</option>
+                <option value="user">Utilisateur</option>
+            </select>
+        </div>
+        <div class="sel-group">
+            <label for="sel-target" id="sel-target-label">Selection</label>
+            <select id="sel-target" disabled>
+                <option value="">- choisir d abord a gauche -</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="user-info-bar" id="user-info-bar">
+        <div>Prenom : <span id="uinfo-prenom">-</span></div>
+        <div>Nom : <span id="uinfo-nom">-</span></div>
+        <div>Profil actuel : <span id="uinfo-profile">-</span></div>
+    </div>
+
+    <div class="section-card" id="section-menu">
+        <div class="section-header">
+            <span>Gestion du menu : <span id="selected-menu-name">Menu Vertical</span></span>
+        </div>
+        <div class="section-body">
+            <p class="section-note">
+                Selectionnez les pages a afficher, reordonnez-les par glisser-deposer et gerer la hierarchie directement dans le menu actif.
+            </p>
+            <div class="menu-context-note" id="menu-context-note"></div>
+            <div class="menu-override-warning" id="menu-override-warning" hidden></div>
+            <div class="menus-toolbar">
+                <button class="btn btn-primary btn-sm" id="btn-menu-save" onclick="saveMenu()">Enregistrer le menu</button>
+                <button class="btn btn-secondary btn-sm" onclick="resetMenu()">Reinitialiser</button>
+                <span id="menu-save-status"></span>
+            </div>
+            <div class="menus-grid">
+                <div class="menus-column">
+                    <div class="menus-column-header">
+                        <span class="menus-column-title">Pages disponibles</span>
+                        <button type="button" class="menus-bulk-toggle" data-target-list="list-available">Tout selectionner</button>
+                    </div>
+                    <ul class="menus-list" id="list-available">
+                        <li class="menus-list-empty" id="empty-available">Aucune page disponible</li>
+                    </ul>
+                </div>
+                <div class="menus-transfer-controls">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-move-selected-to-active">Ajouter -></button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-move-selected-to-available"><- Retirer</button>
+                </div>
+                <div class="menus-column">
+                    <div class="menus-column-header">
+                        <span class="menus-column-title">Menu actif</span>
+                        <button type="button" class="menus-bulk-toggle" data-target-list="list-active">Tout selectionner</button>
+                    </div>
+                    <ul class="menus-list" id="list-active">
+                        <li class="menus-list-empty" id="empty-active">Aucune page active</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-card" id="section-perms">
+        <div class="section-header">
+            <span>Permissions d acces aux pages</span>
+            <span class="section-header-actions">
+                <button class="btn btn-success btn-sm" id="btn-perm-save-top" disabled>Enregistrer les permissions</button>
+            </span>
+        </div>
+        <div class="section-body">
+            <div id="perms-container">
+                <div class="placeholder-msg">Selectionnez un profil ou un utilisateur ci-dessus.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .menus-page-header,
+    .menus-toolbar,
+    .perm-bulk-toolbar,
+    .perm-save-row {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .menus-page-header {
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1.5rem;
+    }
+
+    .menus-page-subtitle,
+    .section-note,
+    .menu-context-note,
+    .menu-override-warning,
+    #menu-save-status,
+    #perm-save-status {
+        color: var(--text-muted);
+    }
+
+    .menus-page-subtitle {
+        margin: 0;
+        max-width: 900px;
+    }
+
+    .unified-selector {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .unified-selector label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 0.4rem;
+    }
+
+    .unified-selector select {
+        width: 100%;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+    }
+
+    .user-info-bar {
+        display: none;
+        background: var(--bg-tertiary);
+        border-left: 4px solid var(--primary);
+        border-radius: 6px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1.5rem;
+        color: var(--text-secondary);
+        gap: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .user-info-bar.visible {
+        display: flex;
+    }
+
+    .user-info-bar span {
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
+    .section-card {
+        display: none;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+    }
+
+    .section-card.visible {
+        display: block;
+    }
+
+    .section-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        font-weight: 600;
+    }
+
+    .section-header-actions {
+        margin-left: auto;
+    }
+
+    .section-body {
+        padding: 1rem 1.25rem;
+    }
+
+    .section-note {
+        margin: 0 0 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .menu-override-warning {
+        display: none;
+        margin-bottom: 0.75rem;
+        padding: 0.75rem 0.9rem;
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.24);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 0.84rem;
+    }
+
+    .menu-override-warning.visible {
+        display: block;
+    }
+
+    .menus-grid {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 1.25rem;
+        align-items: stretch;
+    }
+
+    .menus-column {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-primary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .menus-column-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+    }
+
+    .menus-column-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .menus-bulk-toggle,
+    .perm-bulk-link {
+        border: 0;
+        background: transparent;
+        color: var(--primary);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .menus-transfer-controls {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.75rem;
+    }
+
+    .menus-list {
+        list-style: none;
+        margin: 0;
+        padding: 0.5rem;
+        min-height: 220px;
+    }
+
+    .menus-list-empty,
+    .placeholder-msg {
+        text-align: center;
+        color: var(--text-muted);
+        padding: 1.5rem 1rem;
+        font-size: 0.85rem;
+    }
+
+    .menu-folder-separator {
+        margin: 0.7rem 0 0.55rem;
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.55rem 0.75rem;
+        margin-bottom: 0.4rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        position: relative;
+    }
+
+    .menu-item:hover {
+        border-color: var(--primary);
+        box-shadow: 0 2px 8px var(--shadow);
+    }
+
+    .menu-item.sortable-ghost {
+        opacity: 0.4;
+    }
+
+    .menu-item.sortable-drag {
+        box-shadow: 0 4px 16px var(--shadow-lg);
+        border-color: var(--primary);
+    }
+
+    .menu-item-active {
+        padding-left: calc(0.75rem + (var(--menu-depth, 0) * 1.5rem));
+        cursor: grab;
+    }
+
+    .menu-item-child::before {
+        content: '';
+        position: absolute;
+        left: calc(0.65rem + ((var(--menu-depth, 0) - 1) * 1.5rem));
+        top: 50%;
+        width: 0.8rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .menu-item-label {
+        flex: 1;
+        font-weight: 500;
+    }
+
+    .menu-item-blocked {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.16);
+    }
+
+    .menu-item-meta,
+    .perm-toggle {
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .menu-item-selector,
+    .perm-check {
+        width: 17px;
+        height: 17px;
+        cursor: pointer;
+        accent-color: var(--primary);
+    }
+
+    .menu-item-permission-toggle,
+    .menu-item-icon-toggle {
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 0.68rem;
+        font-weight: 600;
+        line-height: 1;
+        padding: 0.18rem 0.42rem;
+        border-radius: 999px;
+        cursor: pointer;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .menu-item:hover .menu-item-permission-toggle,
+    .menu-item:hover .menu-item-icon-toggle,
+    .menu-item:focus-within .menu-item-permission-toggle,
+    .menu-item:focus-within .menu-item-icon-toggle {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .menu-item-icon-toggle.is-disabled {
+        display: none;
+    }
+
+    .menu-item-permission-toggle.is-allowed,
+    .menu-item-icon-toggle.is-icon-only,
+    .perm-badge.enabled {
+        background: rgba(34, 197, 94, 0.12);
+        border-color: rgba(34, 197, 94, 0.22);
+        color: #166534;
+    }
+
+    .menu-item-permission-toggle.is-blocked,
+    .menu-item-icon-toggle.is-label-visible,
+    .perm-badge.disabled {
+        background: rgba(239, 68, 68, 0.12);
+        border-color: rgba(239, 68, 68, 0.22);
+        color: #991B1B;
+    }
+
+    .menu-item-folder,
+    .menu-item-hierarchy,
+    .perm-path {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+    }
+
+    .menu-item-hierarchy {
+        display: none;
+    }
+
+    .menu-item-hierarchy.visible {
+        display: inline-flex;
+    }
+
+    .menu-item-preview-icon-only .menu-item-label,
+    .menu-item-preview-icon-only .menu-item-folder,
+    .menu-item-preview-icon-only .menu-item-hierarchy {
+        display: none;
+    }
+
+    .perm-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .perm-row:last-child {
+        border-bottom: none;
+    }
+
+    .perm-info {
+        flex: 1;
+    }
+
+    .perm-name {
+        font-weight: 500;
+    }
+
+    .perm-badge {
+        font-size: 0.78rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        min-width: 70px;
+        text-align: center;
+        font-weight: 500;
+    }
+
+    .perm-bulk-link.is-active {
+        font-weight: 700;
+        text-decoration: underline;
+    }
+
+    #menu-save-status.success,
+    #perm-save-status.success {
+        color: var(--success, #16A34A);
+    }
+
+    #menu-save-status.error,
+    #perm-save-status.error {
+        color: var(--danger, #DC2626);
+    }
+
+    html.dark .menu-item,
+    html.dark .perm-row,
+    html.dark .perm-info,
+    html.dark .perm-name,
+    html.dark .menu-item-label,
+    html.dark .menu-item-icon,
+    html.dark .menu-item-meta,
+    html.dark .menu-item-folder,
+    html.dark .menu-item-hierarchy,
+    html.dark .perm-path,
+    html.dark .menu-folder-separator,
+    html.dark .menus-list-empty,
+    html.dark .placeholder-msg {
+        color: #fff;
+    }
+
+    html.dark .menu-item-permission-toggle,
+    html.dark .menu-item-icon-toggle,
+    html.dark .menu-item-permission-toggle.is-allowed,
+    html.dark .menu-item-icon-toggle.is-icon-only,
+    html.dark .perm-badge.enabled,
+    html.dark .menu-item-permission-toggle.is-blocked,
+    html.dark .menu-item-icon-toggle.is-label-visible,
+    html.dark .perm-badge.disabled {
+        color: #fff;
+    }
+
+    @media (max-width: 1080px) {
+        .unified-selector,
+        .menus-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .menus-transfer-controls {
+            flex-direction: row;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <script>
+        (function() {
+            var usersData = {{ usersData|json_encode|raw }};
+            var profilesList = {{ profilesList|json_encode|raw }};
+            var menuDefinitions = {{ menuDefinitions|json_encode|raw }};
+            var currentUserContext = {
+                id: {{ app.user ? app.user.id|json_encode|raw : 'null' }},
+                effective_profile_type: {{ app.user ? app.user.effectiveProfileType|json_encode|raw : 'null' }}
+            };
+            var apiUrls = {
+                availablePages: {{ path('menus_api_available_pages')|json_encode|raw }},
+                getConfig: {{ path('menus_api_get_config')|json_encode|raw }},
+                saveConfig: {{ path('menus_api_save_config')|json_encode|raw }},
+                resetConfig: {{ path('menus_api_reset_config')|json_encode|raw }},
+                permissions: {{ path('menus_api_permissions')|json_encode|raw }},
+                updatePermission: {{ path('menus_api_update_permission')|json_encode|raw }}
+            };
+
+            var allAvailablePages = [];
+            var currentMenuConfig = [];
+            var currentPermissions = {};
+            var selType = '';
+            var selValue = '';
+            var currentMenuType = 'sidebar';
+            var selectionStorageKey = 'dashboard.admin.menus.selection';
+            var dragStartX = 0;
+
+            function escHtml(value) {
+                return String(value).replace(/[&<>"']/g, function(character) {
+                    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character];
+                });
+            }
+
+            function normalizeMenuLabel(item) {
+                return String((item && item.label) || (item && item.page) || '').trim();
+            }
+
+            function buildAvailablePageMap(items) {
+                return (Array.isArray(items) ? items : []).reduce(function(map, item) {
+                    if (item && item.page) {
+                        map[String(item.page)] = item;
+                    }
+                    return map;
+                }, {});
+            }
+
+            function mergeMenuItemWithAvailableMeta(item, pageMap) {
+                var page = String((item && item.page) || '');
+                var pageMeta = page && pageMap[page] ? pageMap[page] : {};
+                var merged = Object.assign({}, pageMeta, item || {});
+                merged.label = normalizeMenuLabel(Object.assign({}, merged, {
+                    label: String(pageMeta.label || merged.label || page || '')
+                }));
+                merged.icon = String(pageMeta.icon || merged.icon || 'bi-file-earmark-text');
+                merged.icon_html = String(pageMeta.icon_html || merged.icon_html || '');
+                merged.folder = String(pageMeta.folder || merged.folder || 'pages');
+                merged.url = String(pageMeta.url || merged.url || '#');
+                return merged;
+            }
+
+            function getCurrentSelectionLabel() {
+                if (selType === 'profile') {
+                    return 'le profil ' + selValue;
+                }
+                if (selType === 'user') {
+                    var user = usersData.find(function(candidate) { return String(candidate.id) === selValue; });
+                    if (user) {
+                        return 'l utilisateur ' + user.prenom + ' ' + user.nom;
+                    }
+                }
+                return 'la selection en cours';
+            }
+
+            function getCurrentMenuLabel() {
+                var definition = menuDefinitions[currentMenuType] || menuDefinitions.sidebar || null;
+                return definition ? String(definition.label || 'Menu Vertical') : 'Menu Vertical';
+            }
+
+            function currentMenuSupportsIconOnly() {
+                return currentMenuType === 'header_right';
+            }
+
+            function userHasMenuOverride(user, menuType) {
+                return !!(user && user.menu_overrides && user.menu_overrides[menuType]);
+            }
+
+            function updateSelectedMenuName() {
+                var target = document.getElementById('selected-menu-name');
+                if (target) {
+                    target.textContent = getCurrentMenuLabel();
+                }
+                updateProfileOverrideWarning();
+            }
+
+            function updateProfileOverrideWarning() {
+                var warning = document.getElementById('menu-override-warning');
+                if (!warning) {
+                    return;
+                }
+
+                warning.textContent = '';
+                warning.hidden = true;
+                warning.classList.remove('visible');
+
+                if (selType !== 'profile' || !selValue) {
+                    return;
+                }
+
+                var impactedUsers = usersData.filter(function(user) {
+                    var effectiveProfileType = String(user.effective_profile_type || user.profile_type || '').trim();
+                    return effectiveProfileType === selValue && userHasMenuOverride(user, currentMenuType);
+                });
+
+                if (impactedUsers.length === 0) {
+                    return;
+                }
+
+                var message = impactedUsers.length === 1
+                    ? '1 utilisateur de ce profil a deja un menu specifique pour ' + getCurrentMenuLabel() + '. Son menu personnel prime sur le profil.'
+                    : impactedUsers.length + ' utilisateurs de ce profil ont deja un menu specifique pour ' + getCurrentMenuLabel() + '. Leur menu personnel prime sur le profil.';
+
+                var currentUserIsImpacted = impactedUsers.some(function(user) {
+                    return String(user.id || '') === String(currentUserContext.id || '');
+                });
+
+                if (currentUserIsImpacted) {
+                    message += ' Votre compte est concerne, donc le menu que vous voyez actuellement ne changera pas tant que cette surcharge utilisateur existe.';
+                }
+
+                warning.textContent = message;
+                warning.hidden = false;
+                warning.classList.add('visible');
+            }
+
+            function populateTargetOptions(typeValue) {
+                var target = document.getElementById('sel-target');
+                var label = document.getElementById('sel-target-label');
+
+                if (typeValue === 'profile') {
+                    label.textContent = 'Type de profil';
+                    target.disabled = false;
+                    target.innerHTML = '<option value="">Choisir un profil...</option>' + profilesList.map(function(profileName) {
+                        return '<option value="' + escHtml(profileName) + '">' + escHtml(profileName) + '</option>';
+                    }).join('');
+                    return;
+                }
+
+                if (typeValue === 'user') {
+                    label.textContent = 'Utilisateur';
+                    target.disabled = false;
+                    target.innerHTML = '<option value="">Choisir un utilisateur...</option>' + usersData.map(function(user) {
+                        return '<option value="' + escHtml(user.id) + '">' + escHtml(user.prenom) + ' ' + escHtml(user.nom) + ' (' + escHtml(user.effective_profile_type || user.profile_type || '-') + ')</option>';
+                    }).join('');
+                    return;
+                }
+
+                label.textContent = 'Selection';
+                target.disabled = true;
+                target.innerHTML = '<option value="">- choisir d abord a gauche -</option>';
+            }
+
+            function persistSelectionState() {
+                try {
+                    window.localStorage.setItem(selectionStorageKey, JSON.stringify({menuType: currentMenuType, type: selType, value: selValue}));
+                } catch (error) {}
+
+                var url = new URL(window.location.href);
+                currentMenuType ? url.searchParams.set('menu', currentMenuType) : url.searchParams.delete('menu');
+                selType ? url.searchParams.set('type', selType) : url.searchParams.delete('type');
+                selValue ? url.searchParams.set('value', selValue) : url.searchParams.delete('value');
+                window.history.replaceState({}, '', url.toString());
+            }
+
+            function restoreSelectionState() {
+                var url = new URL(window.location.href);
+                var restoredMenuType = url.searchParams.get('menu') || 'sidebar';
+                var restoredType = url.searchParams.get('type') || '';
+                var restoredValue = url.searchParams.get('value') || '';
+
+                if (!restoredType) {
+                    try {
+                        var saved = JSON.parse(window.localStorage.getItem(selectionStorageKey) || '{}');
+                        restoredMenuType = typeof saved.menuType === 'string' ? saved.menuType : restoredMenuType;
+                        restoredType = typeof saved.type === 'string' ? saved.type : '';
+                        restoredValue = typeof saved.value === 'string' ? saved.value : '';
+                    } catch (error) {}
+                }
+
+                if (!menuDefinitions[restoredMenuType]) {
+                    restoredMenuType = 'sidebar';
+                }
+
+                currentMenuType = restoredMenuType;
+                document.getElementById('sel-menu-type').value = restoredMenuType;
+                updateSelectedMenuName();
+
+                if (!['profile', 'user'].includes(restoredType)) {
+                    persistSelectionState();
+                    return;
+                }
+
+                document.getElementById('sel-type').value = restoredType;
+                selType = restoredType;
+                populateTargetOptions(restoredType);
+
+                if (!restoredValue) {
+                    persistSelectionState();
+                    return;
+                }
+
+                var isValid = restoredType === 'profile'
+                    ? profilesList.indexOf(restoredValue) !== -1
+                    : usersData.some(function(user) { return String(user.id) === restoredValue; });
+
+                if (!isValid) {
+                    selValue = '';
+                    persistSelectionState();
+                    return;
+                }
+
+                document.getElementById('sel-target').value = restoredValue;
+                document.getElementById('sel-target').dispatchEvent(new Event('change'));
+            }
+
+            function hideAll() {
+                document.getElementById('section-menu').classList.remove('visible');
+                document.getElementById('section-perms').classList.remove('visible');
+                document.getElementById('user-info-bar').classList.remove('visible');
+                clearMenuUI();
+                document.getElementById('perms-container').innerHTML = '<div class="placeholder-msg">Selectionnez un profil ou un utilisateur ci-dessus.</div>';
+                document.getElementById('btn-perm-save-top').disabled = true;
+                currentPermissions = {};
+                updateProfileOverrideWarning();
+            }
+
+            function clearMenuUI() {
+                var listAvail = document.getElementById('list-available');
+                var listActive = document.getElementById('list-active');
+                listAvail.querySelectorAll('li.menu-item, li.menu-folder-separator').forEach(function(element) { element.remove(); });
+                listActive.querySelectorAll('li.menu-item, li.menu-folder-separator').forEach(function(element) { element.remove(); });
+                document.getElementById('empty-available').style.display = '';
+                document.getElementById('empty-active').style.display = '';
+                document.getElementById('menu-save-status').className = '';
+                document.getElementById('menu-save-status').textContent = '';
+                document.getElementById('menu-context-note').textContent = '';
+                allAvailablePages = [];
+                currentMenuConfig = [];
+                updateSelectedMenuName();
+                updateMenuBulkToggleLabels();
+            }
+
+            function makeItem(item) {
+                var li = document.createElement('li');
+                var label = normalizeMenuLabel(item);
+                var iconOnly = !!item.icon_only;
+                var iconHtml = String(item.icon_html || '');
+
+                li.className = 'menu-item';
+                li.dataset.page = item.page;
+                li.dataset.url = item.url;
+                li.dataset.label = label;
+                li.dataset.icon = item.icon;
+                li.dataset.folder = item.folder;
+                li.dataset.parentPage = item.parent_page || '';
+                li.dataset.iconOnly = iconOnly ? '1' : '0';
+                li.tabIndex = 0;
+                li.innerHTML =
+                    '<input type="checkbox" class="menu-item-selector" aria-label="Selectionner ' + escHtml(label) + '">' +
+                    '<span class="menu-item-icon">' + (iconHtml || escHtml(item.icon || '')) + '</span>' +
+                    '<span class="menu-item-label">' + escHtml(label) + '</span>' +
+                    '<span class="menu-item-meta">' +
+                        '<button type="button" class="menu-item-permission-toggle"></button>' +
+                        '<button type="button" class="menu-item-icon-toggle"></button>' +
+                        '<span class="menu-item-folder">' + escHtml(item.folder || '') + '</span>' +
+                        '<span class="menu-item-hierarchy"></span>' +
+                    '</span>';
+
+                var checkbox = li.querySelector('.menu-item-selector');
+                if (checkbox) {
+                    ['click', 'mousedown', 'touchstart', 'pointerdown'].forEach(function(eventName) {
+                        checkbox.addEventListener(eventName, function(event) {
+                            event.stopPropagation();
+                        });
+                    });
+                }
+
+                var permissionToggle = li.querySelector('.menu-item-permission-toggle');
+                var iconToggle = li.querySelector('.menu-item-icon-toggle');
+
+                if (permissionToggle) {
+                    ['click', 'mousedown', 'touchstart', 'pointerdown'].forEach(function(eventName) {
+                        permissionToggle.addEventListener(eventName, function(event) {
+                            event.stopPropagation();
+                        });
+                    });
+                    permissionToggle.addEventListener('click', function() {
+                        toggleMenuItemPermission(li.dataset.page || '');
+                    });
+                }
+
+                if (iconToggle) {
+                    ['click', 'mousedown', 'touchstart', 'pointerdown'].forEach(function(eventName) {
+                        iconToggle.addEventListener(eventName, function(event) {
+                            event.stopPropagation();
+                        });
+                    });
+                    iconToggle.addEventListener('click', function() {
+                        toggleMenuItemIconOnly(li.dataset.page || '');
+                    });
+                }
+
+                updateMenuItemIconToggle(li);
+                return li;
+            }
+
+            function makeFolderSeparator(folder) {
+                var li = document.createElement('li');
+                li.className = 'menu-folder-separator';
+                li.textContent = '/' + String(folder || '').toLowerCase();
+                return li;
+            }
+
+            function collectActiveItems() {
+                return Array.from(document.querySelectorAll('#list-active li.menu-item'));
+            }
+
+            function rebuildAvailableList() {
+                var listAvail = document.getElementById('list-available');
+                listAvail.querySelectorAll('li.menu-folder-separator, li.menu-item').forEach(function(element) { element.remove(); });
+
+                var activePaths = new Set(collectActiveItems().map(function(item) {
+                    return item.dataset.page || '';
+                }));
+
+                var visibleItems = allAvailablePages.filter(function(item) {
+                    return !activePaths.has(item.page);
+                });
+
+                var currentFolder = '';
+                visibleItems.forEach(function(item) {
+                    var folder = String(item.folder || '').toLowerCase();
+                    if (folder !== currentFolder) {
+                        currentFolder = folder;
+                        listAvail.appendChild(makeFolderSeparator(folder));
+                    }
+                    listAvail.appendChild(makeItem(item));
+                });
+            }
+
+            function getMenuListItems(listId) {
+                var list = document.getElementById(listId);
+                return list ? Array.from(list.querySelectorAll('li.menu-item')) : [];
+            }
+
+            function setMenuSelectionForList(listId, shouldSelect) {
+                getMenuListItems(listId).forEach(function(item) {
+                    var checkbox = item.querySelector('.menu-item-selector');
+                    if (checkbox) {
+                        checkbox.checked = shouldSelect;
+                    }
+                });
+                updateMenuBulkToggleLabels();
+            }
+
+            function updateMenuBulkToggleLabels() {
+                document.querySelectorAll('.menus-bulk-toggle').forEach(function(button) {
+                    var listId = button.dataset.targetList || '';
+                    var items = getMenuListItems(listId);
+                    if (items.length === 0) {
+                        button.textContent = 'Tout selectionner';
+                        button.disabled = true;
+                        return;
+                    }
+
+                    button.disabled = false;
+                    var allSelected = items.every(function(item) {
+                        var checkbox = item.querySelector('.menu-item-selector');
+                        return checkbox && checkbox.checked;
+                    });
+                    button.textContent = allSelected ? 'Tout deselectionner' : 'Tout selectionner';
+                });
+            }
+
+            function moveCheckedMenuItems(fromListId, toListId) {
+                var toList = document.getElementById(toListId);
+                var selectedItems = getMenuListItems(fromListId).filter(function(item) {
+                    var checkbox = item.querySelector('.menu-item-selector');
+                    return checkbox && checkbox.checked;
+                });
+
+                selectedItems.forEach(function(item) {
+                    var checkbox = item.querySelector('.menu-item-selector');
+                    if (checkbox) {
+                        checkbox.checked = false;
+                    }
+                    if (toListId === 'list-available') {
+                        item.dataset.parentPage = '';
+                        item.remove();
+                    } else {
+                        toList.appendChild(item);
+                    }
+                });
+
+                rebuildAvailableList();
+                normalizeHierarchyInActiveList();
+                updateEmptyMessages();
+                updateMenuBulkToggleLabels();
+                applyMenuPermissionStates();
+            }
+
+            function bindMenuBulkInteractions() {
+                document.querySelectorAll('.menus-bulk-toggle').forEach(function(button) {
+                    button.addEventListener('click', function() {
+                        var listId = button.dataset.targetList || '';
+                        var items = getMenuListItems(listId);
+                        var allSelected = items.length > 0 && items.every(function(item) {
+                            var checkbox = item.querySelector('.menu-item-selector');
+                            return checkbox && checkbox.checked;
+                        });
+                        setMenuSelectionForList(listId, !allSelected);
+                    });
+                });
+
+                document.getElementById('btn-move-selected-to-active').addEventListener('click', function() {
+                    moveCheckedMenuItems('list-available', 'list-active');
+                });
+                document.getElementById('btn-move-selected-to-available').addEventListener('click', function() {
+                    moveCheckedMenuItems('list-active', 'list-available');
+                });
+
+                document.querySelectorAll('.menus-list').forEach(function(list) {
+                    list.addEventListener('change', function(event) {
+                        if (event.target && event.target.classList.contains('menu-item-selector')) {
+                            updateMenuBulkToggleLabels();
+                        }
+                    });
+                });
+            }
+
+            function setPermissionBadgeState(checkbox) {
+                if (!checkbox) {
+                    return;
+                }
+                var badge = checkbox.closest('.perm-toggle').querySelector('.perm-badge');
+                if (!badge) {
+                    return;
+                }
+                badge.className = checkbox.checked ? 'perm-badge enabled' : 'perm-badge disabled';
+                badge.textContent = checkbox.checked ? 'Autorise' : 'Bloque';
+            }
+
+            function getLivePermissionState(pagePath) {
+                var checkbox = document.querySelector('.perm-check[value="' + pagePath.replace(/"/g, '\\"') + '"]');
+                if (checkbox) {
+                    return checkbox.checked;
+                }
+                return Object.prototype.hasOwnProperty.call(currentPermissions, pagePath) ? !!currentPermissions[pagePath] : true;
+            }
+
+            function updateMenuPermissionToggle(item, isAllowed) {
+                var button = item.querySelector('.menu-item-permission-toggle');
+                if (!button) {
+                    return;
+                }
+                button.classList.toggle('is-allowed', isAllowed);
+                button.classList.toggle('is-blocked', !isAllowed);
+                button.textContent = isAllowed ? 'Autorise' : 'Bloque';
+            }
+
+            function isMenuItemIconOnly(item) {
+                return !!(item && String(item.dataset.iconOnly || '') === '1');
+            }
+
+            function updateMenuItemIconToggle(item) {
+                var button = item.querySelector('.menu-item-icon-toggle');
+                if (!button) {
+                    return;
+                }
+                var iconOnly = isMenuItemIconOnly(item);
+                var isSupported = currentMenuSupportsIconOnly();
+                item.classList.toggle('menu-item-preview-icon-only', isSupported && iconOnly);
+                button.classList.toggle('is-disabled', !isSupported);
+                if (!isSupported) {
+                    button.classList.remove('is-icon-only', 'is-label-visible');
+                    button.textContent = '';
+                    return;
+                }
+                button.classList.toggle('is-icon-only', iconOnly);
+                button.classList.toggle('is-label-visible', !iconOnly);
+                button.textContent = 'Icon Only';
+            }
+
+            function toggleMenuItemIconOnly(pagePath) {
+                document.querySelectorAll('.menu-item').forEach(function(item) {
+                    if ((item.dataset.page || '') === pagePath) {
+                        item.dataset.iconOnly = isMenuItemIconOnly(item) ? '0' : '1';
+                        updateMenuItemIconToggle(item);
+                    }
+                });
+            }
+
+            function syncPermissionCheckbox(pagePath, isAllowed) {
+                var checkbox = document.querySelector('.perm-check[value="' + pagePath.replace(/"/g, '\\"') + '"]');
+                if (!checkbox) {
+                    currentPermissions[pagePath] = isAllowed;
+                    applyMenuPermissionStates();
+                    return;
+                }
+                checkbox.checked = isAllowed;
+                setPermissionBadgeState(checkbox);
+                applyMenuPermissionStates();
+            }
+
+            function toggleMenuItemPermission(pagePath) {
+                if (pagePath) {
+                    syncPermissionCheckbox(pagePath, !getLivePermissionState(pagePath));
+                }
+            }
+
+            function applyMenuPermissionStates() {
+                document.querySelectorAll('.menu-item').forEach(function(item) {
+                    var pagePath = item.dataset.page || '';
+                    updateMenuItemIconToggle(item);
+                    var isAllowed = pagePath ? getLivePermissionState(pagePath) : true;
+                    item.classList.toggle('menu-item-blocked', !isAllowed);
+                    updateMenuPermissionToggle(item, isAllowed);
+                });
+            }
+
+            function applyPermissionBulkState(shouldAllow) {
+                var status = document.getElementById('perm-save-status');
+                document.querySelectorAll('.perm-check').forEach(function(checkbox) {
+                    checkbox.checked = shouldAllow;
+                    setPermissionBadgeState(checkbox);
+                });
+                applyMenuPermissionStates();
+                if (status) {
+                    status.className = 'success';
+                    status.textContent = shouldAllow ? 'Toutes les pages visibles sont autorisees.' : 'Toutes les pages visibles sont bloquees.';
+                }
+            }
+
+            function normalizeHierarchyInActiveList() {
+                var items = collectActiveItems();
+                var seen = {};
+                var labels = {};
+                items.forEach(function(item) {
+                    labels[item.dataset.page] = item.dataset.label || item.dataset.page;
+                });
+                items.forEach(function(item) {
+                    var page = item.dataset.page || '';
+                    var parentPage = item.dataset.parentPage || '';
+                    if (!page) {
+                        return;
+                    }
+                    if (!parentPage || !seen[parentPage] || parentPage === page) {
+                        parentPage = '';
+                        item.dataset.parentPage = '';
+                    } else {
+                        var parentNode = items.find(function(candidate) { return candidate.dataset.page === parentPage; });
+                        if (parentNode && parentNode.dataset.parentPage) {
+                            parentPage = '';
+                            item.dataset.parentPage = '';
+                        }
+                    }
+                    seen[page] = true;
+                    applyHierarchyVisualState(item, parentPage ? 1 : 0, parentPage, labels[parentPage] || '');
+                });
+            }
+
+            function applyHierarchyVisualState(item, depth, parentPage, parentLabel) {
+                item.style.setProperty('--menu-depth', String(depth));
+                item.classList.toggle('menu-item-active', item.parentElement && item.parentElement.id === 'list-active');
+                item.classList.toggle('menu-item-child', depth > 0);
+                var badge = item.querySelector('.menu-item-hierarchy');
+                if (!badge) {
+                    return;
+                }
+                if (parentPage) {
+                    badge.textContent = 'enfant de ' + parentLabel;
+                    badge.classList.add('visible');
+                } else {
+                    badge.textContent = '';
+                    badge.classList.remove('visible');
+                }
+            }
+
+            function applyHierarchyFromDrag(item, evt) {
+                if (!item || item.parentElement.id !== 'list-active') {
+                    if (item) {
+                        item.dataset.parentPage = '';
+                    }
+                    return;
+                }
+                var deltaX = evt && evt.originalEvent && typeof evt.originalEvent.clientX === 'number' ? evt.originalEvent.clientX - dragStartX : 0;
+                if (deltaX < -30) {
+                    item.dataset.parentPage = '';
+                    return;
+                }
+                if (deltaX > 30) {
+                    var previousItem = item.previousElementSibling;
+                    while (previousItem && !previousItem.classList.contains('menu-item')) {
+                        previousItem = previousItem.previousElementSibling;
+                    }
+                    if (previousItem && !previousItem.dataset.parentPage) {
+                        item.dataset.parentPage = previousItem.dataset.page || '';
+                        return;
+                    }
+                }
+                item.dataset.parentPage = '';
+            }
+
+            function updateEmptyMessages() {
+                document.getElementById('empty-available').style.display = document.querySelectorAll('#list-available li.menu-item').length ? 'none' : '';
+                document.getElementById('empty-active').style.display = document.querySelectorAll('#list-active li.menu-item').length ? 'none' : '';
+            }
+
+            function finalizeMenuDrag(evt) {
+                if (evt && evt.to && evt.to.id === 'list-available' && evt.item) {
+                    evt.item.dataset.parentPage = '';
+                }
+                if (evt && evt.to && evt.to.id === 'list-active') {
+                    applyHierarchyFromDrag(evt.item, evt);
+                }
+                rebuildAvailableList();
+                normalizeHierarchyInActiveList();
+                updateEmptyMessages();
+                updateMenuBulkToggleLabels();
+                applyMenuPermissionStates();
+            }
+
+            function initSortable() {
+                var availableList = document.getElementById('list-available');
+                var activeList = document.getElementById('list-active');
+                if (!availableList || !activeList || typeof Sortable === 'undefined') {
+                    return;
+                }
+                [availableList, activeList].forEach(function(list) {
+                    if (list._sortable) {
+                        list._sortable.destroy();
+                    }
+                });
+                var commonOptions = {
+                    group: 'menu-config',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    draggable: '.menu-item',
+                    filter: '.menus-list-empty, .menu-folder-separator, .menu-item-selector, .menu-item-permission-toggle',
+                    preventOnFilter: false,
+                    onStart: function(evt) {
+                        dragStartX = evt && evt.originalEvent && typeof evt.originalEvent.clientX === 'number' ? evt.originalEvent.clientX : 0;
+                    },
+                    onEnd: finalizeMenuDrag
+                };
+                availableList._sortable = Sortable.create(availableList, Object.assign({}, commonOptions, {sort: false, group: {name: 'menu-config', pull: true, put: true}}));
+                activeList._sortable = Sortable.create(activeList, Object.assign({}, commonOptions, {group: {name: 'menu-config', pull: true, put: true}}));
+            }
+
+            function renderMenu(available, active) {
+                var listActive = document.getElementById('list-active');
+                listActive.querySelectorAll('li.menu-item').forEach(function(element) { element.remove(); });
+                active.forEach(function(item) { listActive.appendChild(makeItem(item)); });
+                rebuildAvailableList();
+                normalizeHierarchyInActiveList();
+                updateEmptyMessages();
+                updateMenuBulkToggleLabels();
+                initSortable();
+                applyMenuPermissionStates();
+            }
+
+            async function loadMenuData() {
+                var status = document.getElementById('menu-save-status');
+                status.className = '';
+                status.textContent = '';
+                clearMenuUI();
+                try {
+                    var ts = Date.now();
+                    var pagesUrl = new URL(apiUrls.availablePages, window.location.origin);
+                    pagesUrl.searchParams.set('_t', String(ts));
+                    var configUrl = new URL(apiUrls.getConfig, window.location.origin);
+                    configUrl.searchParams.set('type', selType);
+                    configUrl.searchParams.set('value', selValue);
+                    configUrl.searchParams.set('menu_type', currentMenuType);
+                    configUrl.searchParams.set('_t', String(ts));
+                    var responses = await Promise.all([fetch(pagesUrl.toString(), {cache: 'no-store'}), fetch(configUrl.toString(), {cache: 'no-store'})]);
+                    allAvailablePages = await responses[0].json();
+                    var menuPayload = await responses[1].json();
+                    if (allAvailablePages._error || menuPayload._error) {
+                        status.className = 'error';
+                        status.textContent = 'Erreur de chargement du menu';
+                        return;
+                    }
+                    currentMenuConfig = Array.isArray(menuPayload.menu) ? menuPayload.menu : [];
+                    allAvailablePages = allAvailablePages.map(function(item) { return mergeMenuItemWithAvailableMeta(item, {}); });
+                    var availablePageMap = buildAvailablePageMap(allAvailablePages);
+                    currentMenuConfig = currentMenuConfig.map(function(item) { return mergeMenuItemWithAvailableMeta(item, availablePageMap); });
+                    document.getElementById('menu-context-note').textContent = getCurrentMenuLabel() + ' : ' + (menuPayload.source_label || 'Configuration par defaut') + ' pour ' + getCurrentSelectionLabel() + '.';
+                    renderMenu(allAvailablePages, currentMenuConfig);
+                } catch (error) {
+                    status.className = 'error';
+                    status.textContent = 'Erreur reseau';
+                }
+            }
+
+            async function saveMenu() {
+                var button = document.getElementById('btn-menu-save');
+                var status = document.getElementById('menu-save-status');
+                button.disabled = true;
+                status.className = '';
+                status.textContent = 'Enregistrement...';
+                var items = Array.from(document.querySelectorAll('#list-active li.menu-item')).map(function(item) {
+                    return {page: item.dataset.page, url: item.dataset.url, label: item.dataset.label, icon: item.dataset.icon, folder: item.dataset.folder, parent_page: item.dataset.parentPage || null, icon_only: item.dataset.iconOnly === '1'};
+                });
+                try {
+                    var response = await fetch(apiUrls.saveConfig, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({menu_type: currentMenuType, type: selType, value: selValue, menu: items})});
+                    var data = await response.json();
+                    if (!data.success) {
+                        status.className = 'error';
+                        status.textContent = 'Erreur : ' + (data._error || 'Erreur');
+                    } else {
+                        var permissionResult = document.querySelector('.perm-check') ? await savePermissions() : null;
+                        status.className = permissionResult && permissionResult.success === false ? 'error' : 'success';
+                        status.textContent = permissionResult && permissionResult.changed ? 'OK menu et permissions enregistres pour ' + getCurrentSelectionLabel() : 'OK menu enregistre pour ' + getCurrentSelectionLabel();
+                        if (permissionResult && permissionResult.success === false) {
+                            status.textContent = 'Le menu a ete enregistre, mais pas les permissions.';
+                        }
+                        document.getElementById('menu-context-note').textContent = getCurrentMenuLabel() + ' : configuration specifique enregistree pour ' + getCurrentSelectionLabel() + '.';
+                    }
+                } catch (error) {
+                    status.className = 'error';
+                    status.textContent = 'Erreur reseau';
+                }
+                button.disabled = false;
+            }
+
+            function resetMenu() {
+                if (!window.confirm('Reinitialiser ' + getCurrentMenuLabel() + ' pour la selection courante et revenir a l heritage ?')) {
+                    return;
+                }
+                fetch(apiUrls.resetConfig, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({menu_type: currentMenuType, type: selType, value: selValue})})
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            loadMenuData();
+                        } else {
+                            document.getElementById('menu-save-status').className = 'error';
+                            document.getElementById('menu-save-status').textContent = 'Erreur : ' + (data._error || 'Erreur');
+                        }
+                    });
+            }
+
+            async function loadPermissions() {
+                var container = document.getElementById('perms-container');
+                var topSaveButton = document.getElementById('btn-perm-save-top');
+                container.innerHTML = '<div class="placeholder-msg">Chargement des permissions...</div>';
+                topSaveButton.disabled = true;
+                currentPermissions = {};
+                try {
+                    var permissionsUrl = new URL(apiUrls.permissions, window.location.origin);
+                    permissionsUrl.searchParams.set('type', selType === 'profile' ? 'profile' : 'user');
+                    permissionsUrl.searchParams.set('value', selValue);
+                    var response = await fetch(permissionsUrl.toString(), {cache: 'no-store'});
+                    var data = await response.json();
+                    if (data._error) {
+                        container.innerHTML = '<div class="placeholder-msg" style="color:var(--danger);">Erreur : ' + escHtml(data._error) + '</div>';
+                        return;
+                    }
+                    var permissions = data.permissions || [];
+                    if (permissions.length === 0) {
+                        container.innerHTML = '<div class="placeholder-msg">Aucune page trouvee.</div>';
+                        return;
+                    }
+                    var html = '<div class="perm-bulk-toolbar"><button type="button" class="perm-bulk-link" data-bulk-action="allow">Tout selectionner</button><button type="button" class="perm-bulk-link" data-bulk-action="block">Tout decocher</button></div>';
+                    permissions.forEach(function(permission) {
+                        currentPermissions[permission.page_path] = permission.is_allowed ? true : false;
+                        html += '<div class="perm-row"><div class="perm-info"><div class="perm-name">' + (permission.icon_html ? '<span class="menu-item-icon">' + String(permission.icon_html) + '</span> ' : '') + escHtml(permission.page_name) + '</div><div class="perm-path">' + escHtml(permission.page_path) + '</div></div><div class="perm-toggle"><span class="perm-badge ' + (permission.is_allowed ? 'enabled' : 'disabled') + '">' + (permission.is_allowed ? 'Autorise' : 'Bloque') + '</span><input type="checkbox" class="perm-check" value="' + escHtml(permission.page_path) + '"' + (permission.is_allowed ? ' checked' : '') + '></div></div>';
+                    });
+                    html += '<div class="perm-save-row"><span id="perm-save-status"></span><button class="btn btn-success btn-sm" id="btn-perm-save">Enregistrer les permissions</button></div>';
+                    container.innerHTML = html;
+                    container.querySelectorAll('.perm-check').forEach(function(checkbox) {
+                        checkbox.addEventListener('change', function() {
+                            setPermissionBadgeState(this);
+                            applyMenuPermissionStates();
+                        });
+                    });
+                    container.querySelectorAll('.perm-bulk-link').forEach(function(link) {
+                        link.addEventListener('click', function() {
+                            container.querySelectorAll('.perm-bulk-link').forEach(function(otherLink) {
+                                otherLink.classList.toggle('is-active', otherLink === link);
+                            });
+                            applyPermissionBulkState((link.dataset.bulkAction || '') === 'allow');
+                        });
+                    });
+                    document.getElementById('btn-perm-save').onclick = savePermissions;
+                    topSaveButton.onclick = savePermissions;
+                    topSaveButton.disabled = false;
+                    applyMenuPermissionStates();
+                } catch (error) {
+                    container.innerHTML = '<div class="placeholder-msg" style="color:var(--danger);">Erreur reseau</div>';
+                }
+            }
+
+            async function savePermissions() {
+                var button = document.getElementById('btn-perm-save');
+                var topButton = document.getElementById('btn-perm-save-top');
+                var status = document.getElementById('perm-save-status');
+                if (!status) {
+                    return {success: true, changed: false, skipped: true};
+                }
+                if (button) { button.disabled = true; }
+                if (topButton) { topButton.disabled = true; }
+                status.className = '';
+                status.textContent = 'Enregistrement...';
+                var updates = [];
+                document.querySelectorAll('.perm-check').forEach(function(checkbox) {
+                    var path = checkbox.value;
+                    var now = checkbox.checked;
+                    var was = currentPermissions[path];
+                    if (now !== was) {
+                        updates.push({type: selType === 'profile' ? 'profile' : 'user', value: selValue, page_path: path, is_allowed: now});
+                    }
+                });
+                if (updates.length === 0) {
+                    status.className = 'success';
+                    status.textContent = 'Aucune modification';
+                    if (button) { button.disabled = false; }
+                    if (topButton) { topButton.disabled = false; }
+                    return {success: true, changed: false};
+                }
+                var errors = 0;
+                for (var index = 0; index < updates.length; index += 1) {
+                    try {
+                        var response = await fetch(apiUrls.updatePermission, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(updates[index])});
+                        var result = await response.json();
+                        if (result._error) {
+                            errors += 1;
+                        }
+                    } catch (error) {
+                        errors += 1;
+                    }
+                }
+                if (button) { button.disabled = false; }
+                if (topButton) { topButton.disabled = false; }
+                if (errors === 0) {
+                    status.className = 'success';
+                    status.textContent = 'OK permissions enregistrees';
+                    document.querySelectorAll('.perm-check').forEach(function(checkbox) {
+                        currentPermissions[checkbox.value] = checkbox.checked;
+                    });
+                    applyMenuPermissionStates();
+                    return {success: true, changed: true};
+                }
+                status.className = 'error';
+                status.textContent = 'Erreur : ' + errors + ' erreur(s)';
+                return {success: false, changed: true, errors: errors};
+            }
+
+            document.getElementById('sel-menu-type').addEventListener('change', function() {
+                currentMenuType = this.value && menuDefinitions[this.value] ? this.value : 'sidebar';
+                updateSelectedMenuName();
+                persistSelectionState();
+                if (selValue) {
+                    loadMenuData();
+                } else {
+                    clearMenuUI();
+                }
+            });
+
+            document.getElementById('sel-type').addEventListener('change', function() {
+                selType = this.value;
+                selValue = '';
+                hideAll();
+                populateTargetOptions(selType);
+                persistSelectionState();
+            });
+
+            document.getElementById('sel-target').addEventListener('change', function() {
+                selValue = this.value;
+                persistSelectionState();
+                if (!selValue) {
+                    hideAll();
+                    return;
+                }
+                document.getElementById('menu-save-status').className = '';
+                document.getElementById('menu-save-status').textContent = '';
+                var infoBar = document.getElementById('user-info-bar');
+                if (selType === 'user') {
+                    var user = usersData.find(function(candidate) { return String(candidate.id) === selValue; });
+                    if (user) {
+                        document.getElementById('uinfo-prenom').textContent = user.prenom;
+                        document.getElementById('uinfo-nom').textContent = user.nom;
+                        document.getElementById('uinfo-profile').textContent = user.effective_profile_type || user.profile_type || '-';
+                        infoBar.classList.add('visible');
+                    }
+                } else {
+                    infoBar.classList.remove('visible');
+                }
+                document.getElementById('section-menu').classList.add('visible');
+                document.getElementById('section-perms').classList.add('visible');
+                updateProfileOverrideWarning();
+                loadMenuData();
+                loadPermissions();
+            });
+
+            window.saveMenu = saveMenu;
+            window.resetMenu = resetMenu;
+            bindMenuBulkInteractions();
+            restoreSelectionState();
+        })();
+    </script>
+{% endblock %}

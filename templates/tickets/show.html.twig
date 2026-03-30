@@ -1,0 +1,977 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Detail ticket{% endblock %}
+
+{% block body %}
+{% set ticket = detailPayload.ticket|default(null) %}
+<div class="tickets-detail-page">
+    <div class="card tickets-detail-shell">
+        <div class="tickets-detail-topbar">
+            <a class="tickets-detail-back" href="{{ path('app_tickets') }}">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                <span>Retour aux tickets</span>
+            </a>
+            {% if ticket %}
+                <a class="tickets-detail-youtrack" href="{{ ticket.url }}" target="_blank" rel="noopener noreferrer">
+                    <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+                    <span>Ouvrir dans YouTrack</span>
+                </a>
+            {% endif %}
+        </div>
+
+        {% if detailPayload._error is defined and detailPayload._error %}
+            <div class="alert alert-danger">{{ detailPayload._error }}</div>
+        {% else %}
+            <div id="ticket-detail-container">
+                <p class="tickets-detail-loading">Chargement du ticket...</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .tickets-detail-page {
+        display: grid;
+        gap: 1rem;
+    }
+    .tickets-detail-shell {
+        padding: 1.1rem;
+    }
+    .tickets-detail-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    .tickets-detail-back,
+    .tickets-detail-youtrack {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-weight: 600;
+    }
+    .tickets-detail-loading {
+        margin: 0;
+        color: var(--text-muted);
+    }
+    .tickets-detail-card {
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 18px;
+        background: var(--bg-primary);
+        padding: 1rem 1.05rem;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+    }
+    .tickets-detail-card + .tickets-detail-card {
+        margin-top: 1rem;
+    }
+    .tickets-detail-card h2 {
+        margin-top: 0;
+        margin-bottom: 0.9rem;
+    }
+    .tickets-detail-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    .tickets-detail-title {
+        margin: 0;
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        flex-wrap: wrap;
+        font-size: 1.45rem;
+    }
+    .tickets-detail-id {
+        color: #2563eb;
+        font-weight: 800;
+    }
+    .tickets-detail-meta-note {
+        margin: 0.4rem 0 0;
+        color: var(--text-muted);
+    }
+    .tickets-detail-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 30px;
+        padding: 0.25rem 0.7rem;
+        border-radius: 999px;
+        color: #fff;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .tickets-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.8rem;
+    }
+    .tickets-detail-field {
+        padding: 0.75rem 0.85rem;
+        border-radius: 14px;
+        background: var(--bg-secondary);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .tickets-detail-label {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 0.25rem;
+    }
+    .tickets-detail-value {
+        color: var(--text-primary);
+        line-height: 1.45;
+        word-break: break-word;
+    }
+    .tickets-detail-rule {
+        height: 4px;
+        border-radius: 999px;
+        margin-top: 0.45rem;
+        background: var(--border);
+    }
+    .tickets-rich-html,
+    .tickets-comment-text {
+        color: var(--text-secondary);
+        line-height: 1.75;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+    .tickets-rich-html > :first-child,
+    .tickets-comment-text > :first-child {
+        margin-top: 0;
+    }
+    .tickets-rich-html > :last-child,
+    .tickets-comment-text > :last-child {
+        margin-bottom: 0;
+    }
+    .tickets-rich-html p,
+    .tickets-comment-text p {
+        margin: 0 0 0.85rem;
+    }
+    .tickets-rich-html ul,
+    .tickets-rich-html ol,
+    .tickets-comment-text ul,
+    .tickets-comment-text ol {
+        margin: 0 0 0.85rem 1.4rem;
+        padding: 0;
+    }
+    .tickets-rich-html li,
+    .tickets-comment-text li {
+        margin-bottom: 0.35rem;
+    }
+    .tickets-rich-html blockquote,
+    .tickets-comment-text blockquote {
+        margin: 0 0 0.85rem;
+        padding-left: 1rem;
+        border-left: 4px solid var(--border);
+        color: var(--text-muted);
+    }
+    .tickets-rich-html pre,
+    .tickets-comment-text pre {
+        margin: 0 0 0.85rem;
+        padding: 0.9rem;
+        border-radius: 12px;
+        background: var(--bg-secondary);
+        overflow-x: auto;
+    }
+    .tickets-rich-html code,
+    .tickets-comment-text code {
+        border-radius: 8px;
+        background: rgba(148, 163, 184, 0.12);
+        padding: 0.15rem 0.35rem;
+    }
+    .tickets-rich-html table,
+    .tickets-comment-text table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 1rem;
+    }
+    .tickets-rich-html th,
+    .tickets-rich-html td,
+    .tickets-comment-text th,
+    .tickets-comment-text td {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        padding: 0.55rem 0.65rem;
+        text-align: left;
+        vertical-align: top;
+    }
+    .tickets-rich-html img,
+    .tickets-comment-text img {
+        width: auto !important;
+        max-width: 100% !important;
+        height: auto !important;
+        border-radius: 12px;
+        margin: 0.75rem 0;
+        cursor: zoom-in;
+        display: inline-block;
+    }
+    .tickets-rich-html a,
+    .tickets-comment-text a {
+        color: #2563eb;
+        font-weight: 600;
+    }
+    .tickets-attachments-wrap {
+        margin-top: 1rem;
+        display: grid;
+        gap: 0.8rem;
+    }
+    .tickets-attachments-title {
+        margin: 0;
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .tickets-attachments-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.85rem;
+    }
+    .tickets-attachment-card {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.8rem 0.9rem;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: var(--bg-secondary);
+        color: inherit;
+        text-decoration: none;
+        transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+    .tickets-attachment-card:hover {
+        transform: translateY(-1px);
+        border-color: rgba(37, 99, 235, 0.35);
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+    }
+    .tickets-attachment-preview {
+        width: 74px;
+        height: 74px;
+        flex: 0 0 74px;
+        border-radius: 14px;
+        overflow: hidden;
+        background: rgba(148, 163, 184, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .tickets-attachment-preview img {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        object-fit: cover;
+        margin: 0;
+        cursor: zoom-in;
+    }
+    .tickets-attachment-preview.is-file {
+        color: #2563eb;
+    }
+    .tickets-attachment-icon {
+        font-size: 1.5rem;
+    }
+    .tickets-attachment-meta {
+        min-width: 0;
+        display: grid;
+        gap: 0.22rem;
+    }
+    .tickets-attachment-name {
+        color: var(--text-primary);
+        font-weight: 700;
+        word-break: break-word;
+    }
+    .tickets-attachment-kind {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+    .tickets-comments-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+    }
+    .tickets-comment-card {
+        padding: 0.9rem 1rem;
+        border-radius: 14px;
+        background: var(--bg-secondary);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .tickets-comment-topbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.8rem;
+        align-items: baseline;
+        flex-wrap: wrap;
+        margin-bottom: 0.6rem;
+    }
+    .tickets-comment-author {
+        color: #2563eb;
+        font-weight: 700;
+    }
+    .tickets-comment-date {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+    @media (max-width: 768px) {
+        .tickets-detail-heading,
+        .tickets-comment-topbar {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .tickets-attachments-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+{% if detailPayload._error is not defined or not detailPayload._error %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const payload = {{ detailPayload|json_encode(constant('JSON_UNESCAPED_UNICODE') b-or constant('JSON_UNESCAPED_SLASHES') b-or constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT'))|raw }};
+        const container = document.getElementById('ticket-detail-container');
+
+        if (!container || !payload || !payload.ticket) {
+            return;
+        }
+
+        renderTicketDetail(
+            payload.ticket,
+            Array.isArray(payload.comments) ? payload.comments : [],
+            Array.isArray(payload.attachments) ? payload.attachments : []
+        );
+
+        function renderTicketDetail(ticket, comments, attachments) {
+            const statusColor = getStatusColor(ticket.state || '');
+            const priorityColor = getPriorityColor(ticket.priority || '');
+            const descriptionHtml = formatRichHtml(ticket.description || '', attachments);
+
+            let html = '' +
+                '<div class="tickets-detail-card">' +
+                    '<div class="tickets-detail-heading">' +
+                        '<div>' +
+                            '<h1 class="tickets-detail-title">' +
+                                '<span class="tickets-detail-id">' + escapeHtml(ticket.idReadable || '') + '</span>' +
+                                '<span>' + escapeHtml(ticket.summary || '') + '</span>' +
+                            '</h1>' +
+                            '<p class="tickets-detail-meta-note">Cree le ' + escapeHtml(ticket.created || '-') + ' - Mis a jour le ' + escapeHtml(ticket.updated || '-') + '</p>' +
+                        '</div>' +
+                        '<span class="tickets-detail-badge" style="background:' + escapeHtml(statusColor) + ';">' + escapeHtml(ticket.state || 'Sans etat') + '</span>' +
+                    '</div>' +
+                    '<div class="tickets-detail-grid">' +
+                        buildField('Priorite', escapeHtml(ticket.priority || '-'), priorityColor) +
+                        buildField('Service', escapeHtml(ticket.service || '-')) +
+                        buildField('Responsable', escapeHtml(ticket.assignee || '-')) +
+                        buildField('Rapporteur', escapeHtml(ticket.reporter || '-')) +
+                        buildField('Type action', escapeHtml(ticket.action || '-')) +
+                        buildField('Date echeance', escapeHtml(ticket.dueDate || '-')) +
+                        buildField('Lien RM', formatRmLink(ticket.lienRm || '')) +
+                    '</div>' +
+                '</div>';
+
+            html += '' +
+                '<div class="tickets-detail-card">' +
+                    '<h2>Description</h2>' +
+                    '<div class="tickets-rich-html">' + descriptionHtml + '</div>' +
+                    renderAttachmentsSection('Medias et pieces jointes', attachments) +
+                '</div>';
+
+            html += '' +
+                '<div class="tickets-detail-card">' +
+                    '<h2>Commentaires</h2>' +
+                    (comments.length === 0
+                        ? '<p class="tickets-detail-loading">Aucun commentaire disponible.</p>'
+                        : '<div class="tickets-comments-list">' + comments.map(function(comment) {
+                            const commentAttachments = Array.isArray(comment.attachments) ? comment.attachments : [];
+
+                            return '' +
+                                '<div class="tickets-comment-card">' +
+                                    '<div class="tickets-comment-topbar">' +
+                                        '<span class="tickets-comment-author">' + escapeHtml(comment.author || 'Inconnu') + '</span>' +
+                                        '<span class="tickets-comment-date">' + escapeHtml(comment.created || '-') + '</span>' +
+                                    '</div>' +
+                                    '<div class="tickets-comment-text">' + formatCommentText(comment.text || '', commentAttachments) + '</div>' +
+                                    renderAttachmentsSection('Pieces jointes', commentAttachments) +
+                                '</div>';
+                        }).join('') + '</div>') +
+                '</div>';
+
+            container.innerHTML = html;
+        }
+
+        function buildField(label, value, color) {
+            return '' +
+                '<div class="tickets-detail-field">' +
+                    '<div class="tickets-detail-label">' + escapeHtml(label) + '</div>' +
+                    '<div class="tickets-detail-value">' + value + '</div>' +
+                    (color ? '<div class="tickets-detail-rule" style="background:' + escapeHtml(color) + ';"></div>' : '') +
+                '</div>';
+        }
+
+        function renderAttachmentsSection(title, attachments) {
+            const normalizedAttachments = normalizeAttachments(attachments);
+            if (normalizedAttachments.length === 0) {
+                return '';
+            }
+
+            return '' +
+                '<div class="tickets-attachments-wrap">' +
+                    '<p class="tickets-attachments-title">' + escapeHtml(title) + '</p>' +
+                    '<div class="tickets-attachments-grid">' +
+                        normalizedAttachments.map(function(attachment) {
+                            return renderAttachmentCard(attachment);
+                        }).join('') +
+                    '</div>' +
+                '</div>';
+        }
+
+        function renderAttachmentCard(attachment) {
+            const name = String(attachment.name || '').trim() || 'Piece jointe';
+            const url = String(attachment.url || '').trim();
+            if (!url) {
+                return '';
+            }
+
+            const imageAttachment = isImageAttachment(attachment);
+            const preview = imageAttachment
+                ? '<span class="tickets-attachment-preview"><img src="' + escapeHtml(url) + '" alt="' + escapeHtml(name) + '" loading="lazy"></span>'
+                : '<span class="tickets-attachment-preview is-file"><i class="' + escapeHtml(getAttachmentIcon(name)) + ' tickets-attachment-icon" aria-hidden="true"></i></span>';
+
+            return '' +
+                '<a class="tickets-attachment-card' + (imageAttachment ? ' is-image' : '') + '" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' +
+                    preview +
+                    '<span class="tickets-attachment-meta">' +
+                        '<span class="tickets-attachment-name">' + escapeHtml(name) + '</span>' +
+                        '<span class="tickets-attachment-kind">' + escapeHtml(getAttachmentKindLabel(name, imageAttachment)) + '</span>' +
+                    '</span>' +
+                '</a>';
+        }
+
+        function formatRmLink(url) {
+            const cleanUrl = String(url || '').trim();
+            if (!cleanUrl) {
+                return '-';
+            }
+
+            const match = cleanUrl.match(/\/issues\/(\d+)(?:[\/?#]|$)/i);
+            const label = match && match[1] ? 'RM#' + match[1] : 'Ouvrir';
+
+            return '<a href="' + escapeHtml(cleanUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(label) + '</a>';
+        }
+
+        function formatCommentText(text, attachments) {
+            return renderRichContent(text, attachments, '<span class="tickets-detail-loading">Aucun commentaire.</span>');
+        }
+
+        function formatRichHtml(text, attachments) {
+            return renderRichContent(text, attachments, '<span class="tickets-detail-loading">Aucune description.</span>');
+        }
+
+        function renderRichContent(text, attachments, emptyFallback) {
+            const cleanText = String(text || '').trim();
+            if (!cleanText) {
+                return emptyFallback;
+            }
+
+            const attachmentContext = buildAttachmentContext(attachments);
+            const decodedText = decodeHtmlEntities(cleanText);
+            let html = '';
+
+            if (looksLikeHtml(decodedText)) {
+                html = renderHtmlContent(decodedText, attachmentContext);
+            } else {
+                html = convertMarkdownToHtml(decodedText, attachmentContext);
+            }
+
+            const sanitized = sanitizeHtmlString(html);
+            return sanitized.trim() ? sanitized : emptyFallback;
+        }
+
+        function renderHtmlContent(html, attachmentContext) {
+            const parser = new DOMParser();
+            const parsedDocument = parser.parseFromString(String(html || ''), 'text/html');
+            const root = parsedDocument.body || parsedDocument.documentElement;
+
+            if (!root) {
+                return '';
+            }
+
+            root.querySelectorAll('script, style, meta, link, title, noscript, iframe, object, embed, form, input, button, textarea, select, option, svg, canvas').forEach(function(node) {
+                node.remove();
+            });
+
+            normalizeMediaSources(root, attachmentContext);
+
+            return root.innerHTML || '';
+        }
+
+        function normalizeMediaSources(root, attachmentContext) {
+            Array.from(root.querySelectorAll('img')).forEach(function(image) {
+                const resolvedSrc = resolveAssetUrl(image.getAttribute('src') || image.getAttribute('data-src') || '', attachmentContext);
+                if (!resolvedSrc) {
+                    image.remove();
+                    return;
+                }
+
+                image.setAttribute('src', resolvedSrc);
+                image.removeAttribute('data-src');
+                image.setAttribute('loading', 'lazy');
+            });
+
+            Array.from(root.querySelectorAll('a[href]')).forEach(function(link) {
+                const originalHref = String(link.getAttribute('href') || '').trim();
+                const resolvedHref = resolveAssetUrl(originalHref, attachmentContext);
+                if (!resolvedHref) {
+                    return;
+                }
+
+                link.setAttribute('href', resolvedHref);
+
+                if (!resolvedHref.startsWith('#')) {
+                    link.setAttribute('target', '_blank');
+                    link.setAttribute('rel', 'noopener noreferrer');
+                }
+            });
+        }
+
+        function convertMarkdownToHtml(markdown, attachmentContext) {
+            let html = String(markdown || '');
+
+            html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, function(match, alt, url) {
+                const resolvedUrl = resolveAssetUrl(url, attachmentContext);
+                if (!resolvedUrl) {
+                    return '';
+                }
+
+                return '<img src="' + escapeHtml(resolvedUrl) + '" alt="' + escapeHtml(alt) + '" loading="lazy">';
+            });
+
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, label, url) {
+                const resolvedUrl = resolveAssetUrl(url, attachmentContext);
+                if (!resolvedUrl) {
+                    return escapeHtml(label);
+                }
+
+                return '<a href="' + escapeHtml(resolvedUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(label) + '</a>';
+            });
+
+            html = html.replace(/<((?:https?:\/\/|mailto:|tel:)[^>\s]+)>/gi, function(match, url) {
+                const resolvedUrl = resolveAssetUrl(url, attachmentContext);
+                if (!resolvedUrl) {
+                    return escapeHtml(url);
+                }
+
+                return '<a href="' + escapeHtml(resolvedUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(url) + '</a>';
+            });
+
+            html = html.replace(/^###\s+([^\n]+)/gm, '<h3>$1</h3>');
+            html = html.replace(/^##\s+([^\n]+)/gm, '<h2>$1</h2>');
+            html = html.replace(/^#\s+([^\n]+)/gm, '<h1>$1</h1>');
+            html = html.replace(/^>\s?([^\n]+)/gm, '<blockquote>$1</blockquote>');
+            html = html.replace(/^(?:_{3,}|-{3,})$/gm, '<hr>');
+            html = html.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+            html = html.replace(/\*([^\*\n]+)\*/g, '<em>$1</em>');
+            html = html.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+            html = html.replace(/^\s*[-*]\s+([^\n]+)/gm, '<li>$1</li>');
+            html = html.replace(/(?:<li>.*?<\/li>)+/gs, function(match) {
+                return '<ul>' + match + '</ul>';
+            });
+            html = html.replace(/\r\n|\n\r|\r|\n/g, '<br>');
+
+            return html;
+        }
+
+        function sanitizeHtmlString(html) {
+            const template = document.createElement('template');
+            template.innerHTML = String(html || '');
+
+            const allowedTags = ['A', 'ARTICLE', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'DEL', 'DIV', 'EM', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HR', 'I', 'IMG', 'LI', 'OL', 'P', 'PRE', 'SECTION', 'SPAN', 'STRONG', 'TABLE', 'TBODY', 'TD', 'TH', 'THEAD', 'TR', 'U', 'UL'];
+            const blockedTags = ['BUTTON', 'CANVAS', 'EMBED', 'FORM', 'HEAD', 'IFRAME', 'INPUT', 'LINK', 'META', 'NOSCRIPT', 'OBJECT', 'OPTION', 'SCRIPT', 'SELECT', 'STYLE', 'SVG', 'TEXTAREA', 'TITLE'];
+            const allowedAttrs = {
+                A: ['href', 'target', 'rel', 'title', 'class'],
+                ARTICLE: ['class'],
+                CODE: ['class'],
+                DIV: ['class'],
+                IMG: ['src', 'alt', 'title', 'width', 'height', 'style', 'class', 'loading'],
+                P: ['class'],
+                PRE: ['class'],
+                SECTION: ['class'],
+                SPAN: ['class'],
+                TABLE: ['class'],
+                TBODY: ['class'],
+                TD: ['colspan', 'rowspan', 'class'],
+                TH: ['colspan', 'rowspan', 'class'],
+                THEAD: ['class'],
+                TR: ['class']
+            };
+
+            sanitizeNode(template.content);
+            return template.innerHTML;
+
+            function sanitizeNode(root) {
+                Array.from(root.childNodes).forEach(function(node) {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        return;
+                    }
+
+                    if (node.nodeType !== Node.ELEMENT_NODE) {
+                        node.remove();
+                        return;
+                    }
+
+                    if (blockedTags.indexOf(node.tagName) !== -1) {
+                        node.remove();
+                        return;
+                    }
+
+                    if (allowedTags.indexOf(node.tagName) === -1) {
+                        const fragment = document.createDocumentFragment();
+                        while (node.firstChild) {
+                            fragment.appendChild(node.firstChild);
+                        }
+                        node.replaceWith(fragment);
+                        sanitizeNode(fragment);
+                        return;
+                    }
+
+                    Array.from(node.attributes).forEach(function(attribute) {
+                        const attributeName = attribute.name.toLowerCase();
+                        const allowed = (allowedAttrs[node.tagName] || []).map(function(item) {
+                            return item.toLowerCase();
+                        });
+
+                        if (allowed.indexOf(attributeName) === -1) {
+                            node.removeAttribute(attribute.name);
+                            return;
+                        }
+
+                        const value = attribute.value || '';
+                        if ((attributeName === 'href' || attributeName === 'src') && isUnsafeUrl(value)) {
+                            node.removeAttribute(attribute.name);
+                            return;
+                        }
+
+                        if (attributeName === 'style') {
+                            const safeStyle = sanitizeStyleValue(value);
+                            if (!safeStyle) {
+                                node.removeAttribute(attribute.name);
+                                return;
+                            }
+
+                            node.setAttribute(attribute.name, safeStyle);
+                        }
+                    });
+
+                    if (node.tagName === 'A') {
+                        const href = String(node.getAttribute('href') || '').trim();
+                        if (href && !href.startsWith('#')) {
+                            node.setAttribute('target', '_blank');
+                            node.setAttribute('rel', 'noopener noreferrer');
+                        }
+                    }
+
+                    if (node.tagName === 'IMG') {
+                        const src = String(node.getAttribute('src') || '').trim();
+                        if (!src) {
+                            node.remove();
+                            return;
+                        }
+
+                        node.setAttribute('loading', 'lazy');
+                    }
+
+                    sanitizeNode(node);
+                });
+            }
+        }
+
+        function sanitizeStyleValue(value) {
+            const allowedProperties = [
+                'border-radius',
+                'display',
+                'height',
+                'margin',
+                'margin-bottom',
+                'margin-left',
+                'margin-right',
+                'margin-top',
+                'max-height',
+                'max-width',
+                'min-height',
+                'min-width',
+                'object-fit',
+                'width'
+            ];
+
+            return String(value || '')
+                .split(';')
+                .map(function(rule) {
+                    return rule.trim();
+                })
+                .filter(function(rule) {
+                    if (!rule || rule.indexOf(':') === -1) {
+                        return false;
+                    }
+
+                    const lowerRule = rule.toLowerCase();
+                    if (lowerRule.indexOf('expression') !== -1 || lowerRule.indexOf('javascript:') !== -1 || lowerRule.indexOf('vbscript:') !== -1 || lowerRule.indexOf('url(') !== -1 || lowerRule.indexOf('behavior:') !== -1) {
+                        return false;
+                    }
+
+                    const property = lowerRule.split(':')[0].trim();
+                    return allowedProperties.indexOf(property) !== -1;
+                })
+                .join('; ');
+        }
+
+        function buildAttachmentContext(attachments) {
+            const normalizedAttachments = normalizeAttachments(attachments);
+            const map = {};
+            let origin = '';
+
+            normalizedAttachments.forEach(function(attachment) {
+                const url = String(attachment.url || '').trim();
+                const name = String(attachment.name || '').trim();
+
+                if (url && !origin && /^https?:\/\//i.test(url)) {
+                    try {
+                        origin = new URL(url).origin;
+                    } catch (error) {
+                        origin = '';
+                    }
+                }
+
+                [name, basename(name), stripExtension(name)].forEach(function(key) {
+                    const lookupKey = normalizeLookupKey(key);
+                    if (!lookupKey || !url) {
+                        return;
+                    }
+
+                    map[lookupKey] = url;
+                });
+            });
+
+            return {
+                attachments: normalizedAttachments,
+                map: map,
+                origin: origin
+            };
+        }
+
+        function normalizeAttachments(attachments) {
+            return Array.isArray(attachments)
+                ? attachments.filter(function(attachment) {
+                    return attachment && typeof attachment === 'object' && String(attachment.url || '').trim() !== '';
+                })
+                : [];
+        }
+
+        function resolveAssetUrl(value, attachmentContext) {
+            let cleanValue = String(value || '').trim();
+            if (!cleanValue) {
+                return '';
+            }
+
+            const markdownImageMatch = cleanValue.match(/^!\[[^\]]*\]\(([^)]+)\)$/);
+            if (markdownImageMatch && markdownImageMatch[1]) {
+                cleanValue = String(markdownImageMatch[1]).trim();
+            }
+
+            const markdownLinkMatch = cleanValue.match(/^\[[^\]]+\]\(([^)]+)\)$/);
+            if (markdownLinkMatch && markdownLinkMatch[1]) {
+                cleanValue = String(markdownLinkMatch[1]).trim();
+            }
+
+            const angleWrappedMatch = cleanValue.match(/^<([^>]+)>$/);
+            if (angleWrappedMatch && angleWrappedMatch[1]) {
+                cleanValue = String(angleWrappedMatch[1]).trim();
+            }
+
+            if (!cleanValue || isUnsafeUrl(cleanValue)) {
+                return '';
+            }
+
+            if (cleanValue.startsWith('#') || /^mailto:/i.test(cleanValue) || /^tel:/i.test(cleanValue) || /^https?:\/\//i.test(cleanValue)) {
+                return cleanValue;
+            }
+
+            if (/^\/\//.test(cleanValue)) {
+                return 'https:' + cleanValue;
+            }
+
+            if (cleanValue.startsWith('/') && attachmentContext.origin) {
+                return attachmentContext.origin + cleanValue;
+            }
+
+            const candidates = [cleanValue, basename(cleanValue), stripExtension(cleanValue), stripExtension(basename(cleanValue))];
+            for (let index = 0; index < candidates.length; index += 1) {
+                const lookupKey = normalizeLookupKey(candidates[index]);
+                if (lookupKey && attachmentContext.map[lookupKey]) {
+                    return attachmentContext.map[lookupKey];
+                }
+            }
+
+            return cleanValue;
+        }
+
+        function decodeHtmlEntities(text) {
+            let decoded = String(text || '');
+
+            for (let index = 0; index < 3; index += 1) {
+                const textarea = document.createElement('textarea');
+                textarea.innerHTML = decoded;
+                const nextValue = textarea.value;
+
+                if (nextValue === decoded) {
+                    break;
+                }
+
+                decoded = nextValue;
+            }
+
+            return decoded;
+        }
+
+        function looksLikeHtml(text) {
+            return /<\s*(?:html|body|div|p|br|span|section|article|table|thead|tbody|tr|td|th|blockquote|pre|code|strong|b|em|i|u|img|ul|ol|li|a|h[1-6])\b/i.test(String(text || ''));
+        }
+
+        function isImageAttachment(attachment) {
+            const value = String(attachment.name || attachment.url || '').toLowerCase();
+            return /\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(value);
+        }
+
+        function getAttachmentKindLabel(name, imageAttachment) {
+            if (imageAttachment) {
+                return 'Image';
+            }
+
+            const lowerName = String(name || '').toLowerCase();
+            if (/\.pdf$/i.test(lowerName)) {
+                return 'Document PDF';
+            }
+            if (/\.(doc|docx|odt)$/i.test(lowerName)) {
+                return 'Document';
+            }
+            if (/\.(xls|xlsx|csv|ods)$/i.test(lowerName)) {
+                return 'Tableur';
+            }
+            if (/\.(zip|rar|7z|tar|gz)$/i.test(lowerName)) {
+                return 'Archive';
+            }
+            if (/\.(mp4|mov|avi|mkv|webm)$/i.test(lowerName)) {
+                return 'Video';
+            }
+            if (/\.(mp3|wav|ogg|m4a)$/i.test(lowerName)) {
+                return 'Audio';
+            }
+
+            return 'Piece jointe';
+        }
+
+        function getAttachmentIcon(name) {
+            const lowerName = String(name || '').toLowerCase();
+            if (/\.pdf$/i.test(lowerName)) {
+                return 'bi bi-file-earmark-pdf';
+            }
+            if (/\.(doc|docx|odt)$/i.test(lowerName)) {
+                return 'bi bi-file-earmark-word';
+            }
+            if (/\.(xls|xlsx|csv|ods)$/i.test(lowerName)) {
+                return 'bi bi-file-earmark-spreadsheet';
+            }
+            if (/\.(zip|rar|7z|tar|gz)$/i.test(lowerName)) {
+                return 'bi bi-file-earmark-zip';
+            }
+            if (/\.(mp4|mov|avi|mkv|webm)$/i.test(lowerName)) {
+                return 'bi bi-film';
+            }
+            if (/\.(mp3|wav|ogg|m4a)$/i.test(lowerName)) {
+                return 'bi bi-music-note-beamed';
+            }
+
+            return 'bi bi-paperclip';
+        }
+
+        function basename(value) {
+            const cleanValue = String(value || '').trim();
+            if (!cleanValue) {
+                return '';
+            }
+
+            return cleanValue.split(/[\\/]/).pop() || '';
+        }
+
+        function stripExtension(value) {
+            return String(value || '').replace(/\.[^.]+$/, '');
+        }
+
+        function normalizeLookupKey(value) {
+            return String(value || '').trim().toLowerCase().replace(/[#?].*$/, '');
+        }
+
+        function isUnsafeUrl(value) {
+            return /^(?:javascript|vbscript|data):/i.test(String(value || '').trim());
+        }
+
+        function getStatusColor(status) {
+            const value = normalizeValue(status);
+            if (value === 'fait' || value.indexOf('termine') !== -1 || value.indexOf('done') !== -1) {
+                return '#10b981';
+            }
+            if (value.indexOf('cours') !== -1 || value.indexOf('progress') !== -1) {
+                return '#f59e0b';
+            }
+            if (value.indexOf('bloque') !== -1 || value.indexOf('rejet') !== -1) {
+                return '#ef4444';
+            }
+            return '#3b82f6';
+        }
+
+        function getPriorityColor(priority) {
+            const value = normalizeValue(priority);
+            if (value.indexOf('faible') !== -1 || value.indexOf('low') !== -1) {
+                return '#14b8a6';
+            }
+            if (value.indexOf('moderee') !== -1 || value.indexOf('medium') !== -1 || value.indexOf('moyenne') !== -1) {
+                return '#facc15';
+            }
+            if (value.indexOf('elevee') !== -1 || value.indexOf('high') !== -1) {
+                return '#f97316';
+            }
+            if (value.indexOf('urgent') !== -1 || value.indexOf('prio') !== -1 || value.indexOf('p1') !== -1) {
+                return '#dc2626';
+            }
+            return '#64748b';
+        }
+
+        function normalizeValue(value) {
+            return String(value || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        }
+
+        function escapeHtml(text) {
+            return String(text || '').replace(/[&<>"']/g, function(character) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    '\'': '&#039;'
+                }[character];
+            });
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

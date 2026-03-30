@@ -1,0 +1,25 @@
+{% for item in items %}
+    {% if item.children is not empty %}
+        <li class="nav-item nav-item-parent{% if item.is_open %} is-open{% endif %}">
+            <div class="nav-parent-row">
+                <a href="{{ item.url }}" class="nav-link nav-link-parent{% if item.is_current %} active{% elseif item.is_open %} active-parent{% endif %}" title="{{ item.label }}">
+                    <span class="nav-icon">{{ item.icon_html|raw }}</span>
+                    <span class="nav-label">{{ item.label }}</span>
+                </a>
+                <button type="button" class="nav-submenu-toggle" data-submenu-id="{{ item.submenu_id }}" aria-expanded="{% if item.is_open %}true{% else %}false{% endif %}" aria-controls="{{ item.submenu_id }}">
+                    <span class="nav-submenu-chevron">▾</span>
+                </button>
+            </div>
+            <ul class="nav-submenu" id="{{ item.submenu_id }}">
+                {{ include('_partials/menu/sidebar_items.html.twig', {items: item.children}) }}
+            </ul>
+        </li>
+    {% else %}
+        <li class="nav-item">
+            <a href="{{ item.url }}" class="nav-link{% if item.is_current %} active{% endif %}" title="{{ item.label }}">
+                <span class="nav-icon">{{ item.icon_html|raw }}</span>
+                <span class="nav-label">{{ item.label }}</span>
+            </a>
+        </li>
+    {% endif %}
+{% endfor %}

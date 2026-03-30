@@ -1,0 +1,286 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Pages{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('admin_pages', 'Pages') %}
+
+<div class="pages-admin-page">
+    <div class="pages-admin-header">
+        <div>
+            <h1 class="page-title-heading">
+                {{ page_display_service.renderNavigationIcon('admin_pages', 'bi-window-stack', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p>Créez vos pages dynamiques, activez-les, puis rattachez-les aux menus et permissions depuis la gestion du menu.</p>
+        </div>
+        <a href="{{ path('admin_pages_builder') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>
+            <span>Nouvelle page</span>
+        </a>
+    </div>
+
+    <div class="pages-admin-toolbar">
+        <div class="form-group pages-admin-search">
+            <label for="page-search">Rechercher une page</label>
+            <input id="page-search" type="search" placeholder="Titre, slug, mots-clés...">
+        </div>
+        <div class="pages-admin-stats">
+            <span class="pages-admin-stat"><strong>{{ pages|length }}</strong> page{{ pages|length > 1 ? 's' : '' }}</span>
+            <span class="pages-admin-stat"><strong>{{ activePagesCount }}</strong> active{{ activePagesCount > 1 ? 's' : '' }}</span>
+        </div>
+    </div>
+
+    <div class="pages-admin-card">
+        {% if pages is empty %}
+            <div class="pages-admin-empty">
+                <h3>Aucune page créée</h3>
+                <p>Commencez par créer une première page, puis vous pourrez l’activer et l’ajouter aux menus.</p>
+                <a href="{{ path('admin_pages_builder') }}" class="btn btn-primary">Créer une page</a>
+            </div>
+        {% else %}
+            <div class="pages-admin-table-wrap">
+                <table class="table pages-admin-table">
+                    <thead>
+                        <tr>
+                            <th>Page</th>
+                            <th>Statut</th>
+                            <th>Création</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pages-admin-table-body">
+                        {% for page in pages %}
+                            {% set publicUrl = path(publicRouteName, {slug: page.slug}) %}
+                            <tr data-search="{{ [page.title, page.slug, page.keywords|default('')]|join(' ')|lower|e('html_attr') }}">
+                                <td>
+                                    <div class="pages-admin-name">{{ page.title }}</div>
+                                    <div class="pages-admin-meta">
+                                        <span>/pages/{{ page.slug }}</span>
+                                        {% if page.keywords %}
+                                            <span>{{ page.keywords }}</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <form method="post" action="{{ path('admin_pages_toggle_status', {id: page.id}) }}" class="pages-admin-toggle-form">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('toggle_page_' ~ page.id) }}">
+                                        <input type="hidden" name="is_active" value="{% if page.isActive %}0{% else %}1{% endif %}">
+                                        <button type="submit" class="pages-admin-status {% if page.isActive %}is-active{% else %}is-inactive{% endif %}">
+                                            <span class="pages-admin-status-dot"></span>
+                                            <span>{% if page.isActive %}Active{% else %}Inactive{% endif %}</span>
+                                        </button>
+                                    </form>
+                                </td>
+                                <td>
+                                    <div>{{ page.createdAt ? page.createdAt|date('d/m/Y H:i') : '-' }}</div>
+                                    <small class="text-muted">Modif. {{ page.updatedAt ? page.updatedAt|date('d/m/Y H:i') : '-' }}</small>
+                                </td>
+                                <td>
+                                    <div class="pages-admin-actions">
+                                        <a href="{{ path('admin_pages_edit', {id: page.id}) }}" class="btn btn-secondary btn-sm">Éditer</a>
+                                        <form method="post" action="{{ path('admin_pages_duplicate', {id: page.id}) }}">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('duplicate_page_' ~ page.id) }}">
+                                            <button type="submit" class="btn btn-secondary btn-sm">Dupliquer</button>
+                                        </form>
+                                        {% if page.isActive %}
+                                            <a href="{{ publicUrl }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Ouvrir</a>
+                                        {% else %}
+                                            <span class="btn btn-primary btn-sm disabled" aria-disabled="true">Inactive</span>
+                                        {% endif %}
+                                        <form method="post" action="{{ path('admin_pages_delete', {id: page.id}) }}" onsubmit="return confirm('Supprimer cette page ?');">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('delete_page_' ~ page.id) }}">
+                                            <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="alert alert-info pages-admin-noresult" id="pages-admin-noresult" hidden>
+                Aucune page ne correspond à votre recherche.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .pages-admin-page {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .pages-admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .pages-admin-header p {
+        margin: 0.35rem 0 0;
+        color: var(--text-muted);
+        max-width: 72ch;
+    }
+
+    .pages-admin-toolbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: end;
+        flex-wrap: wrap;
+    }
+
+    .pages-admin-search {
+        min-width: min(100%, 360px);
+        margin: 0;
+    }
+
+    .pages-admin-search input {
+        width: 100%;
+    }
+
+    .pages-admin-stats {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .pages-admin-stat {
+        padding: 0.7rem 1rem;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--primary) 10%, var(--bg-primary));
+        color: var(--text-primary);
+        border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+    }
+
+    .pages-admin-card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg-primary);
+        box-shadow: 0 2px 8px var(--shadow);
+        overflow: hidden;
+    }
+
+    .pages-admin-table-wrap {
+        overflow-x: auto;
+    }
+
+    .pages-admin-table {
+        margin: 0;
+        width: 100%;
+    }
+
+    .pages-admin-table th,
+    .pages-admin-table td {
+        vertical-align: middle;
+        padding: 1rem;
+    }
+
+    .pages-admin-name {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .pages-admin-meta {
+        display: flex;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+        margin-top: 0.3rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .pages-admin-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        padding: 0.45rem 0.85rem;
+        background: none;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .pages-admin-status.is-active {
+        color: #166534;
+        background: rgba(34, 197, 94, 0.14);
+        border-color: rgba(34, 197, 94, 0.3);
+    }
+
+    .pages-admin-status.is-inactive {
+        color: #9a3412;
+        background: rgba(249, 115, 22, 0.14);
+        border-color: rgba(249, 115, 22, 0.3);
+    }
+
+    .pages-admin-status-dot {
+        width: 0.6rem;
+        height: 0.6rem;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .pages-admin-actions {
+        display: flex;
+        gap: 0.55rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .pages-admin-actions form {
+        margin: 0;
+    }
+
+    .pages-admin-empty {
+        display: grid;
+        gap: 0.85rem;
+        justify-items: start;
+        padding: 2rem;
+    }
+
+    .pages-admin-empty h3,
+    .pages-admin-empty p {
+        margin: 0;
+    }
+
+    .pages-admin-noresult {
+        margin: 1rem;
+    }
+</style>
+
+<script>
+    (function initPageSearch() {
+        const input = document.getElementById('page-search');
+        const body = document.getElementById('pages-admin-table-body');
+        const emptyState = document.getElementById('pages-admin-noresult');
+
+        if (!input || !body) {
+            return;
+        }
+
+        const rows = Array.from(body.querySelectorAll('tr[data-search]'));
+        input.addEventListener('input', function() {
+            const query = String(input.value || '').trim().toLowerCase();
+            let visibleCount = 0;
+
+            rows.forEach(function(row) {
+                const searchValue = row.getAttribute('data-search') || '';
+                const visible = query === '' || searchValue.indexOf(query) !== -1;
+                row.hidden = !visible;
+                if (visible) {
+                    visibleCount += 1;
+                }
+            });
+
+            if (emptyState) {
+                emptyState.hidden = visibleCount !== 0;
+            }
+        });
+    })();
+</script>
+{% endblock %}
