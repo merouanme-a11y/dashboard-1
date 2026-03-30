@@ -9,16 +9,41 @@ require_once dirname(__DIR__).'/vendor/autoload_runtime.php';
 return function (array $context) {
     $projectDir = dirname(__DIR__);
     $environment = (string) ($context['APP_ENV'] ?? 'prod');
+    $projectVarDir = $projectDir . '/var';
+    $runtimeBaseDir = $projectVarDir;
+    $canUseProjectVarDir = (is_dir($projectVarDir) || @mkdir($projectVarDir, 0775, true)) && is_writable($projectVarDir);
+
+    if (!$canUseProjectVarDir) {
+        $homeDir = trim((string) ($_SERVER['HOME'] ?? $_SERVER['USERPROFILE'] ?? ''));
+        $tempDir = trim((string) ($_SERVER['TMPDIR'] ?? sys_get_temp_dir()));
+        $projectHash = substr(sha1($projectDir), 0, 12);
+        $fallbackCandidates = [];
+
+        if ($homeDir !== '') {
+            $fallbackCandidates[] = rtrim(str_replace('\\', '/', $homeDir), '/') . '/tmp/dashboard-runtime-' . $projectHash;
+        }
+
+        if ($tempDir !== '') {
+            $fallbackCandidates[] = rtrim(str_replace('\\', '/', $tempDir), '/') . '/dashboard-runtime-' . $projectHash;
+        }
+
+        foreach ($fallbackCandidates as $candidate) {
+            if (is_dir($candidate) || @mkdir($candidate, 0775, true)) {
+                $runtimeBaseDir = $candidate;
+                break;
+            }
+        }
+    }
 
     $directories = [
-        $projectDir . '/var',
-        $projectDir . '/var/cache',
-        $projectDir . '/var/cache/' . $environment,
-        $projectDir . '/var/log',
-        $projectDir . '/var/share',
-        $projectDir . '/var/share/' . $environment,
-        $projectDir . '/var/sessions',
-        $projectDir . '/var/sessions/' . $environment,
+        $runtimeBaseDir,
+        $runtimeBaseDir . '/cache',
+        $runtimeBaseDir . '/cache/' . $environment,
+        $runtimeBaseDir . '/log',
+        $runtimeBaseDir . '/share',
+        $runtimeBaseDir . '/share/' . $environment,
+        $runtimeBaseDir . '/sessions',
+        $runtimeBaseDir . '/sessions/' . $environment,
     ];
 
     foreach ($directories as $directory) {
@@ -27,7 +52,14 @@ return function (array $context) {
         }
     }
 
-    $sessionDir = $projectDir . '/var/sessions/' . $environment;
+    $shareDir = $runtimeBaseDir . '/share';
+    $sessionDir = $runtimeBaseDir . '/cache/' . $environment . '/sessions';
+
+    if (is_dir($shareDir) && is_writable($shareDir)) {
+        $_SERVER['APP_SHARE_DIR'] = $shareDir;
+        $_ENV['APP_SHARE_DIR'] = $shareDir;
+    }
+
     if (is_dir($sessionDir) && is_writable($sessionDir)) {
         @ini_set('session.save_path', $sessionDir);
     }
