@@ -27,11 +27,15 @@ class ThemeService
 
     public function getAll(): array
     {
-        return $this->cache->get('theme_settings_all', function (ItemInterface $item) {
-            $item->expiresAfter(3600);
+        try {
+            return $this->cache->get('theme_settings_all', function (ItemInterface $item) {
+                $item->expiresAfter(3600);
 
-            return $this->normalizeSettings($this->settingRepository->findAllAsArray());
-        });
+                return $this->normalizeSettings($this->settingRepository->findAllAsArray());
+            });
+        } catch (\Throwable) {
+            return $this->getDefaultSettings();
+        }
     }
 
     public function get(string $key, mixed $default = null): mixed
@@ -338,11 +342,15 @@ class ThemeService
         $settings = $settings !== [] ? $this->normalizeSettings($settings) : $this->getAll();
         $cacheKey = 'theme_css_overrides_' . md5((string) json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-        return $this->cache->get($cacheKey, function (ItemInterface $item) use ($settings): string {
-            $item->expiresAfter(86400);
+        try {
+            return $this->cache->get($cacheKey, function (ItemInterface $item) use ($settings): string {
+                $item->expiresAfter(86400);
 
+                return $this->doBuildCssOverrides($settings);
+            });
+        } catch (\Throwable) {
             return $this->doBuildCssOverrides($settings);
-        });
+        }
     }
 
     private function doBuildCssOverrides(array $settings): string

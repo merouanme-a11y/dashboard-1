@@ -136,23 +136,27 @@ class PageDisplayService
             return $this->configuredTitleOverridesCache;
         }
 
-        return $this->configuredTitleOverridesCache = $this->cache->get('page_display_title_overrides_v1', function (ItemInterface $item): array {
-            $item->expiresAfter(3600);
+        try {
+            return $this->configuredTitleOverridesCache = $this->cache->get('page_display_title_overrides_v1', function (ItemInterface $item): array {
+                $item->expiresAfter(3600);
 
-            $titles = [];
+                $titles = [];
 
-            foreach ($this->pageTitleRepository->findAllRows() as $pageTitle) {
-                $pagePath = trim((string) ($pageTitle['pagePath'] ?? ''));
-                $displayName = $this->normalizeTitle((string) ($pageTitle['displayName'] ?? ''));
-                if ($pagePath === '' || $displayName === '') {
-                    continue;
+                foreach ($this->pageTitleRepository->findAllRows() as $pageTitle) {
+                    $pagePath = trim((string) ($pageTitle['pagePath'] ?? ''));
+                    $displayName = $this->normalizeTitle((string) ($pageTitle['displayName'] ?? ''));
+                    if ($pagePath === '' || $displayName === '') {
+                        continue;
+                    }
+
+                    $titles[$pagePath] = $displayName;
                 }
 
-                $titles[$pagePath] = $displayName;
-            }
-
-            return $titles;
-        });
+                return $titles;
+            });
+        } catch (\Throwable) {
+            return $this->configuredTitleOverridesCache = [];
+        }
     }
 
     public function saveTitleOverrides(array $titles): void
@@ -197,27 +201,31 @@ class PageDisplayService
             return $this->configuredIconsCache;
         }
 
-        return $this->configuredIconsCache = $this->cache->get('page_display_icons_v1', function (ItemInterface $item): array {
-            $item->expiresAfter(3600);
+        try {
+            return $this->configuredIconsCache = $this->cache->get('page_display_icons_v1', function (ItemInterface $item): array {
+                $item->expiresAfter(3600);
 
-            $icons = [];
+                $icons = [];
 
-            foreach ($this->pageIconRepository->findAllRows() as $pageIcon) {
-                $pagePath = trim((string) ($pageIcon['pagePath'] ?? ''));
-                $iconValue = trim((string) ($pageIcon['icon'] ?? ''));
-                if ($pagePath === '' || $iconValue === '') {
-                    continue;
+                foreach ($this->pageIconRepository->findAllRows() as $pageIcon) {
+                    $pagePath = trim((string) ($pageIcon['pagePath'] ?? ''));
+                    $iconValue = trim((string) ($pageIcon['icon'] ?? ''));
+                    if ($pagePath === '' || $iconValue === '') {
+                        continue;
+                    }
+
+                    $icons[$pagePath] = [
+                        'value' => $iconValue,
+                        'color' => $this->sanitizeIconColor($pageIcon['color'] ?? ''),
+                        'library' => $this->normalizeIconLibrary((string) ($pageIcon['iconLibrary'] ?? '')),
+                    ];
                 }
 
-                $icons[$pagePath] = [
-                    'value' => $iconValue,
-                    'color' => $this->sanitizeIconColor($pageIcon['color'] ?? ''),
-                    'library' => $this->normalizeIconLibrary((string) ($pageIcon['iconLibrary'] ?? '')),
-                ];
-            }
-
-            return $icons;
-        });
+                return $icons;
+            });
+        } catch (\Throwable) {
+            return $this->configuredIconsCache = [];
+        }
     }
 
     public function saveIconConfiguration(string $library, array $icons): void
@@ -279,25 +287,29 @@ class PageDisplayService
             return $this->activeIconLibraryCache;
         }
 
-        return $this->activeIconLibraryCache = $this->cache->get('page_display_active_icon_library_v1', function (ItemInterface $item): string {
-            $item->expiresAfter(3600);
+        try {
+            return $this->activeIconLibraryCache = $this->cache->get('page_display_active_icon_library_v1', function (ItemInterface $item): string {
+                $item->expiresAfter(3600);
 
-            $setting = $this->themeSettingRepository->findByKey(self::PAGE_ICON_LIBRARY_SETTING_KEY);
-            $settingValue = $this->normalizeIconLibrary((string) ($setting?->getSettingValue() ?? ''));
+                $setting = $this->themeSettingRepository->findByKey(self::PAGE_ICON_LIBRARY_SETTING_KEY);
+                $settingValue = $this->normalizeIconLibrary((string) ($setting?->getSettingValue() ?? ''));
 
-            if (isset($this->getAvailableIconLibraries()[$settingValue])) {
-                return $settingValue;
-            }
-
-            foreach ($this->getConfiguredIcons() as $pageIcon) {
-                $library = $this->normalizeIconLibrary((string) ($pageIcon['library'] ?? ''));
-                if (isset($this->getAvailableIconLibraries()[$library])) {
-                    return $library;
+                if (isset($this->getAvailableIconLibraries()[$settingValue])) {
+                    return $settingValue;
                 }
-            }
 
-            return 'bootstrap';
-        });
+                foreach ($this->getConfiguredIcons() as $pageIcon) {
+                    $library = $this->normalizeIconLibrary((string) ($pageIcon['library'] ?? ''));
+                    if (isset($this->getAvailableIconLibraries()[$library])) {
+                        return $library;
+                    }
+                }
+
+                return 'bootstrap';
+            });
+        } catch (\Throwable) {
+            return $this->activeIconLibraryCache = 'bootstrap';
+        }
     }
 
     public function getIconLibraryStylesheets(bool $includeAll = false): array
