@@ -327,7 +327,7 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const ticketsDataUrl = {{ ticketsDataUrl|json_encode|raw }};
-        const ticketDetailUrlPattern = {{ path(ticketDetailRouteName, {id: '__ID__'})|json_encode|raw }};
+        const ticketDetailUrlPattern = {{ ticketDetailUrlPattern|json_encode|raw }};
         const ticketsCacheKey = {{ ticketsCacheKey|json_encode|raw }};
         const preloadedPayload = {{ preloadedTicketsPayload|default(null)|json_encode|raw }};
         const cacheTtlMs = 5 * 60 * 1000;

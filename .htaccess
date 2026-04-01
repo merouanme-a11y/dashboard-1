@@ -1,5 +1,5 @@
 Options -Indexes
-DirectoryIndex public/index.php
+DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
@@ -7,14 +7,25 @@ DirectoryIndex public/index.php
     # Leave ACME challenges untouched.
     RewriteRule ^\.well-known/ - [L]
 
+    # Keep the root front controller stable so Symfony can resolve the base path as /dashboard.
+    RewriteRule ^index\.php(?:/.*)?$ - [L]
+
     # Canonicalize accidental /public URLs back to the site root.
-    RewriteRule ^public/?(.*)$ /$1 [R=302,L,NE]
+    RewriteRule ^public/?$ ./ [R=302,L,NE]
+    RewriteRule ^public/(.*)$ $1 [R=302,L,NE]
+
+    # Serve files that are published under /public without exposing the whole folder in URLs.
+    RewriteCond public/$1 -f [OR]
+    RewriteCond public/$1 -d
+    RewriteRule ^(.+)$ public/$1 [L]
 
     # Protect private Symfony files when the whole project is uploaded as web root.
-    RewriteRule ^(?:bin|config|migrations|src|templates|tests|translations|var|vendor)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:bin|config|migrations|src|tests|translations|var|vendor|docs|scripts)(?:/|$) - [F,L,NC]
     RewriteRule ^(?:\.env(?:\..*)?|composer\.(?:json|lock)|symfony\.lock|phpunit(?:\.dist)?\.xml|CLAUDE\.md|implementation_plan\.md|walkthrough\.md)$ - [F,L,NC]
 
-    # Route the domain root through Symfony's public front controller.
-    RewriteRule ^$ public/ [L]
-    RewriteRule ^(.*)$ public/$1 [L]
+    RewriteCond %{HTTP:Authorization} ^(.*)
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+
+    # Route application pages through the root front controller.
+    RewriteRule ^ index.php [QSA,L]
 </IfModule>

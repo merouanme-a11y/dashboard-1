@@ -29,7 +29,11 @@ final class TicketsController extends AbstractController
 
         $response = $this->render('tickets/index.html.twig', [
             'ticketsDataUrl' => $this->generateUrl('app_tickets_data'),
-            'ticketDetailRouteName' => 'app_ticket_detail',
+            'ticketDetailUrlPattern' => str_replace(
+                'MTN-1',
+                '__ID__',
+                $this->generateUrl('app_ticket_detail', ['id' => 'MTN-1'])
+            ),
             'ticketsCacheKey' => $this->buildBrowserCacheKey($user),
             'preloadedTicketsPayload' => $this->youTrackApiService->peekTicketsPayloadForUser($user),
         ]);
