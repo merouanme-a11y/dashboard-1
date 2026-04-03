@@ -679,6 +679,25 @@ body.gantt-planning-layout-hidden .app-content > .gantt-dashboard-page{
     min-width: max-content;
 }
 
+.gantt-dashboard-page.planning-focus-mode .timeline-years{
+    position: sticky;
+    top: 0;
+    z-index: 18;
+}
+
+.gantt-dashboard-page.planning-focus-mode .timeline-months{
+    position: sticky;
+    top: calc(52px * var(--timeline-scale));
+    z-index: 17;
+}
+
+.gantt-dashboard-page.planning-focus-mode .timeline-years .timeline-corner,
+.gantt-dashboard-page.planning-focus-mode .timeline-years .timeline-track,
+.gantt-dashboard-page.planning-focus-mode .timeline-months .timeline-corner,
+.gantt-dashboard-page.planning-focus-mode .timeline-months .timeline-track{
+    background: var(--panel-strong);
+}
+
 .gantt-dashboard-page .timeline-years,
 .gantt-dashboard-page .timeline-months,
 .gantt-dashboard-page .timeline-row{

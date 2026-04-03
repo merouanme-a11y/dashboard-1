@@ -73,7 +73,9 @@ class PageDisplayService
             return $this->configurablePagesCache;
         }
 
-        return $this->configurablePagesCache = $this->cache->get('page_display_configurable_pages_v2', function (ItemInterface $item): array {
+        $cacheKey = 'page_display_configurable_pages_' . $this->buildConfigurablePagesFingerprint();
+
+        return $this->configurablePagesCache = $this->cache->get($cacheKey, function (ItemInterface $item): array {
             $item->expiresAfter(86400);
 
             $pages = [];
@@ -128,6 +130,7 @@ class PageDisplayService
         $this->allowedPageMapCache = null;
         $this->cache->delete('page_display_configurable_pages_v1');
         $this->cache->delete('page_display_configurable_pages_v2');
+        $this->cache->delete('page_display_configurable_pages_' . $this->buildConfigurablePagesFingerprint());
     }
 
     public function getConfiguredTitleOverrides(): array
@@ -867,6 +870,8 @@ class PageDisplayService
             'app_vente' => 'Vente',
             'app_stats' => 'Statistiques',
             'app_gantt_projects' => 'Planning projets',
+            'app_livre_de_caisse' => 'Livre de caisse',
+            'app_livre_de_caisse_listing' => 'Listing livre de caisse agence',
             'admin_parametrage' => 'Parametrage',
             'admin_modules' => 'Modules',
             'admin_pages' => 'Pages',
@@ -1236,5 +1241,39 @@ class PageDisplayService
         }
 
         return $this->modulesByRouteCache = $modulesByRoute;
+    }
+
+    private function buildConfigurablePagesFingerprint(): string
+    {
+        $routeSignatures = [];
+
+        foreach ($this->router->getRouteCollection()->all() as $routeName => $route) {
+            $routeSignatures[] = implode('|', [
+                (string) $routeName,
+                (string) $route->getPath(),
+                implode(',', $route->getMethods()),
+                (string) $route->getDefault('_controller'),
+                (string) ($route->getDefault('_managed_page_path') ?? ''),
+            ]);
+        }
+
+        sort($routeSignatures);
+
+        $moduleSignatures = [];
+        foreach ($this->moduleService->getAllModules() as $module) {
+            $moduleSignatures[] = implode('|', [
+                (string) $module->getName(),
+                (string) $module->getRouteName(),
+                (string) $module->getLabel(),
+                (string) $module->getIcon(),
+            ]);
+        }
+
+        sort($moduleSignatures);
+
+        return sha1(json_encode([
+            'routes' => $routeSignatures,
+            'modules' => $moduleSignatures,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
     }
 }

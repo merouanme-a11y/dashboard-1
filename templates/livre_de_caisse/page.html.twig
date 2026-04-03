@@ -1,0 +1,256 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ pageTitle }}{% endblock %}
+
+{% block stylesheets %}
+    <link href="{{ asset('modules/livre-de-caisse/style.css') }}?v={{ 'now'|date('U') }}" rel="stylesheet">
+    <style>
+        .app-content {
+            max-width: none;
+            width: 100%;
+        }
+
+        .app-main {
+            overflow-x: auto;
+        }
+
+        .ldc-page {
+            --ldc-navy: var(--bg-secondary);
+            --ldc-navy-mid: var(--bg-secondary);
+            --ldc-navy-light: var(--bg-tertiary);
+            --ldc-blue: var(--primary);
+            --ldc-blue-dark: var(--primary-dark);
+            --ldc-surface: var(--bg-secondary);
+            --ldc-surface-alt: var(--bg-primary);
+            --ldc-surface-muted: var(--bg-tertiary);
+            --ldc-border: var(--border);
+            --ldc-text: var(--text-primary);
+            --ldc-text-muted: var(--text-secondary);
+            --ldc-text-light: var(--text-muted);
+            --ldc-shadow: 0 1px 3px var(--shadow);
+            gap: 1.25rem;
+            max-width: none;
+        }
+
+        .ldc-page .panel,
+        .ldc-page .modal-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px var(--shadow);
+        }
+
+        .ldc-page .panel-header,
+        .ldc-page .panel-caisse .panel-header,
+        .ldc-page .panel-form .panel-header,
+        .ldc-page .panel-edit .panel-header,
+        .ldc-page .panel-table .panel-header {
+            background: transparent;
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 1.25rem;
+        }
+
+        .ldc-page .panel-header-left {
+            gap: 0.75rem;
+        }
+
+        .ldc-page .panel-header-icon {
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--primary);
+        }
+
+        .ldc-page .panel-header-title,
+        .ldc-page .panel-header-meta-value {
+            color: var(--text-primary);
+        }
+
+        .ldc-page .panel-header-title {
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+
+        .ldc-page .panel-header-meta {
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            justify-content: end;
+        }
+
+        .ldc-page .panel-header-meta-item {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+        }
+
+        .ldc-page .panel-header-meta-label {
+            color: var(--text-muted);
+        }
+
+        .ldc-page .caisse-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: none;
+        }
+
+        .ldc-page .caisse-card-title,
+        .ldc-page .caisse-card-meta {
+            color: var(--text-secondary);
+        }
+
+        .ldc-page .caisse-card-amount {
+            color: var(--text-primary);
+        }
+
+        .ldc-page .caisse-card.is-especes,
+        .ldc-page .caisse-card.is-cheque,
+        .ldc-page .caisse-card.is-cb,
+        .ldc-page .caisse-card.is-prelever,
+        .ldc-page .caisse-card.is-offert,
+        .ldc-page .caisse-card.is-appel {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .ldc-page .btn-action,
+        .ldc-page .row-btn {
+            border-radius: 8px;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .ldc-page .btn-action:hover,
+        .ldc-page .row-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .ldc-page .btn-action.filled-green {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .ldc-page .btn-action.red {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .ldc-page .btn-action.amber {
+            background: var(--warning);
+            color: #111827;
+        }
+
+        .ldc-page .btn-action.blue,
+        .ldc-page .row-btn.edit {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .ldc-page .btn-action.violet,
+        .ldc-page .btn-action.rose {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .ldc-page .row-btn.delete {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .ldc-page .form-input,
+        .ldc-page .form-select,
+        .ldc-page .multi-select-trigger,
+        .ldc-page .remise-input {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            box-shadow: none;
+        }
+
+        .ldc-page .form-input:focus,
+        .ldc-page .form-select:focus,
+        .ldc-page .multi-select-trigger:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+        }
+
+        .ldc-page .form-block,
+        .ldc-page .conditional-section,
+        .ldc-page .options-box,
+        .ldc-page .attachment-dropzone,
+        .ldc-page .attachment-selected-item,
+        .ldc-page .attachment-item {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+        }
+
+        .ldc-page .type-affaire-helper {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.18);
+            color: var(--primary-dark);
+        }
+
+        .ldc-page .prod-table thead th,
+        .ldc-page .caisse-table th {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .ldc-page .prod-table td,
+        .ldc-page .caisse-table td {
+            border-top-color: var(--border);
+        }
+
+        .ldc-page .prod-table tbody tr:hover,
+        .ldc-page .caisse-table tbody tr:hover {
+            background: var(--bg-primary);
+        }
+
+        .ldc-page .badge-blue {
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--primary);
+        }
+
+        .ldc-page .badge-green {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+        }
+
+        .ldc-page .badge-amber {
+            background: rgba(245, 158, 11, 0.14);
+            color: #b45309;
+        }
+
+        .ldc-page .badge-red {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+        }
+
+        .ldc-page .badge-gray {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+
+        .ldc-page .badge-violet {
+            background: rgba(139, 92, 246, 0.12);
+            color: #7c3aed;
+        }
+
+        .ldc-page .modal-overlay {
+            backdrop-filter: blur(4px);
+        }
+
+        .ldc-page .ldc-history-item,
+        .ldc-page .ldc-history-summary,
+        .ldc-page .ldc-history-content {
+            background: transparent;
+        }
+    </style>
+{% endblock %}
+
+{% block body %}
+    {{ content|raw }}
+{% endblock %}

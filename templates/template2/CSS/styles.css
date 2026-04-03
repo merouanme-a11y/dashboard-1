@@ -1064,7 +1064,7 @@ input::placeholder {
     padding: 0 0.75rem 1rem;
     background: var(--bg-secondary);
     border-right: 1px solid var(--border);
-    overflow: visible;
+    overflow: hidden;
     position: sticky;
     top: 0;
     min-height: 100vh;
@@ -1082,6 +1082,7 @@ input::placeholder {
     flex: 1;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
 }
 
 .sidebar-brand {
@@ -1175,7 +1176,10 @@ html.dark .site-brand-logo:not(.has-image-logo) {
 .sidebar-nav {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     padding: 1rem 0 0.75rem;
 }
 
