@@ -7,20 +7,8 @@ const GANTT_LOGOUT_URL = String(GANTT_CONFIG.logoutUrl || "./logout.php");
 const GANTT_TICKET_DETAIL_URL_PATTERN = String(
     GANTT_CONFIG.ticketDetailUrlPattern || `${window.location.origin}/tickets/__ID__`
 );
-const AVAILABLE_PROFILE_TYPES = Array.isArray(GANTT_CONFIG.availableProfiles)
-    ? GANTT_CONFIG.availableProfiles
-        .map((profile) => String(profile || "").trim())
-        .filter((profile, index, values) => profile !== "" && values.indexOf(profile) === index)
-    : [];
-const SHARED_SETTINGS_KEYS = [
-    "authorizedProfile",
-    "showSettingsAccessButton",
-    "showTimelineProgressButton",
-    "showTodayMarkerButton"
-];
 const API_ROUTES = {
     session: String(GANTT_ROUTE_CONFIG.session || `${GANTT_BASE_URL}/api/session`),
-    settings: String(GANTT_ROUTE_CONFIG.settings || `${GANTT_BASE_URL}/api/settings`),
     login: String(GANTT_ROUTE_CONFIG.login || `${GANTT_BASE_URL}/api/login`),
     logout: String(GANTT_ROUTE_CONFIG.logout || `${GANTT_BASE_URL}/api/logout`),
     projects: String(GANTT_ROUTE_CONFIG.projects || `${GANTT_BASE_URL}/api/projects`),
@@ -43,17 +31,15 @@ const DEFAULT_SETTINGS = {
     timelineZoom: 1,
     defaultDuration: 1,
     showTodayMarker: true,
-    showTodayMarkerButton: false,
     showTimelineProgress: true,
-    showTimelineProgressButton: false,
     showPlanningSidebar: true,
     showSettingsPanel: true,
-    showSettingsAccessButton: false,
-    authorizedProfile: "",
     serviceFilter: "all",
+    typeFilter: "all",
     statusFilter: "all",
     backlogView: "cards",
-    search: ""
+    search: "",
+    expandedProjectIds: []
 };
 
 const PROJECT_STATUSES = [
@@ -63,6 +49,14 @@ const PROJECT_STATUSES = [
     { value: "Terminé", className: "is-done" },
     { value: "Standby", className: "is-standby" }
 ];
+const PROJECT_TYPES = [
+    "Maintenance",
+    "Evolution",
+    "Projet transverse",
+    "Projet non transverse"
+];
+const PROJECT_MODAL_DEFAULT_HELP = "La timeline reste alignée sur des demi-mois, mais vous pouvez piloter ici les dates de début et de fin du projet.";
+const EMPTY_PROJECT_TYPE_FILTER = "__empty__";
 
 const DEFAULT_PROJECT_TASK_COLUMNS = ["idReadable", "summary", "assignee", "dueDate", "state"];
 const PROJECT_TASK_COLUMN_OPTIONS = [
@@ -126,6 +120,10 @@ const dom = {
     projectModalRefInput: document.querySelector("#projectModalRefInput"),
     projectModalServiceDisplay: document.querySelector("#projectModalServiceDisplay"),
     projectModalServiceInput: document.querySelector("#projectModalServiceInput"),
+    projectModalTypeDisplay: document.querySelector("#projectModalTypeDisplay"),
+    projectModalTypeInput: document.querySelector("#projectModalTypeInput"),
+    projectModalParentDisplay: document.querySelector("#projectModalParentDisplay"),
+    projectModalParentInput: document.querySelector("#projectModalParentInput"),
     projectModalStartDisplay: document.querySelector("#projectModalStartDisplay"),
     projectModalStartInput: document.querySelector("#projectModalStartInput"),
     projectModalEndDisplay: document.querySelector("#projectModalEndDisplay"),
@@ -164,14 +162,12 @@ const dom = {
     monthWidth: document.querySelector("#monthWidth"),
     monthWidthValue: document.querySelector("#monthWidthValue"),
     serviceFilter: document.querySelector("#serviceFilter"),
+    typeFilter: document.querySelector("#typeFilter"),
     statusFilter: document.querySelector("#statusFilter"),
     searchInput: document.querySelector("#searchInput"),
     addProjectButton: document.querySelector("#addProjectButton"),
     serviceColorSelect: document.querySelector("#serviceColorSelect"),
     serviceColorInput: document.querySelector("#serviceColorInput"),
-    profileAccessSelect: document.querySelector("#profileAccessSelect"),
-    toggleSettingsAccessVisibilityButton: document.querySelector("#toggleSettingsAccessVisibilityButton"),
-    toggleTimelineProgressVisibilityButton: document.querySelector("#toggleTimelineProgressVisibilityButton"),
     controlsPanel: document.querySelector("#controlsPanel"),
     timelineBoard: document.querySelector("#timelineBoard"),
     timelineYears: document.querySelector("#timelineYears"),
@@ -192,7 +188,6 @@ const dom = {
     toggleTodayMarkerButton: document.querySelector("#toggleTodayMarkerButton"),
     toggleTimelineProgressButton: document.querySelector("#toggleTimelineProgressButton"),
     toggleSettingsPanelButton: document.querySelector("#toggleSettingsPanelButton"),
-    toggleTodayMarkerVisibilityButton: document.querySelector("#toggleTodayMarkerVisibilityButton"),
     focusPlanningButton: document.querySelector("#focusPlanningButton"),
     exitPlanningFocusButton: document.querySelector("#exitPlanningFocusButton"),
     authOverlay: document.querySelector("#authOverlay"),
@@ -201,7 +196,8 @@ const dom = {
     loginPassword: document.querySelector("#loginPassword"),
     loginError: document.querySelector("#loginError"),
     authUser: document.querySelector("#authUser"),
-    logoutButton: document.querySelector("#logoutButton")
+    logoutButton: document.querySelector("#logoutButton"),
+    themeToggleButton: document.querySelector(".dark-mode-toggle")
 };
 
 const state = {
@@ -230,7 +226,6 @@ let projectsSyncTimeout = null;
 let projectsSyncInFlight = false;
 let projectsSyncQueued = false;
 let themeObserver = null;
-let projectUsersLoadPromise = null;
 let projectModalTasksRequestToken = 0;
 let projectModalTeamRequestToken = 0;
 const projectModalYouTrackTasksState = {
@@ -339,7 +334,6 @@ function onPlanningFullscreenChange() {
 }
 
 async function init() {
-    addRootClass("is-permissions-pending");
     syncThemeFromTemplate();
     observeTemplateTheme();
     ensureProjectModalEnhancements();
@@ -350,7 +344,7 @@ async function init() {
     const bootstrapUser = window.__GANTT_AUTH_USER__ || null;
     if (bootstrapUser?.username) {
         unlockApplication(bootstrapUser);
-        await startApplication({ sharedSettings: GANTT_CONFIG.sharedSettings || {} });
+        await startApplication();
         return;
     }
 
@@ -361,10 +355,10 @@ async function init() {
     }
 
     unlockApplication(session.user);
-    await startApplication({ sharedSettings: session.settings || {} });
+    await startApplication();
 }
 
-async function startApplication(options = {}) {
+async function startApplication() {
     if (appStarted) {
         render();
         return;
@@ -373,15 +367,14 @@ async function startApplication(options = {}) {
     appStarted = true;
 
     try {
-        const [seedProjects, servicesPayload] = await Promise.all([
+        const [seedProjects, servicesPayload, projectUsersPayload] = await Promise.all([
             loadProjects(),
-            loadServices().catch(() => ({ services: {} }))
+            loadServices().catch(() => ({ services: {} })),
+            loadProjectUsers().catch(() => ({ users: [] }))
         ]);
         applyServiceColors(servicesPayload?.services || {});
-        hydrateState(seedProjects, {
-            preferSeedPlanning: true,
-            sharedSettings: options.sharedSettings || {}
-        });
+        state.projectUsers = Array.isArray(projectUsersPayload?.users) ? projectUsersPayload.users : [];
+        hydrateState(seedProjects, { preferSeedPlanning: true });
         render();
     } catch (error) {
         console.error(error);
@@ -461,8 +454,6 @@ function unlockApplication(user) {
             username: String(user.username || user.id || "").trim(),
             displayName: String(user.displayName || user.username || user.id || "").trim(),
             email: String(user.email || "").trim(),
-            isAdmin: user.isAdmin === true,
-            profileType: String(user.profileType || user.role || "").trim(),
         }
         : null;
     removeRootClass("is-auth-locked");
@@ -602,42 +593,6 @@ async function loadServices() {
 
 async function loadProjectUsers() {
     return rememberApiResponse("projectUsers", "all", FRONTEND_CACHE_TTLS.projectUsers, () => apiRequest(API_ROUTES.projectUsers));
-}
-
-async function ensureProjectUsersLoaded(options = {}) {
-    const force = Boolean(options.force);
-
-    if (!force && Array.isArray(state.projectUsers) && state.projectUsers.length) {
-        return state.projectUsers;
-    }
-
-    if (projectUsersLoadPromise && !force) {
-        return projectUsersLoadPromise;
-    }
-
-    projectUsersLoadPromise = loadProjectUsers()
-        .then((payload) => {
-            state.projectUsers = Array.isArray(payload?.users) ? payload.users : [];
-
-            if (!dom.projectModal?.hidden) {
-                renderProjectModalTeam();
-            }
-
-            return state.projectUsers;
-        })
-        .catch((error) => {
-            console.error(error);
-            return state.projectUsers;
-        })
-        .finally(() => {
-            projectUsersLoadPromise = null;
-        });
-
-    if (!dom.projectModal?.hidden) {
-        renderProjectModalTeam();
-    }
-
-    return projectUsersLoadPromise;
 }
 
 async function loadYouTrackProjectTeam(projectKey) {
@@ -884,22 +839,20 @@ function clearApplicationData() {
 function hydrateState(seedProjects, options = {}) {
     const savedState = readSavedState();
     const savedSettings = { ...(savedState.settings || {}) };
-    const sharedSettings = extractSharedSettings(
-        options.sharedSettings || GANTT_CONFIG.sharedSettings || {}
-    );
 
     // Force the drop default back to 1 month when an older browser state kept a larger value.
     if (Number(savedSettings.defaultDuration) !== DEFAULT_SETTINGS.defaultDuration) {
         savedSettings.defaultDuration = DEFAULT_SETTINGS.defaultDuration;
     }
 
-    state.settings = { ...DEFAULT_SETTINGS, ...savedSettings, ...sharedSettings };
+    state.settings = { ...DEFAULT_SETTINGS, ...savedSettings };
     state.settings.backlogView = normalizeBacklogView(state.settings.backlogView);
-    state.settings.authorizedProfile = normalizeAuthorizedProfile(state.settings.authorizedProfile);
+    state.settings.expandedProjectIds = normalizeExpandedProjectIds(state.settings.expandedProjectIds);
 
     state.projects = seedProjects.map((project) => normalizeProjectForState(project));
 
     normalizeLanes();
+    sanitizeExpandedProjectIds();
     populateServiceFilter();
     writeSerializableStateToStorage();
 }
@@ -944,6 +897,12 @@ function bindStaticEvents() {
         render();
     });
 
+    dom.typeFilter.addEventListener("change", () => {
+        state.settings.typeFilter = dom.typeFilter.value;
+        persistState();
+        render();
+    });
+
     dom.statusFilter.addEventListener("change", () => {
         state.settings.statusFilter = dom.statusFilter.value;
         persistState();
@@ -956,18 +915,6 @@ function bindStaticEvents() {
 
     dom.serviceColorSelect.addEventListener("change", onServiceColorSelectionChange);
     dom.serviceColorInput.addEventListener("change", onServiceColorSave);
-    if (dom.profileAccessSelect) {
-        dom.profileAccessSelect.addEventListener("change", onAuthorizedProfileChange);
-    }
-    if (dom.toggleSettingsAccessVisibilityButton) {
-        dom.toggleSettingsAccessVisibilityButton.addEventListener("click", onSettingsAccessVisibilityToggle);
-    }
-    if (dom.toggleTimelineProgressVisibilityButton) {
-        dom.toggleTimelineProgressVisibilityButton.addEventListener("click", onTimelineProgressVisibilityToggle);
-    }
-    if (dom.toggleTodayMarkerVisibilityButton) {
-        dom.toggleTodayMarkerVisibilityButton.addEventListener("click", onTodayMarkerVisibilityToggle);
-    }
 
     dom.searchInput.addEventListener("input", () => {
         state.settings.search = dom.searchInput.value;
@@ -1003,6 +950,8 @@ function bindStaticEvents() {
     dom.projectModalTitleInput.addEventListener("input", syncProjectModalDisplays);
     dom.projectModalRefInput.addEventListener("input", syncProjectModalDisplays);
     dom.projectModalServiceInput.addEventListener("input", syncProjectModalDisplays);
+    dom.projectModalTypeInput.addEventListener("change", syncProjectModalDisplays);
+    dom.projectModalParentInput.addEventListener("change", onProjectModalParentChange);
     dom.projectModalColorInput.addEventListener("input", onProjectModalColorChange);
     dom.projectModalColorHexInput.addEventListener("change", onProjectModalColorHexChange);
     dom.projectModalRiskGainInput.addEventListener("input", syncProjectModalDisplays);
@@ -1071,7 +1020,6 @@ function render() {
     renderTimeline();
     renderBacklog();
     renderSummary();
-    removeRootClass("is-permissions-pending");
 }
 
 function syncControls() {
@@ -1079,6 +1027,7 @@ function syncControls() {
     dom.visibleMonths.value = String(state.settings.visibleMonths);
     dom.monthWidth.value = String(state.settings.monthWidth);
     dom.serviceFilter.value = state.settings.serviceFilter;
+    dom.typeFilter.value = state.settings.typeFilter;
     dom.statusFilter.value = state.settings.statusFilter;
     dom.searchInput.value = state.settings.search;
 
@@ -1093,25 +1042,21 @@ function syncControls() {
     syncBacklogViewToggle();
     syncSettingsPanelToggle();
     syncServiceColorControls();
-    syncProfileAccessControls();
-    syncSettingsAccessVisibilityButton();
-    syncTimelineProgressVisibilityButton();
-    syncTodayMarkerVisibilityButton();
 }
 
 function renderSummary() {
     const scheduled = state.projects.filter(isScheduled);
     const backlog = state.projects.filter((project) => !isScheduled(project));
     const visibleBacklog = backlog.filter(matchesFilters);
-    const visibleScheduled = scheduled.filter(matchesFilters);
+    const visibleScheduledRows = buildVisibleTimelineProjects();
 
     dom.scheduledCount.textContent = String(scheduled.length);
     dom.backlogCount.textContent = String(backlog.length);
     dom.rangeSummary.textContent = `${state.settings.visibleMonths} mois`;
 
     if (dom.backlogNote) {
-        if (backlog.length - visibleBacklog.length || scheduled.length - visibleScheduled.length) {
-            dom.backlogNote.textContent = `${visibleBacklog.length} projet(s) backlog visibles, ${visibleScheduled.length} ligne(s) visibles sur la timeline.`;
+        if (backlog.length - visibleBacklog.length || scheduled.length - visibleScheduledRows.length) {
+            dom.backlogNote.textContent = `${visibleBacklog.length} projet(s) backlog visibles, ${visibleScheduledRows.length} ligne(s) visibles sur la timeline.`;
         } else {
             dom.backlogNote.textContent = "Faites glisser une carte sur la timeline pour la planifier.";
         }
@@ -1123,10 +1068,7 @@ function renderTimeline() {
     const yearGroups = groupMonthsByYear(months);
     const timelineZoom = getTimelineZoom();
     const scaledMonthWidth = getScaledMonthWidth();
-    const visibleScheduled = state.projects
-        .filter(isScheduled)
-        .filter(matchesFilters)
-        .sort((left, right) => left.lane - right.lane);
+    const visibleTimelineProjects = buildVisibleTimelineProjects();
 
     dom.timelineBoard.style.setProperty("--months-visible", String(state.settings.visibleMonths));
     dom.timelineBoard.style.setProperty("--timeline-scale", String(timelineZoom));
@@ -1147,8 +1089,8 @@ function renderTimeline() {
         </div>
     `).join("");
 
-    const rowsMarkup = [...visibleScheduled.map(renderScheduledRow), renderDropRow()];
-    if (!visibleScheduled.length) {
+    const rowsMarkup = [...visibleTimelineProjects.map(renderScheduledRow), renderDropRow()];
+    if (!visibleTimelineProjects.length) {
         rowsMarkup.unshift(`<div class="timeline-empty">Aucun projet n'est encore planifié dans cette vue. Déposez un projet sur la ligne d'ajout ci-dessous.</div>`);
     }
 
@@ -1171,10 +1113,15 @@ function renderDropRow() {
     `;
 }
 
-function renderScheduledRow(project) {
+function renderScheduledRow(rowData) {
+    const project = rowData.project;
+    const depth = Number(rowData.depth || 0);
+    const hasChildren = Boolean(rowData.hasChildren);
+    const expanded = Boolean(rowData.expanded);
     const bar = getBarMetrics(project);
     const barWidth = Math.max(26, bar.width - 12);
     const barClasses = ["timeline-bar"];
+    const rowClasses = ["timeline-row"];
     const progression = normalizeProjectProgression(project.progression);
     const progressMarkup = state.settings.showTimelineProgress === false
         ? ""
@@ -1183,12 +1130,39 @@ function renderScheduledRow(project) {
         barClasses.push("is-outside");
     }
 
+    const toggleMarkup = hasChildren
+        ? `<button class="timeline-bar-toggle" type="button" data-toggle-children="${escapeHtml(project.id)}" aria-expanded="${expanded ? "true" : "false"}" aria-label="${expanded ? "Masquer" : "Afficher"} les sous-projets de ${escapeHtml(project.title)}">${expanded ? "-" : "+"}</button>`
+        : "";
+    const hasProjectRef = Boolean(String(project.ref || "").trim());
+    const hasProjectTitle = Boolean(String(project.title || "").trim());
+    const inlineRefMarkup = hasProjectRef
+        ? `<span class="bar-ref-inline">${escapeHtml(project.ref)}</span>`
+        : "";
+    const inlineSeparatorMarkup = hasProjectRef && hasProjectTitle
+        ? `<span class="bar-title-separator" aria-hidden="true">|</span>`
+        : "";
+    const inlineTitleMarkup = hasProjectTitle
+        ? `<span class="bar-title-text">${escapeHtml(project.title)}</span>`
+        : "";
+    const rowTitle = [project.ref, project.title]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .join(" | ");
+    const removeButtonTitle = project.parentProjectId
+        ? "Supprimer la liaison avec le projet parent"
+        : "Retirer le projet";
+    const projectTypeMarkup = project.projectType
+        ? `<span class="chip project-type-chip">${escapeHtml(project.projectType)}</span>`
+        : "";
+
     return `
-        <div class="timeline-row" data-project-id="${escapeHtml(project.id)}">
-            <div class="row-label timeline-sticky compact-row-label">
-                <h3>${escapeHtml(project.title)}</h3>
+        <div class="${rowClasses.join(" ")}" data-project-id="${escapeHtml(project.id)}" style="--tree-depth:${depth};">
+            <div class="row-label timeline-sticky compact-row-label project-tree-label">
+                <span class="timeline-tree-indent" aria-hidden="true"></span>
+                <h3>${escapeHtml(rowTitle || project.title || project.ref || "Projet sans nom")}</h3>
                 <div class="service-line compact-inline">
                     ${tokenizeService(project.service).map((token) => `<span class="chip">${escapeHtml(token)}</span>`).join("")}
+                    ${projectTypeMarkup}
                 </div>
             </div>
             <div class="lane" data-project-lane="${escapeHtml(project.id)}">
@@ -1200,10 +1174,16 @@ function renderScheduledRow(project) {
                     ${progressMarkup}
                     <span class="resize-handle" data-resize="left" data-project-id="${escapeHtml(project.id)}"></span>
                     <div class="bar-main">
-                        <strong>${escapeHtml(project.title)}</strong>
-                        <span>${escapeHtml(project.ref)}</span>
+                        <div class="bar-title-line">
+                            ${toggleMarkup}
+                            <strong>
+                                ${inlineRefMarkup}
+                                ${inlineSeparatorMarkup}
+                                ${inlineTitleMarkup}
+                            </strong>
+                        </div>
                     </div>
-                    <button class="bar-remove" type="button" title="Retirer le projet" data-unschedule="${escapeHtml(project.id)}">×</button>
+                    <button class="bar-remove" type="button" title="${escapeHtml(removeButtonTitle)}" aria-label="${escapeHtml(removeButtonTitle)}" data-unschedule="${escapeHtml(project.id)}">×</button>
                     <span class="resize-handle" data-resize="right" data-project-id="${escapeHtml(project.id)}"></span>
                 </div>
             </div>
@@ -1253,6 +1233,26 @@ function renderBacklog() {
         : renderBacklogCards(backlogProjects);
 }
 
+function renderProjectMetaSummary(project) {
+    const summaryParts = [];
+    const projectType = normalizeProjectType(project.projectType);
+    const parentProject = getProjectParent(project);
+
+    if (projectType) {
+        summaryParts.push(projectType);
+    }
+
+    if (parentProject) {
+        summaryParts.push(`Parent: ${parentProject.ref}`);
+    }
+
+    if (!summaryParts.length) {
+        return "";
+    }
+
+    return `<small class="project-meta-summary">${escapeHtml(summaryParts.join(" | "))}</small>`;
+}
+
 function renderBacklogCards(backlogProjects) {
     return backlogProjects.map((project) => {
         const scheduled = isScheduled(project);
@@ -1278,6 +1278,7 @@ function renderBacklogCards(backlogProjects) {
             </div>
             <h3>${escapeHtml(project.title)}</h3>
             <p>${escapeHtml(project.service)}</p>
+            ${renderProjectMetaSummary(project)}
             ${renderProjectStatusControl(project)}
         </article>
     `;
@@ -1330,6 +1331,7 @@ function renderBacklogTableRow(project) {
             </td>
             <td data-label="Projet">
                 <strong class="project-table-title">${escapeHtml(project.title)}</strong>
+                ${renderProjectMetaSummary(project)}
             </td>
             <td data-label="Service">
                 <span class="project-table-service">${escapeHtml(project.service)}</span>
@@ -1389,6 +1391,26 @@ function populateServiceFilter() {
         ? selectedValue
         : "all";
     state.settings.serviceFilter = dom.serviceFilter.value;
+    populateTypeFilter();
+}
+
+function populateTypeFilter() {
+    const selectedValue = state.settings.typeFilter || "all";
+    const typedProjects = state.projects
+        .map((project) => normalizeProjectType(project.projectType))
+        .filter(Boolean);
+    const hasEmptyType = state.projects.some((project) => !normalizeProjectType(project.projectType));
+    const types = [...new Set(typedProjects)].sort((left, right) => left.localeCompare(right, "fr"));
+
+    dom.typeFilter.innerHTML = [
+        `<option value="all">Tous les types</option>`,
+        ...types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`),
+        ...(hasEmptyType ? [`<option value="${EMPTY_PROJECT_TYPE_FILTER}">Non renseigné</option>`] : [])
+    ].join("");
+
+    const isKnownType = types.includes(selectedValue) || selectedValue === "all" || (hasEmptyType && selectedValue === EMPTY_PROJECT_TYPE_FILTER);
+    dom.typeFilter.value = isKnownType ? selectedValue : "all";
+    state.settings.typeFilter = dom.typeFilter.value;
     populateStatusFilter();
 }
 
@@ -1496,14 +1518,23 @@ function onProjectStatusEditorFocusOut(event) {
 }
 
 function onTimelineDragOver(event) {
+    const draggedProjectId = event.dataTransfer?.getData("text/plain") || "";
+    const parentDropTarget = getTimelineParentDropTargetFromElement(event.target, draggedProjectId);
     const lane = event.target.closest(".lane");
-    if (!lane) {
+
+    if (!parentDropTarget && !lane) {
         return;
     }
 
     event.preventDefault();
     clearDropTargets();
-    const row = lane.closest(".timeline-row");
+
+    if (parentDropTarget?.row) {
+        parentDropTarget.row.classList.add("is-child-drop-target");
+        return;
+    }
+
+    const row = lane?.closest(".timeline-row");
     if (row) {
         row.classList.add("is-drop-target");
     }
@@ -1514,21 +1545,39 @@ function onTimelineDragLeave(event) {
     const nextRow = event.relatedTarget?.closest?.(".timeline-row");
     if (currentRow && currentRow !== nextRow) {
         currentRow.classList.remove("is-drop-target");
+        currentRow.classList.remove("is-child-drop-target");
     }
 }
 
 function onTimelineDrop(event) {
     const lane = event.target.closest(".lane");
-    if (!lane) {
+    const projectId = event.dataTransfer.getData("text/plain");
+    const project = findProject(projectId);
+    const parentDropTarget = getTimelineParentDropTargetFromElement(event.target, projectId);
+
+    if (!lane && !parentDropTarget) {
         return;
     }
 
     event.preventDefault();
-    const projectId = event.dataTransfer.getData("text/plain");
-    const project = findProject(projectId);
     clearDropTargets();
 
     if (!project) {
+        return;
+    }
+
+    if (parentDropTarget) {
+        const parentProject = findProject(parentDropTarget.projectId);
+        if (!parentProject) {
+            return;
+        }
+
+        if (!assignProjectToParent(project, parentProject, { expandParent: true })) {
+            return;
+        }
+
+        persistState();
+        render();
         return;
     }
 
@@ -1539,10 +1588,16 @@ function onTimelineDrop(event) {
         getTotalVisibleSlots() - 1
     );
 
-    scheduleProject(project, slotIndex);
+    scheduleProject(project, slotIndex, { clearParent: true });
 }
 
 function onTimelineClick(event) {
+    const treeToggle = event.target.closest("[data-toggle-children]");
+    if (treeToggle) {
+        toggleTimelineProjectExpanded(treeToggle.dataset.toggleChildren);
+        return;
+    }
+
     const unscheduleButton = event.target.closest("[data-unschedule]");
     if (!unscheduleButton) {
         const row = event.target.closest(".timeline-row[data-project-id]");
@@ -1559,6 +1614,12 @@ function onTimelineClick(event) {
 
     const project = findProject(unscheduleButton.dataset.unschedule);
     if (!project) {
+        return;
+    }
+
+    if (detachProjectFromParent(project)) {
+        persistState();
+        render();
         return;
     }
 
@@ -1585,6 +1646,10 @@ function onProjectColorChange(event) {
 
 function onTimelinePointerDown(event) {
     if (event.button !== 0) {
+        return;
+    }
+
+    if (event.target.closest("[data-toggle-children]")) {
         return;
     }
 
@@ -1647,9 +1712,15 @@ function onPointerMove(event) {
     interaction.previewStartIndex = nextStartIndex;
     interaction.previewDuration = nextDuration;
     previewBar(interaction.barElement, nextStartIndex, nextDuration);
+
+    if (interaction.type === "move") {
+        syncPointerParentDropTarget(event.clientX, event.clientY, interaction.projectId);
+    } else {
+        clearDropTargets();
+    }
 }
 
-function onPointerUp() {
+function onPointerUp(event) {
     if (!interaction) {
         return;
     }
@@ -1657,31 +1728,49 @@ function onPointerUp() {
     const project = findProject(interaction.projectId);
     if (project) {
         const shouldOpenModal = interaction.type === "move" && !interaction.moved;
+        const parentDropTarget = interaction.type === "move" && interaction.moved
+            ? getTimelineParentDropTargetFromPoint(event.clientX, event.clientY, interaction.projectId)
+            : null;
 
         if (shouldOpenModal) {
             openProjectModal(project);
+        } else if (parentDropTarget) {
+            const parentProject = findProject(parentDropTarget.projectId);
+            if (parentProject && assignProjectToParent(project, parentProject, { expandParent: true })) {
+                persistState();
+                render();
+            } else {
+                render();
+            }
         } else {
             project.start = slotIndexToStartDate(state.settings.timelineStart, interaction.previewStartIndex);
             project.duration = interaction.previewDuration;
             syncProjectExactDatesWithSchedule(project);
+            syncProjectScheduleHierarchy(project);
             persistState();
             render();
         }
     }
 
     interaction = null;
+    clearDropTargets();
     removeRootClass("is-scrubbing");
 }
 
-function scheduleProject(project, slotIndex) {
+function scheduleProject(project, slotIndex, options = {}) {
     if (normalizeProjectStoredStatus(project.status, project) === "A planifier") {
         project.status = "Planifié";
+    }
+
+    if (options.clearParent) {
+        project.parentProjectId = null;
     }
 
     project.start = slotIndexToStartDate(state.settings.timelineStart, slotIndex);
     project.duration = 2;
     project.lane = getNextLane();
     syncProjectExactDatesWithSchedule(project);
+    syncProjectScheduleHierarchy(project);
     persistState();
     render();
 }
@@ -1833,15 +1922,7 @@ function syncPlanningSidebarToggle() {
 }
 
 function syncTodayMarkerToggle() {
-    if (!dom.toggleTodayMarkerButton) {
-        return;
-    }
-
-    const isButtonVisible = canCurrentUserSeeTodayMarkerToggle();
     const isVisible = state.settings.showTodayMarker !== false;
-    dom.toggleTodayMarkerButton.hidden = !isButtonVisible;
-    dom.toggleTodayMarkerButton.disabled = !isButtonVisible;
-    dom.toggleTodayMarkerButton.style.display = isButtonVisible ? "" : "none";
     dom.toggleTodayMarkerButton.classList.toggle("is-active", isVisible);
     dom.toggleTodayMarkerButton.setAttribute("aria-pressed", String(isVisible));
     dom.toggleTodayMarkerButton.setAttribute(
@@ -1852,15 +1933,7 @@ function syncTodayMarkerToggle() {
 }
 
 function syncTimelineProgressToggle() {
-    if (!dom.toggleTimelineProgressButton) {
-        return;
-    }
-
-    const isButtonVisible = canCurrentUserSeeTimelineProgressToggle();
     const isVisible = state.settings.showTimelineProgress !== false;
-    dom.toggleTimelineProgressButton.hidden = !isButtonVisible;
-    dom.toggleTimelineProgressButton.disabled = !isButtonVisible;
-    dom.toggleTimelineProgressButton.style.display = isButtonVisible ? "" : "none";
     dom.toggleTimelineProgressButton.classList.toggle("is-active", isVisible);
     dom.toggleTimelineProgressButton.setAttribute("aria-pressed", String(isVisible));
     dom.toggleTimelineProgressButton.setAttribute(
@@ -1894,20 +1967,12 @@ function syncBacklogViewToggle() {
 }
 
 function syncSettingsPanelToggle() {
-    if (!dom.toggleSettingsPanelButton) {
-        return;
-    }
-
     const isVisible = state.settings.showSettingsPanel !== false;
-    const isButtonVisible = canCurrentUserSeeSettingsPanelToggle();
 
     if (dom.controlsPanel) {
-        dom.controlsPanel.hidden = !isVisible || !isButtonVisible;
+        dom.controlsPanel.hidden = !isVisible;
     }
 
-    dom.toggleSettingsPanelButton.hidden = !isButtonVisible;
-    dom.toggleSettingsPanelButton.disabled = !isButtonVisible;
-    dom.toggleSettingsPanelButton.style.display = isButtonVisible ? "" : "none";
     dom.toggleSettingsPanelButton.classList.toggle("is-active", isVisible);
     dom.toggleSettingsPanelButton.setAttribute("aria-pressed", String(isVisible));
     dom.toggleSettingsPanelButton.setAttribute(
@@ -1918,13 +1983,14 @@ function syncSettingsPanelToggle() {
 }
 
 function openProjectModal(project) {
-    void ensureProjectUsersLoaded();
     setProjectModalMode("edit");
     const editableDates = getProjectEditableDates(project);
     dom.projectModalTitle.textContent = project.title;
     dom.projectModalTitleInput.value = project.title || "";
     dom.projectModalRefInput.value = project.ref || "";
     dom.projectModalServiceInput.value = project.service || "";
+    populateProjectModalParentOptions(project.id, project.parentProjectId || "");
+    dom.projectModalTypeInput.innerHTML = renderProjectTypeOptions(project.projectType);
     dom.projectModalStartInput.value = editableDates.start || "";
     dom.projectModalEndInput.value = editableDates.end || "";
     dom.projectModalColorInput.value = project.color || getDefaultColor(project.service);
@@ -1962,7 +2028,6 @@ function openProjectModal(project) {
 }
 
 function openCreateProjectModal() {
-    void ensureProjectUsersLoaded();
     const project = createEmptyProjectDraft();
 
     setProjectModalMode("create");
@@ -1970,6 +2035,8 @@ function openCreateProjectModal() {
     dom.projectModalTitleInput.value = "";
     dom.projectModalRefInput.value = "";
     dom.projectModalServiceInput.value = "";
+    populateProjectModalParentOptions("", "");
+    dom.projectModalTypeInput.innerHTML = renderProjectTypeOptions("");
     dom.projectModalStartInput.value = "";
     dom.projectModalEndInput.value = "";
     dom.projectModalColorInput.value = project.color || getDefaultColor(project.service);
@@ -2117,11 +2184,10 @@ function syncProjectModalYouTrackControls(project = getProjectModalCurrentProjec
 
     const linkedToYouTrack = isYouTrackProject(project);
     const enabled = isProjectModalYouTrackEnabled(project);
-    const canManageYouTrackToggle = canCurrentUserManageYouTrackProjectToggle();
-    dom.projectModalYouTrackBlock.hidden = !canManageYouTrackToggle;
-    dom.projectModalCreateInYouTrack.disabled = !canManageYouTrackToggle;
+    dom.projectModalYouTrackBlock.hidden = false;
+    dom.projectModalCreateInYouTrack.disabled = false;
 
-    if (dom.projectModalYouTrackNote && canManageYouTrackToggle) {
+    if (dom.projectModalYouTrackNote) {
         if (linkedToYouTrack && enabled) {
             dom.projectModalYouTrackNote.textContent = "Ce projet est deja cree dans YouTrack. Vous pouvez gerer ses taches ci-dessous, ou desactiver le toggle pour l'archiver dans YouTrack a la validation tout en conservant les informations locales.";
         } else if (linkedToYouTrack) {
@@ -2134,156 +2200,6 @@ function syncProjectModalYouTrackControls(project = getProjectModalCurrentProjec
     }
 
     syncProjectModalYouTrackBadge(project);
-}
-
-function normalizeAuthorizedProfile(profile) {
-    const normalizedProfile = String(profile || "").trim();
-    if (normalizedProfile === "") {
-        return "";
-    }
-
-    return AVAILABLE_PROFILE_TYPES.includes(normalizedProfile) ? normalizedProfile : "";
-}
-
-function extractSharedSettings(settings) {
-    const source = settings && typeof settings === "object" ? settings : {};
-
-    return {
-        authorizedProfile: normalizeAuthorizedProfile(source.authorizedProfile),
-        showSettingsAccessButton: source.showSettingsAccessButton === true,
-        showTimelineProgressButton: source.showTimelineProgressButton === true,
-        showTodayMarkerButton: source.showTodayMarkerButton === true,
-    };
-}
-
-function getSharedSettingsPayload() {
-    return extractSharedSettings({
-        authorizedProfile: state.settings.authorizedProfile,
-        showSettingsAccessButton: state.settings.showSettingsAccessButton,
-        showTimelineProgressButton: state.settings.showTimelineProgressButton,
-        showTodayMarkerButton: state.settings.showTodayMarkerButton,
-    });
-}
-
-async function saveSharedSettings() {
-    const payload = getSharedSettingsPayload();
-    const response = await apiRequest(API_ROUTES.settings, {
-        method: "POST",
-        body: JSON.stringify({ settings: payload })
-    });
-
-    const sharedSettings = extractSharedSettings(response?.settings || payload);
-    Object.assign(state.settings, sharedSettings);
-    GANTT_CONFIG.sharedSettings = sharedSettings;
-    writeSerializableStateToStorage();
-}
-
-function syncProfileAccessControls() {
-    if (dom.profileAccessSelect) {
-        const currentValue = normalizeAuthorizedProfile(state.settings.authorizedProfile);
-        const options = [
-            `<option value="">Aucun profil</option>`,
-            ...AVAILABLE_PROFILE_TYPES.map((profile) => `<option value="${escapeHtml(profile)}">${escapeHtml(profile)}</option>`)
-        ];
-        dom.profileAccessSelect.innerHTML = options.join("");
-        dom.profileAccessSelect.value = currentValue;
-        dom.profileAccessSelect.disabled = !isCurrentUserAdmin();
-        const profileCard = dom.profileAccessSelect.closest(".service-visibility-settings");
-        if (profileCard) {
-            profileCard.hidden = !isCurrentUserAdmin();
-        }
-    }
-}
-
-async function onAuthorizedProfileChange() {
-    state.settings.authorizedProfile = normalizeAuthorizedProfile(dom.profileAccessSelect?.value);
-    await saveSharedSettings();
-    render();
-    syncProjectModalYouTrackControls();
-}
-
-async function onSettingsAccessVisibilityToggle() {
-    state.settings.showSettingsAccessButton = !(state.settings.showSettingsAccessButton !== false);
-    if (state.settings.showSettingsAccessButton === false) {
-        state.settings.showSettingsPanel = true;
-    }
-    await saveSharedSettings();
-    render();
-}
-
-async function onTimelineProgressVisibilityToggle() {
-    state.settings.showTimelineProgressButton = !(state.settings.showTimelineProgressButton !== false);
-    await saveSharedSettings();
-    render();
-}
-
-async function onTodayMarkerVisibilityToggle() {
-    state.settings.showTodayMarkerButton = !(state.settings.showTodayMarkerButton !== false);
-    await saveSharedSettings();
-    render();
-}
-
-function syncSettingsAccessVisibilityButton() {
-    if (!dom.toggleSettingsAccessVisibilityButton) {
-        return;
-    }
-
-    const canManage = canCurrentUserManagePlannerDisplaySettings();
-    const isRestrictionEnabled = state.settings.showSettingsAccessButton === true;
-    dom.toggleSettingsAccessVisibilityButton.hidden = !canManage;
-    dom.toggleSettingsAccessVisibilityButton.classList.toggle("is-active", isRestrictionEnabled);
-    dom.toggleSettingsAccessVisibilityButton.setAttribute("aria-pressed", String(isRestrictionEnabled));
-    dom.toggleSettingsAccessVisibilityButton.setAttribute(
-        "aria-label",
-        isRestrictionEnabled
-            ? "Ne plus masquer le bouton paramétrage pour le profil autorisé"
-            : "Masquer le bouton paramétrage pour le profil autorisé"
-    );
-    dom.toggleSettingsAccessVisibilityButton.title = isRestrictionEnabled
-        ? "Ne plus masquer le bouton paramétrage pour le profil autorisé"
-        : "Masquer le bouton paramétrage pour le profil autorisé";
-}
-
-function syncTimelineProgressVisibilityButton() {
-    if (!dom.toggleTimelineProgressVisibilityButton) {
-        return;
-    }
-
-    const canManage = canCurrentUserManagePlannerDisplaySettings();
-    const isRestrictionEnabled = state.settings.showTimelineProgressButton === true;
-    dom.toggleTimelineProgressVisibilityButton.hidden = !canManage;
-    dom.toggleTimelineProgressVisibilityButton.classList.toggle("is-active", isRestrictionEnabled);
-    dom.toggleTimelineProgressVisibilityButton.setAttribute("aria-pressed", String(isRestrictionEnabled));
-    dom.toggleTimelineProgressVisibilityButton.setAttribute(
-        "aria-label",
-        isRestrictionEnabled
-            ? "Ne plus masquer le bouton avancement pour le profil autorisé"
-            : "Masquer le bouton avancement pour le profil autorisé"
-    );
-    dom.toggleTimelineProgressVisibilityButton.title = isRestrictionEnabled
-        ? "Ne plus masquer le bouton avancement pour le profil autorisé"
-        : "Masquer le bouton avancement pour le profil autorisé";
-}
-
-function syncTodayMarkerVisibilityButton() {
-    if (!dom.toggleTodayMarkerVisibilityButton) {
-        return;
-    }
-
-    const canManage = canCurrentUserManagePlannerDisplaySettings();
-    const isRestrictionEnabled = state.settings.showTodayMarkerButton === true;
-    dom.toggleTodayMarkerVisibilityButton.hidden = !canManage;
-    dom.toggleTodayMarkerVisibilityButton.classList.toggle("is-active", isRestrictionEnabled);
-    dom.toggleTodayMarkerVisibilityButton.setAttribute("aria-pressed", String(isRestrictionEnabled));
-    dom.toggleTodayMarkerVisibilityButton.setAttribute(
-        "aria-label",
-        isRestrictionEnabled
-            ? "Ne plus masquer le bouton repère du jour pour le profil autorisé"
-            : "Masquer le bouton repère du jour pour le profil autorisé"
-    );
-    dom.toggleTodayMarkerVisibilityButton.title = isRestrictionEnabled
-        ? "Ne plus masquer le bouton repère du jour pour le profil autorisé"
-        : "Masquer le bouton repère du jour pour le profil autorisé";
 }
 
 function upsertProjectInState(project) {
@@ -2446,120 +2362,6 @@ function getCurrentAuthenticatedUser() {
     return state.currentUser && typeof state.currentUser === "object"
         ? state.currentUser
         : null;
-}
-
-function isCurrentUserAdmin() {
-    const currentUser = getCurrentAuthenticatedUser();
-    if (!currentUser) {
-        return false;
-    }
-
-    if (currentUser.isAdmin === true) {
-        return true;
-    }
-
-    return normalizeComparableUserValue(currentUser?.role) === "admin";
-}
-
-function getCurrentUserProfileType() {
-    const currentUser = getCurrentAuthenticatedUser();
-    if (!currentUser) {
-        return "";
-    }
-
-    const profileType = String(currentUser.profileType || "").trim();
-    if (profileType && profileType.toLocaleLowerCase("fr-FR") !== "admin") {
-        return profileType;
-    }
-
-    const role = String(currentUser.role || "").trim();
-    if (role && role.toLocaleLowerCase("fr-FR") !== "admin") {
-        return role;
-    }
-
-    return "";
-}
-
-function canCurrentUserManagePlannerDisplaySettings() {
-    return isCurrentUserAdmin();
-}
-
-function isCurrentUserInAuthorizedProfile() {
-    if (isCurrentUserAdmin()) {
-        return false;
-    }
-
-    const authorizedProfile = normalizeAuthorizedProfile(state.settings.authorizedProfile);
-    if (!authorizedProfile) {
-        return false;
-    }
-
-    return normalizeComparableUserValue(getCurrentUserProfileType()) === normalizeComparableUserValue(authorizedProfile);
-}
-
-function shouldHidePlanningControlForCurrentUser(settingKey) {
-    if (isCurrentUserAdmin()) {
-        return false;
-    }
-
-    if (!canCurrentUserUseAuthorizedProfile()) {
-        return true;
-    }
-
-    return Boolean(state.settings[settingKey]);
-}
-
-function canCurrentUserSeeSettingsPanelToggle() {
-    if (isCurrentUserAdmin()) {
-        return true;
-    }
-
-    if (!canCurrentUserUseAuthorizedProfile()) {
-        return false;
-    }
-
-    return state.settings.showSettingsAccessButton !== true;
-}
-
-function canCurrentUserSeeTimelineProgressToggle() {
-    if (isCurrentUserAdmin()) {
-        return true;
-    }
-
-    if (!canCurrentUserUseAuthorizedProfile()) {
-        return false;
-    }
-
-    return state.settings.showTimelineProgressButton !== true;
-}
-
-function canCurrentUserSeeTodayMarkerToggle() {
-    if (isCurrentUserAdmin()) {
-        return true;
-    }
-
-    if (!canCurrentUserUseAuthorizedProfile()) {
-        return false;
-    }
-
-    return state.settings.showTodayMarkerButton !== true;
-}
-
-function canCurrentUserUseAuthorizedProfile() {
-    if (isCurrentUserAdmin()) {
-        return true;
-    }
-
-    const authorizedProfile = normalizeAuthorizedProfile(state.settings.authorizedProfile);
-    if (!authorizedProfile) {
-        return false;
-    }
-
-    return normalizeComparableUserValue(getCurrentUserProfileType()) === normalizeComparableUserValue(authorizedProfile);
-}
-
-function canCurrentUserManageYouTrackProjectToggle() {
-    return canCurrentUserUseAuthorizedProfile();
 }
 
 function getCurrentAuthenticatedProjectUser() {
@@ -2813,8 +2615,6 @@ function renderProjectModalTeam() {
         </div>
     `;
 
-    const isLoadingUsers = Boolean(projectUsersLoadPromise) && state.projectUsers.length === 0;
-
     dom.projectModalTeamMenu.innerHTML = availableUsers.length ? `
         ${filterMarkup}
         ${filteredUsers.length ? filteredUsers.map((user) => `
@@ -2826,7 +2626,7 @@ function renderProjectModalTeam() {
             <div class="project-modal-team-empty">Aucun utilisateur ne correspond au filtre.</div>
         `}
     ` : `
-        <div class="project-modal-team-empty">${isLoadingUsers ? "Chargement des utilisateurs YouTrack..." : "Aucun utilisateur YouTrack disponible."}</div>
+        <div class="project-modal-team-empty">Aucun utilisateur YouTrack disponible.</div>
     `;
 
     const badges = getProjectModalTeamMembers();
@@ -2870,7 +2670,6 @@ function updateCurrentProjectTeamMembers(teamMembers) {
 }
 
 async function syncProjectModalYouTrackTeam(project = getProjectModalCurrentProject()) {
-    void ensureProjectUsersLoaded();
     const projectKey = getYouTrackProjectKey(project);
     if (!projectKey) {
         projectModalTeamState.canManage = canCurrentUserManageProjectTeam(project);
@@ -3031,6 +2830,9 @@ async function onProjectModalSubmit(event) {
     const titleValue = dom.projectModalTitleInput.value.trim();
     const refValue = dom.projectModalRefInput.value.trim();
     const serviceValue = dom.projectModalServiceInput.value.trim();
+    const typeValue = normalizeProjectType(dom.projectModalTypeInput.value);
+    const parentProjectId = normalizeProjectParentId(dom.projectModalParentInput.value, projectDraft.id || projectId);
+    const parentProject = parentProjectId ? findProject(parentProjectId) : null;
     const riskGainValue = normalizeProjectMetaInput(dom.projectModalRiskGainInput.value);
     const budgetValue = normalizeProjectMetaInput(dom.projectModalBudgetInput.value);
     const prioritizationValue = normalizeProjectMetaInput(dom.projectModalPrioritizationInput.value);
@@ -3064,6 +2866,16 @@ async function onProjectModalSubmit(event) {
         return;
     }
 
+    if (parentProjectId && !parentProject) {
+        showProjectModalError("Le projet parent sélectionné est introuvable.");
+        return;
+    }
+
+    if (parentProjectId && wouldCreateProjectCycle(projectDraft.id || projectId, parentProjectId)) {
+        showProjectModalError("Un projet ne peut pas être rattaché à l'un de ses sous-projets.");
+        return;
+    }
+
     if ((startValue && !endValue) || (!startValue && endValue)) {
         showProjectModalError("Renseignez une date de début et une date de fin, ou laissez les deux champs vides.");
         return;
@@ -3077,6 +2889,8 @@ async function onProjectModalSubmit(event) {
     projectDraft.ref = refValue;
     projectDraft.title = titleValue;
     projectDraft.service = serviceValue;
+    projectDraft.parentProjectId = parentProjectId || null;
+    projectDraft.projectType = typeValue || null;
     projectDraft.description = descriptionValue;
     projectDraft.riskGain = riskGainValue;
     projectDraft.budgetEstimate = budgetValue;
@@ -3087,7 +2901,7 @@ async function onProjectModalSubmit(event) {
     projectDraft.taskColumns = getProjectModalTaskColumns();
 
     if (!startValue && !endValue) {
-        clearProjectSchedule(projectDraft);
+        clearProjectSchedule(projectDraft, { cascadeChildren: false, skipLaneNormalization: true });
         if (mode === "create") {
             projectDraft.status = "A planifier";
         }
@@ -3112,55 +2926,44 @@ async function onProjectModalSubmit(event) {
         }
     }
 
+    if (projectDraft.parentProjectId) {
+        applyProjectParentSchedule(projectDraft, parentProject, { allowAutoSchedule: true });
+    }
+
     if (removeFromYouTrack) {
         projectDraft.youtrackId = null;
         projectDraft.youtrackUrl = null;
     }
 
-    if (mode === "create" || createInYouTrack || removeFromYouTrack) {
-        dom.projectModalSubmitButton.disabled = true;
+    dom.projectModalSubmitButton.disabled = true;
 
-        try {
-            const response = await createProjectRecord(buildProjectPersistencePayload(projectDraft), createInYouTrack, removeFromYouTrack);
-            const savedProject = normalizeProjectForState(response?.project || projectDraft);
-            upsertProjectInState(savedProject);
-            populateServiceFilter();
-            persistState();
-            render();
+    try {
+        const response = await createProjectRecord(buildProjectPersistencePayload(projectDraft), createInYouTrack, removeFromYouTrack);
+        const savedProject = normalizeProjectForState(response?.project || projectDraft);
+        upsertProjectInState(savedProject);
+        syncProjectScheduleHierarchy(savedProject);
+        populateServiceFilter();
+        persistState();
+        render();
 
-            if (createInYouTrack && pendingYouTrackTasks.length) {
-                try {
-                    await createPendingYouTrackTasks(savedProject.youtrackId, pendingYouTrackTasks);
-                } catch (error) {
-                    console.error(error);
-                    openProjectModal(savedProject);
-                    showProjectModalError(error.message || "Le projet YouTrack a été créé, mais les tâches n'ont pas pu être ajoutées.");
-                    return;
-                }
+        if (createInYouTrack && pendingYouTrackTasks.length) {
+            try {
+                await createPendingYouTrackTasks(savedProject.youtrackId, pendingYouTrackTasks);
+            } catch (error) {
+                console.error(error);
+                openProjectModal(savedProject);
+                showProjectModalError(error.message || "Le projet YouTrack a été créé, mais les tâches n'ont pas pu être ajoutées.");
+                return;
             }
-
-            closeProjectModal();
-        } catch (error) {
-            console.error(error);
-            showProjectModalError(error.message || "Impossible d'enregistrer le projet.");
-        } finally {
-            dom.projectModalSubmitButton.disabled = false;
         }
 
-        return;
+        closeProjectModal();
+    } catch (error) {
+        console.error(error);
+        showProjectModalError(error.message || "Impossible d'enregistrer le projet.");
+    } finally {
+        dom.projectModalSubmitButton.disabled = false;
     }
-
-    Object.assign(project, projectDraft);
-
-    dom.projectModalTitle.textContent = project.title;
-    dom.projectModalColorInput.value = project.color;
-    dom.projectModalColorHexInput.value = project.customColor || "";
-    syncProjectModalDisplays();
-
-    populateServiceFilter();
-    persistState();
-    render();
-    closeProjectModal();
 }
 
 function onProjectModalColorChange() {
@@ -3222,7 +3025,13 @@ async function onProjectModalDelete() {
 
     try {
         await deleteProject(project.id);
-        state.projects = state.projects.filter((item) => item.id !== project.id);
+        state.projects = state.projects
+            .filter((item) => item.id !== project.id)
+            .map((item) => ({
+                ...item,
+                parentProjectId: item.parentProjectId === project.id ? null : item.parentProjectId
+            }));
+        sanitizeExpandedProjectIds();
         populateServiceFilter();
         persistState();
         render();
@@ -3235,13 +3044,33 @@ async function onProjectModalDelete() {
     }
 }
 
-function syncProjectModalDateBounds() {
+function onProjectModalParentChange() {
+    const selectedParentProject = getProjectModalSelectedParentProject(dom.projectModal.dataset.projectId || "");
     const startValue = normalizeDateInputValue(dom.projectModalStartInput.value);
     const endValue = normalizeDateInputValue(dom.projectModalEndInput.value);
 
-    dom.projectModalEndInput.min = startValue || "";
-    dom.projectModalStartInput.max = endValue || "";
-    dom.projectModalHelp.textContent = "";
+    if ((!startValue || !endValue) && isScheduled(selectedParentProject)) {
+        const parentDates = getProjectEditableDates(selectedParentProject);
+        dom.projectModalStartInput.value = parentDates.start || "";
+        dom.projectModalEndInput.value = parentDates.end || "";
+    }
+
+    syncProjectModalDateBounds();
+}
+
+function syncProjectModalDateBounds() {
+    const startValue = normalizeDateInputValue(dom.projectModalStartInput.value);
+    const endValue = normalizeDateInputValue(dom.projectModalEndInput.value);
+    const selectedParentProject = getProjectModalSelectedParentProject(dom.projectModal.dataset.projectId || "");
+    const parentDates = isScheduled(selectedParentProject)
+        ? getProjectEditableDates(selectedParentProject)
+        : { start: "", end: "" };
+
+    dom.projectModalStartInput.min = parentDates.start || "";
+    dom.projectModalStartInput.max = endValue || parentDates.end || "";
+    dom.projectModalEndInput.min = startValue || parentDates.start || "";
+    dom.projectModalEndInput.max = parentDates.end || "";
+    dom.projectModalHelp.textContent = getProjectModalParentHelpMessage(selectedParentProject);
     syncProjectModalDisplays();
 }
 
@@ -3355,11 +3184,16 @@ function groupMonthsByYear(months) {
 function matchesFilters(project) {
     const search = state.settings.search.trim().toLowerCase();
     const serviceFilter = state.settings.serviceFilter;
+    const typeFilter = state.settings.typeFilter;
     const statusFilter = state.settings.statusFilter;
     const serviceMatches = serviceFilter === "all" || tokenizeService(project.service).includes(serviceFilter);
+    const projectType = normalizeProjectType(project.projectType);
+    const typeMatches = typeFilter === "all"
+        || (typeFilter === EMPTY_PROJECT_TYPE_FILTER && !projectType)
+        || projectType === typeFilter;
     const statusMatches = statusFilter === "all" || getProjectEffectiveStatus(project) === statusFilter;
 
-    if (!serviceMatches || !statusMatches) {
+    if (!serviceMatches || !typeMatches || !statusMatches) {
         return false;
     }
 
@@ -3367,18 +3201,255 @@ function matchesFilters(project) {
         return true;
     }
 
-    const haystack = `${project.ref} ${project.title} ${project.service}`.toLowerCase();
+    const haystack = `${project.ref} ${project.title} ${project.service} ${projectType || ""}`.toLowerCase();
     return haystack.includes(search);
 }
 
-function normalizeLanes() {
-    const scheduled = state.projects
-        .filter(isScheduled)
-        .sort((left, right) => (left.lane ?? Number.MAX_SAFE_INTEGER) - (right.lane ?? Number.MAX_SAFE_INTEGER));
+function sortProjectsByLaneThenRef(left, right) {
+    const laneDifference = (left.lane ?? Number.MAX_SAFE_INTEGER) - (right.lane ?? Number.MAX_SAFE_INTEGER);
+    if (laneDifference !== 0) {
+        return laneDifference;
+    }
 
-    scheduled.forEach((project, index) => {
-        project.lane = index;
+    return String(left.ref || "").localeCompare(String(right.ref || ""), "fr");
+}
+
+function normalizeExpandedProjectIds(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return [...new Set(
+        value
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
+    )];
+}
+
+function normalizeProjectParentId(value, currentProjectId = "") {
+    const normalizedValue = String(value || "").trim();
+    if (!normalizedValue || normalizedValue === String(currentProjectId || "").trim()) {
+        return null;
+    }
+
+    return normalizedValue;
+}
+
+function normalizeProjectType(value) {
+    const normalizedValue = String(value || "").trim();
+    return PROJECT_TYPES.includes(normalizedValue) ? normalizedValue : "";
+}
+
+function formatProjectParentLabel(project) {
+    if (!project) {
+        return "Aucun";
+    }
+
+    const projectRef = String(project.ref || "").trim();
+    const projectTitle = String(project.title || "").trim();
+    if (!projectRef) {
+        return projectTitle || "Aucun";
+    }
+
+    return projectTitle ? `${projectRef} - ${projectTitle}` : projectRef;
+}
+
+function renderProjectTypeOptions(selectedType = "") {
+    const normalizedType = normalizeProjectType(selectedType);
+    return [
+        `<option value="">Non renseigné</option>`,
+        ...PROJECT_TYPES.map((type) => `<option value="${escapeHtml(type)}"${type === normalizedType ? " selected" : ""}>${escapeHtml(type)}</option>`)
+    ].join("");
+}
+
+function getProjectParent(project, options = {}) {
+    const parentProjectId = normalizeProjectParentId(project?.parentProjectId, project?.id || "");
+    if (!parentProjectId) {
+        return null;
+    }
+
+    const projectMap = options.projectMap instanceof Map ? options.projectMap : null;
+    const parentProject = projectMap ? (projectMap.get(parentProjectId) || null) : findProject(parentProjectId);
+    if (!parentProject) {
+        return null;
+    }
+
+    if (options.scheduledOnly && !isScheduled(parentProject)) {
+        return null;
+    }
+
+    return parentProject;
+}
+
+function getProjectChildren(projectId, options = {}) {
+    const normalizedProjectId = String(projectId || "").trim();
+    if (!normalizedProjectId) {
+        return [];
+    }
+
+    const projectList = Array.isArray(options.projectList) ? options.projectList : state.projects;
+    return projectList.filter((project) => {
+        if (normalizeProjectParentId(project.parentProjectId, project.id || "") !== normalizedProjectId) {
+            return false;
+        }
+
+        return options.scheduledOnly ? isScheduled(project) : true;
     });
+}
+
+function hasProjectChildren(projectId, options = {}) {
+    return getProjectChildren(projectId, options).length > 0;
+}
+
+function sanitizeExpandedProjectIds() {
+    state.settings.expandedProjectIds = normalizeExpandedProjectIds(state.settings.expandedProjectIds)
+        .filter((projectId) => hasProjectChildren(projectId, { scheduledOnly: true }));
+}
+
+function isTimelineProjectExpanded(projectId) {
+    return normalizeExpandedProjectIds(state.settings.expandedProjectIds).includes(String(projectId || "").trim());
+}
+
+function setTimelineProjectExpanded(projectId, expanded, options = {}) {
+    const normalizedProjectId = String(projectId || "").trim();
+    if (!normalizedProjectId) {
+        return;
+    }
+
+    const expandedProjectIds = new Set(normalizeExpandedProjectIds(state.settings.expandedProjectIds));
+    if (expanded) {
+        expandedProjectIds.add(normalizedProjectId);
+    } else {
+        expandedProjectIds.delete(normalizedProjectId);
+    }
+
+    state.settings.expandedProjectIds = Array.from(expandedProjectIds);
+    sanitizeExpandedProjectIds();
+
+    if (options.persist !== false) {
+        writeSerializableStateToStorage();
+    }
+
+    if (options.render !== false) {
+        render();
+    }
+}
+
+function toggleTimelineProjectExpanded(projectId) {
+    if (!hasProjectChildren(projectId, { scheduledOnly: true })) {
+        return;
+    }
+
+    setTimelineProjectExpanded(projectId, !isTimelineProjectExpanded(projectId));
+}
+
+function expandTimelineAncestors(projectId) {
+    let currentProject = findProject(projectId);
+    while (currentProject?.parentProjectId) {
+        setTimelineProjectExpanded(currentProject.parentProjectId, true, { persist: false, render: false });
+        currentProject = findProject(currentProject.parentProjectId);
+    }
+}
+
+function buildTimelineHierarchyRows(projects) {
+    const projectMap = new Map(projects.map((project) => [project.id, project]));
+    const childrenMap = new Map();
+    const roots = [];
+
+    projects.forEach((project) => {
+        const parentProject = getProjectParent(project, { projectMap });
+        if (parentProject) {
+            if (!childrenMap.has(parentProject.id)) {
+                childrenMap.set(parentProject.id, []);
+            }
+
+            childrenMap.get(parentProject.id).push(project);
+            return;
+        }
+
+        roots.push(project);
+    });
+
+    const sortProjects = (projectList) => projectList.slice().sort(sortProjectsByLaneThenRef);
+    const rows = [];
+    const visitedProjectIds = new Set();
+
+    function walkProject(project, depth) {
+        if (!project || visitedProjectIds.has(project.id)) {
+            return;
+        }
+
+        visitedProjectIds.add(project.id);
+
+        const childProjects = sortProjects(childrenMap.get(project.id) || []);
+        const isExpanded = childProjects.length > 0 ? isTimelineProjectExpanded(project.id) : false;
+        rows.push({
+            project,
+            depth,
+            hasChildren: childProjects.length > 0,
+            expanded: isExpanded
+        });
+
+        if (isExpanded) {
+            childProjects.forEach((childProject) => {
+                walkProject(childProject, depth + 1);
+            });
+        }
+    }
+
+    sortProjects(roots).forEach((project) => {
+        walkProject(project, 0);
+    });
+
+    return rows;
+}
+
+function buildVisibleTimelineProjects() {
+    return buildTimelineHierarchyRows(
+        state.projects
+            .filter(isScheduled)
+            .filter(matchesFilters)
+    );
+}
+
+function normalizeLanes() {
+    let nextLane = 0;
+    const scheduledProjects = state.projects.filter(isScheduled);
+    const projectMap = new Map(scheduledProjects.map((project) => [project.id, project]));
+    const childrenMap = new Map();
+    const roots = [];
+
+    scheduledProjects.forEach((project) => {
+        const parentProject = getProjectParent(project, { projectMap, scheduledOnly: true });
+        if (parentProject) {
+            if (!childrenMap.has(parentProject.id)) {
+                childrenMap.set(parentProject.id, []);
+            }
+
+            childrenMap.get(parentProject.id).push(project);
+            return;
+        }
+
+        roots.push(project);
+    });
+
+    const visitedProjectIds = new Set();
+    const sortProjects = (projectList) => projectList.slice().sort(sortProjectsByLaneThenRef);
+
+    function assignLane(project) {
+        if (!project || visitedProjectIds.has(project.id)) {
+            return;
+        }
+
+        visitedProjectIds.add(project.id);
+        project.lane = nextLane;
+        nextLane += 1;
+
+        sortProjects(childrenMap.get(project.id) || []).forEach(assignLane);
+    }
+
+    sortProjects(roots).forEach(assignLane);
+    sortProjects(scheduledProjects.filter((project) => !visitedProjectIds.has(project.id))).forEach(assignLane);
 
     state.projects
         .filter((project) => !isScheduled(project))
@@ -3395,10 +3466,10 @@ function getNextLane() {
 }
 
 function isScheduled(project) {
-    return Boolean(project.start) && Number.isFinite(project.duration) && project.duration > 0;
+    return Boolean(project?.start) && Number.isFinite(Number(project?.duration)) && Number(project.duration) > 0;
 }
 
-function clearProjectSchedule(project) {
+function clearProjectSchedule(project, options = {}) {
     const currentStatus = normalizeProjectStoredStatus(project.status, project);
 
     project.start = null;
@@ -3411,7 +3482,16 @@ function clearProjectSchedule(project) {
         project.status = "A planifier";
     }
 
-    normalizeLanes();
+    if (options.cascadeChildren !== false) {
+        getProjectChildren(project.id).forEach((childProject) => {
+            clearProjectSchedule(childProject, { cascadeChildren: true, skipLaneNormalization: true });
+        });
+    }
+
+    if (!options.skipLaneNormalization) {
+        normalizeLanes();
+        sanitizeExpandedProjectIds();
+    }
 }
 
 function sanitizeDuration(value) {
@@ -3423,6 +3503,124 @@ function sanitizeDuration(value) {
 
 function findProject(projectId) {
     return state.projects.find((project) => project.id === projectId);
+}
+
+function wouldCreateProjectCycle(projectId, candidateParentId) {
+    const normalizedProjectId = String(projectId || "").trim();
+    let currentParentId = String(candidateParentId || "").trim();
+    if (!normalizedProjectId || !currentParentId) {
+        return false;
+    }
+
+    const visitedProjectIds = new Set([normalizedProjectId]);
+    while (currentParentId) {
+        if (visitedProjectIds.has(currentParentId)) {
+            return true;
+        }
+
+        visitedProjectIds.add(currentParentId);
+        currentParentId = String(findProject(currentParentId)?.parentProjectId || "").trim();
+    }
+
+    return false;
+}
+
+function applyProjectParentSchedule(project, parentProject = getProjectParent(project), options = {}) {
+    if (!project?.parentProjectId) {
+        return;
+    }
+
+    const resolvedParentProject = parentProject || findProject(project.parentProjectId);
+    if (!isScheduled(resolvedParentProject)) {
+        clearProjectSchedule(project, { cascadeChildren: false, skipLaneNormalization: true });
+        return;
+    }
+
+    if (!isScheduled(project) && options.allowAutoSchedule !== true) {
+        return;
+    }
+
+    const parentStartSlot = getHalfMonthSlotNumber(resolvedParentProject.start);
+    const parentEndSlot = parentStartSlot + resolvedParentProject.duration - 1;
+    let childStartSlot = isScheduled(project) ? getHalfMonthSlotNumber(project.start) : parentStartSlot;
+    let childEndSlot = isScheduled(project) ? childStartSlot + project.duration - 1 : parentEndSlot;
+
+    if (childEndSlot < parentStartSlot || childStartSlot > parentEndSlot) {
+        childStartSlot = parentStartSlot;
+        childEndSlot = parentEndSlot;
+    }
+
+    childStartSlot = clamp(childStartSlot, parentStartSlot, parentEndSlot);
+    childEndSlot = clamp(childEndSlot, childStartSlot, parentEndSlot);
+
+    project.start = addHalfMonths(resolvedParentProject.start, childStartSlot - parentStartSlot);
+    project.duration = childEndSlot - childStartSlot + 1;
+    project.lane = Number.isFinite(project.lane) ? project.lane : getNextLane();
+    syncProjectExactDatesWithSchedule(project);
+
+    if (normalizeProjectStoredStatus(project.status, project) === "A planifier") {
+        project.status = "Planifié";
+    }
+}
+
+function syncChildProjectSchedules(projectId) {
+    const parentProject = findProject(projectId);
+    if (!parentProject) {
+        return;
+    }
+
+    getProjectChildren(projectId)
+        .sort(sortProjectsByLaneThenRef)
+        .forEach((childProject) => {
+            applyProjectParentSchedule(childProject, parentProject, { allowAutoSchedule: true });
+            syncChildProjectSchedules(childProject.id);
+        });
+}
+
+function syncProjectScheduleHierarchy(project) {
+    if (!project) {
+        return;
+    }
+
+    if (project.parentProjectId) {
+        applyProjectParentSchedule(project, null, { allowAutoSchedule: true });
+    }
+
+    syncChildProjectSchedules(project.id);
+    normalizeLanes();
+    sanitizeExpandedProjectIds();
+}
+
+function assignProjectToParent(project, parentProject, options = {}) {
+    if (!project || !parentProject) {
+        return false;
+    }
+
+    if (project.id === parentProject.id || wouldCreateProjectCycle(project.id, parentProject.id)) {
+        window.alert("Un projet ne peut pas être rattaché à l'un de ses sous-projets.");
+        return false;
+    }
+
+    project.parentProjectId = parentProject.id;
+    applyProjectParentSchedule(project, parentProject, { allowAutoSchedule: true });
+    syncProjectScheduleHierarchy(project);
+
+    if (options.expandParent) {
+        setTimelineProjectExpanded(parentProject.id, true, { persist: false, render: false });
+        expandTimelineAncestors(parentProject.id);
+    }
+
+    return true;
+}
+
+function detachProjectFromParent(project) {
+    if (!project?.parentProjectId) {
+        return false;
+    }
+
+    project.parentProjectId = null;
+    syncProjectScheduleHierarchy(project);
+    return true;
 }
 
 function isYouTrackProject(project) {
@@ -4993,6 +5191,8 @@ function createEmptyProjectDraft() {
         ref: "",
         title: "",
         service: "",
+        parentProjectId: null,
+        projectType: null,
         description: "",
         color: "",
         customColor: "",
@@ -5170,6 +5370,8 @@ function buildProjectPersistencePayload(project) {
         ref: project.ref,
         title: project.title,
         service: project.service,
+        parentProjectId: project.parentProjectId ?? null,
+        projectType: normalizeProjectType(project.projectType),
         description: project.description,
         color: project.customColor || "",
         customColor: project.customColor || "",
@@ -5217,6 +5419,8 @@ function normalizeProjectForState(project) {
 
     return {
         ...project,
+        parentProjectId: normalizeProjectParentId(project.parentProjectId, project.id || ""),
+        projectType: normalizeProjectType(project.projectType),
         color: resolveProjectColor(project, {}),
         customColor: resolveProjectCustomColor(project, {}),
         start: planning.start,
@@ -5376,6 +5580,45 @@ function renderProjectStatusOptions(selectedStatus) {
     `).join("");
 }
 
+function populateProjectModalParentOptions(currentProjectId = "", selectedParentId = "") {
+    const normalizedCurrentProjectId = String(currentProjectId || "").trim();
+    const normalizedSelectedParentId = normalizeProjectParentId(selectedParentId, normalizedCurrentProjectId) || "";
+    const parentOptions = state.projects
+        .filter((project) => project.id && project.id !== normalizedCurrentProjectId)
+        .sort(sortProjectsByLaneThenRef)
+        .map((project) => {
+            const optionLabel = `${formatProjectParentLabel(project)}${isScheduled(project) ? "" : " (hors timeline)"}`;
+            const isDisabled = normalizedCurrentProjectId ? wouldCreateProjectCycle(normalizedCurrentProjectId, project.id) : false;
+            return `
+                <option value="${escapeHtml(project.id)}"${project.id === normalizedSelectedParentId ? " selected" : ""}${isDisabled ? " disabled" : ""}>
+                    ${escapeHtml(optionLabel)}
+                </option>
+            `;
+        })
+        .join("");
+
+    dom.projectModalParentInput.innerHTML = `<option value="">Aucun</option>${parentOptions}`;
+    dom.projectModalParentInput.value = normalizedSelectedParentId;
+}
+
+function getProjectModalSelectedParentProject(currentProjectId = "") {
+    const parentProjectId = normalizeProjectParentId(dom.projectModalParentInput?.value, currentProjectId);
+    return parentProjectId ? findProject(parentProjectId) : null;
+}
+
+function getProjectModalParentHelpMessage(parentProject) {
+    if (!parentProject) {
+        return PROJECT_MODAL_DEFAULT_HELP;
+    }
+
+    if (!isScheduled(parentProject)) {
+        return `Le projet parent ${formatProjectParentLabel(parentProject)} n'est pas planifié. Ce sous-projet restera hors timeline tant que le parent n'aura pas de dates.`;
+    }
+
+    const parentDates = getProjectDateRange(parentProject);
+    return `Sous-projet contraint au planning du parent ${formatProjectParentLabel(parentProject)} : du ${parentDates.start} au ${parentDates.end}.`;
+}
+
 function syncProjectModalDisplays() {
     if (!dom.projectModalForm) {
         return;
@@ -5383,9 +5626,11 @@ function syncProjectModalDisplays() {
 
     const projectId = dom.projectModal.dataset.projectId || "";
     const project = projectId ? findProject(projectId) : null;
+    const selectedParentProject = getProjectModalSelectedParentProject(projectId);
     const title = dom.projectModalTitleInput.value.trim() || "Projet";
     const ref = dom.projectModalRefInput.value.trim() || "-";
     const service = dom.projectModalServiceInput.value.trim() || "-";
+    const projectType = normalizeProjectType(dom.projectModalTypeInput.value);
     const startValue = normalizeDateInputValue(dom.projectModalStartInput.value);
     const endValue = normalizeDateInputValue(dom.projectModalEndInput.value);
     const start = formatProjectModalDate(startValue);
@@ -5424,6 +5669,10 @@ function syncProjectModalDisplays() {
     dom.projectModalTitle.textContent = title;
     dom.projectModalRefDisplay.textContent = ref;
     dom.projectModalServiceDisplay.textContent = service;
+    dom.projectModalTypeDisplay.textContent = projectType || "Non renseigné";
+    dom.projectModalParentDisplay.textContent = selectedParentProject
+        ? formatProjectParentLabel(selectedParentProject)
+        : "Aucun";
     dom.projectModalStartDisplay.textContent = start;
     dom.projectModalEndDisplay.textContent = end;
     dom.projectModalRiskGainDisplay.textContent = formatProjectMeta(riskGain);
@@ -5816,9 +6065,50 @@ function formatTimelineZoom(value) {
     return `${Math.round(value * 100)}%`;
 }
 
+function getTimelineParentDropTargetFromElement(targetElement, draggedProjectId = "") {
+    if (!(targetElement instanceof Element)) {
+        return null;
+    }
+
+    if (targetElement.closest("[data-unschedule]")) {
+        return null;
+    }
+
+    const row = targetElement.closest(".timeline-row[data-project-id]");
+    if (!row) {
+        return null;
+    }
+
+    const projectId = String(row.dataset.projectId || "").trim();
+    if (!projectId || projectId === String(draggedProjectId || "").trim()) {
+        return null;
+    }
+
+    const isProjectLabelTarget = Boolean(targetElement.closest(".row-label"));
+    const isProjectBarTarget = Boolean(targetElement.closest("[data-bar-id]"));
+    if (!isProjectLabelTarget && !isProjectBarTarget) {
+        return null;
+    }
+
+    return { row, projectId };
+}
+
+function getTimelineParentDropTargetFromPoint(clientX, clientY, draggedProjectId = "") {
+    return getTimelineParentDropTargetFromElement(document.elementFromPoint(clientX, clientY), draggedProjectId);
+}
+
+function syncPointerParentDropTarget(clientX, clientY, draggedProjectId = "") {
+    clearDropTargets();
+    const parentDropTarget = getTimelineParentDropTargetFromPoint(clientX, clientY, draggedProjectId);
+    if (parentDropTarget?.row) {
+        parentDropTarget.row.classList.add("is-child-drop-target");
+    }
+}
+
 function clearDropTargets() {
-    dom.timelineRows.querySelectorAll(".is-drop-target").forEach((row) => {
+    dom.timelineRows.querySelectorAll(".is-drop-target, .is-child-drop-target").forEach((row) => {
         row.classList.remove("is-drop-target");
+        row.classList.remove("is-child-drop-target");
     });
 }
 

@@ -20,7 +20,7 @@ function app_fetch_project_by_id(string $projectId): ?array
     }
 
     $statement = app_db()->prepare(
-        'SELECT id, ref, title, service, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
          FROM projets
          WHERE id = :id
          LIMIT 1'
@@ -45,7 +45,7 @@ function app_fetch_project_by_ref(string $projectRef): ?array
     }
 
     $statement = app_db()->prepare(
-        'SELECT id, ref, title, service, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
          FROM projets
          WHERE ref = :ref
          LIMIT 1'
@@ -70,7 +70,7 @@ function app_fetch_project_by_youtrack_id(string $youtrackId): ?array
     }
 
     $statement = app_db()->prepare(
-        'SELECT id, ref, title, service, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
          FROM projets
          WHERE youtrackId = :youtrackId
          LIMIT 1'
@@ -100,7 +100,7 @@ function app_fetch_projects_from_database(bool $seedIfEmpty): array
     }
 
     $statement = $pdo->query(
-        'SELECT id, ref, title, service, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
          FROM projets
          ORDER BY ref ASC, id ASC'
     );
@@ -109,6 +109,8 @@ function app_fetch_projects_from_database(bool $seedIfEmpty): array
     foreach ($statement->fetchAll() as $row) {
         $projects[] = app_normalize_project_record($row);
     }
+
+    app_sync_project_service_links($projects);
 
     return $projects;
 }
@@ -128,16 +130,20 @@ function app_store_projects(array $projects): array
         $normalizedProjects[] = app_normalize_project_record($project);
     }
 
+    app_validate_project_relationships($normalizedProjects);
+
     $statement = $pdo->prepare(
         'INSERT INTO projets (
-            id, ref, title, service, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+            id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
         ) VALUES (
-            :id, :ref, :title, :service, :description, :color, :customColor, :start, :duration, :lane, :startExact, :endExact, :riskGain, :budgetEstimate, :prioritization, :status, :progression, :youtrackId, :youtrackUrl, :ownerId, :ownerDisplayName, :ownerEmail, :teamMembers, :taskColumns
+            :id, :ref, :title, :service, :parentProjectId, :projectType, :description, :color, :customColor, :start, :duration, :lane, :startExact, :endExact, :riskGain, :budgetEstimate, :prioritization, :status, :progression, :youtrackId, :youtrackUrl, :ownerId, :ownerDisplayName, :ownerEmail, :teamMembers, :taskColumns
         )
         ON DUPLICATE KEY UPDATE
             ref = VALUES(ref),
             title = VALUES(title),
             service = VALUES(service),
+            parentProjectId = VALUES(parentProjectId),
+            projectType = VALUES(projectType),
             description = VALUES(description),
             color = VALUES(color),
             customColor = VALUES(customColor),
@@ -169,6 +175,8 @@ function app_store_projects(array $projects): array
                 'ref' => $project['ref'],
                 'title' => $project['title'],
                 'service' => $project['service'],
+                'parentProjectId' => $project['parentProjectId'],
+                'projectType' => $project['projectType'],
                 'description' => $project['description'],
                 'color' => $project['color'] !== '' ? $project['color'] : null,
                 'customColor' => $project['customColor'] !== '' ? $project['customColor'] : null,
@@ -255,6 +263,13 @@ function app_delete_project(string $projectId): void
         throw new RuntimeException('Identifiant projet manquant.');
     }
 
+    $detachChildrenStatement = app_db()->prepare(
+        'UPDATE projets
+         SET parentProjectId = NULL
+         WHERE parentProjectId = :id'
+    );
+    $detachChildrenStatement->execute(['id' => $normalizedId]);
+
     $statement = app_db()->prepare('DELETE FROM projets WHERE id = :id');
     $statement->execute(['id' => $normalizedId]);
 
@@ -285,6 +300,8 @@ function app_ensure_projects_schema(): void
             ref VARCHAR(50) NOT NULL,
             title VARCHAR(255) NOT NULL,
             service VARCHAR(255) NOT NULL,
+            parentProjectId VARCHAR(32) DEFAULT NULL,
+            projectType VARCHAR(64) DEFAULT NULL,
             description TEXT NOT NULL,
             color VARCHAR(7) DEFAULT NULL,
             customColor VARCHAR(7) DEFAULT NULL,
@@ -311,6 +328,8 @@ function app_ensure_projects_schema(): void
             UNIQUE KEY uniq_projets_ref (ref),
             KEY idx_projets_title (title),
             KEY idx_projets_service (service),
+            KEY idx_projets_parent_project (parentProjectId),
+            KEY idx_projets_project_type (projectType),
             KEY idx_projets_start (start),
             KEY idx_projets_start_exact (startExact),
             KEY idx_projets_end_exact (endExact)
@@ -338,6 +357,22 @@ function app_ensure_projects_schema(): void
             "ALTER TABLE projets
              ADD COLUMN status VARCHAR(50) NOT NULL DEFAULT 'A planifier'
              AFTER prioritization"
+        );
+    }
+
+    if (!app_projects_column_exists('parentProjectId')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN parentProjectId VARCHAR(32) DEFAULT NULL
+             AFTER service"
+        );
+    }
+
+    if (!app_projects_column_exists('projectType')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN projectType VARCHAR(64) DEFAULT NULL
+             AFTER parentProjectId"
         );
     }
 
@@ -406,53 +441,8 @@ function app_ensure_projects_schema(): void
     }
 
     app_merge_duplicate_services();
-    app_seed_project_service_links_if_missing();
 
     $isReady = true;
-}
-
-function app_seed_project_service_links_if_missing(): void
-{
-    static $alreadySeeded = false;
-
-    if ($alreadySeeded) {
-        return;
-    }
-
-    $alreadySeeded = true;
-    $pdo = app_db();
-
-    $projectCount = (int) $pdo->query('SELECT COUNT(*) FROM projets')->fetchColumn();
-    if ($projectCount < 1) {
-        return;
-    }
-
-    $linkCount = (int) $pdo->query('SELECT COUNT(*) FROM projet_services')->fetchColumn();
-    if ($linkCount > 0) {
-        return;
-    }
-
-    $statement = $pdo->query('SELECT id, service FROM projets');
-    $projects = [];
-
-    foreach ($statement->fetchAll() as $row) {
-        $projectId = trim((string) ($row['id'] ?? ''));
-        if ($projectId === '') {
-            continue;
-        }
-
-        $projects[] = [
-            'id' => $projectId,
-            'service' => (string) ($row['service'] ?? ''),
-        ];
-    }
-
-    if ($projects === []) {
-        return;
-    }
-
-    app_sync_services_from_projects($projects);
-    app_sync_project_service_links($projects);
 }
 
 function app_projects_column_exists(string $columnName): bool
@@ -510,15 +500,18 @@ function app_generate_project_id(): string
 function app_normalize_project_record(array $project): array
 {
     $normalizedService = app_normalize_project_services_string(trim((string) ($project['service'] ?? '')));
+    $normalizedProjectId = trim((string) ($project['id'] ?? ''));
     $ownerId = app_normalize_project_nullable_string($project['ownerId'] ?? null);
     $ownerDisplayName = app_normalize_project_nullable_string($project['ownerDisplayName'] ?? null);
     $ownerEmail = app_normalize_project_nullable_string($project['ownerEmail'] ?? null);
 
     $normalized = [
-        'id' => trim((string) ($project['id'] ?? '')),
+        'id' => $normalizedProjectId,
         'ref' => trim((string) ($project['ref'] ?? '')),
         'title' => trim((string) ($project['title'] ?? '')),
         'service' => $normalizedService,
+        'parentProjectId' => app_normalize_project_parent_id($project['parentProjectId'] ?? null, $normalizedProjectId),
+        'projectType' => app_normalize_project_type_value($project['projectType'] ?? null),
         'description' => (string) ($project['description'] ?? ''),
         'color' => '',
         'customColor' => '',
@@ -581,6 +574,33 @@ function app_normalize_project_nullable_string($value): ?string
 
     $normalized = trim((string) $value);
     return $normalized !== '' ? $normalized : null;
+}
+
+function app_normalize_project_parent_id($value, string $projectId): ?string
+{
+    $normalizedParentId = app_normalize_project_nullable_string($value);
+    if ($normalizedParentId === null || $normalizedParentId === $projectId) {
+        return null;
+    }
+
+    return $normalizedParentId;
+}
+
+function app_normalize_project_type_value($value): ?string
+{
+    $normalized = app_normalize_project_nullable_string($value);
+    if ($normalized === null) {
+        return null;
+    }
+
+    $allowedTypes = [
+        'Maintenance',
+        'Evolution',
+        'Projet transverse',
+        'Projet non transverse',
+    ];
+
+    return in_array($normalized, $allowedTypes, true) ? $normalized : null;
 }
 
 function app_normalize_project_json_array($value): array
@@ -733,6 +753,81 @@ function app_normalize_project_hex_color($value): string
     }
 
     return '#' . $hex;
+}
+
+function app_fetch_project_parent_map(): array
+{
+    app_ensure_projects_schema();
+
+    $statement = app_db()->query('SELECT id, parentProjectId FROM projets');
+    $parentMap = [];
+
+    foreach ($statement->fetchAll() as $row) {
+        $projectId = trim((string) ($row['id'] ?? ''));
+        if ($projectId === '') {
+            continue;
+        }
+
+        $parentMap[$projectId] = app_normalize_project_parent_id($row['parentProjectId'] ?? null, $projectId);
+    }
+
+    return $parentMap;
+}
+
+function app_validate_project_relationships(array $projects): void
+{
+    if ($projects === []) {
+        return;
+    }
+
+    $parentMap = app_fetch_project_parent_map();
+    $knownProjectIds = [];
+
+    foreach (array_keys($parentMap) as $projectId) {
+        $knownProjectIds[$projectId] = true;
+    }
+
+    foreach ($projects as $project) {
+        $projectId = trim((string) ($project['id'] ?? ''));
+        if ($projectId === '') {
+            continue;
+        }
+
+        $knownProjectIds[$projectId] = true;
+    }
+
+    foreach ($projects as $project) {
+        $projectId = trim((string) ($project['id'] ?? ''));
+        if ($projectId === '') {
+            continue;
+        }
+
+        $parentProjectId = app_normalize_project_parent_id($project['parentProjectId'] ?? null, $projectId);
+        if ($parentProjectId === null) {
+            $parentMap[$projectId] = null;
+            continue;
+        }
+
+        if (!isset($knownProjectIds[$parentProjectId])) {
+            throw new InvalidArgumentException('Le projet parent sélectionné est introuvable.');
+        }
+
+        $parentMap[$projectId] = $parentProjectId;
+    }
+
+    foreach ($parentMap as $projectId => $parentProjectId) {
+        $visitedIds = [$projectId => true];
+        $cursorId = $parentProjectId;
+
+        while ($cursorId !== null && $cursorId !== '') {
+            if (isset($visitedIds[$cursorId])) {
+                throw new InvalidArgumentException('Un projet ne peut pas être rattaché à l\'un de ses sous-projets.');
+            }
+
+            $visitedIds[$cursorId] = true;
+            $cursorId = $parentMap[$cursorId] ?? null;
+        }
+    }
 }
 
 function app_write_projects_json_mirror(array $projects): void
