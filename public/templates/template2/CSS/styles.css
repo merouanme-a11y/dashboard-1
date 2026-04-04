@@ -1352,8 +1352,14 @@ html.dark .site-brand-logo:not(.has-image-logo) {
     display: none;
 }
 
-.app-container.is-sidebar-collapsed .sidebar-nav {
+.app-container.is-sidebar-collapsed .app-sidebar,
+.app-container.is-sidebar-collapsed .sidebar-shell {
     overflow: visible;
+}
+
+.app-container.is-sidebar-collapsed .sidebar-nav {
+    overflow-x: visible;
+    overflow-y: auto;
 }
 
 .app-container.is-sidebar-collapsed .nav-submenu {

@@ -28,8 +28,45 @@
             --ldc-text-muted: var(--text-secondary);
             --ldc-text-light: var(--text-muted);
             --ldc-shadow: 0 1px 3px var(--shadow);
+            --ldc-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+            --ldc-card-border: rgba(148, 163, 184, 0.18);
+            --ldc-card-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+            --ldc-card-shadow-hover: 0 14px 28px rgba(15, 23, 42, 0.08);
+            --ldc-card-accent-default: rgba(148, 163, 184, 0.5);
+            --ldc-card-especes-bg: linear-gradient(180deg, rgba(236, 253, 245, 0.96), rgba(255, 255, 255, 0.98));
+            --ldc-card-especes-accent: rgba(16, 185, 129, 0.55);
+            --ldc-card-cheque-bg: linear-gradient(180deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.98));
+            --ldc-card-cheque-accent: rgba(59, 130, 246, 0.5);
+            --ldc-card-cb-bg: linear-gradient(180deg, rgba(245, 243, 255, 0.96), rgba(255, 255, 255, 0.98));
+            --ldc-card-cb-accent: rgba(99, 102, 241, 0.5);
+            --ldc-card-prelever-bg: linear-gradient(180deg, rgba(255, 247, 237, 0.96), rgba(255, 255, 255, 0.98));
+            --ldc-card-prelever-accent: rgba(249, 115, 22, 0.5);
+            --ldc-card-offert-bg: linear-gradient(180deg, rgba(254, 242, 242, 0.96), rgba(255, 255, 255, 0.98));
+            --ldc-card-offert-accent: rgba(239, 68, 68, 0.45);
+            --ldc-card-appel-bg: linear-gradient(180deg, rgba(250, 245, 255, 0.96), rgba(255, 255, 255, 0.98));
+            --ldc-card-appel-accent: rgba(168, 85, 247, 0.45);
             gap: 1.25rem;
             max-width: none;
+        }
+
+        html.dark .ldc-page {
+            --ldc-card-bg: linear-gradient(180deg, rgba(51, 65, 85, 0.9), rgba(30, 41, 59, 0.96));
+            --ldc-card-border: rgba(148, 163, 184, 0.14);
+            --ldc-card-shadow: 0 12px 26px rgba(2, 6, 23, 0.24);
+            --ldc-card-shadow-hover: 0 16px 32px rgba(2, 6, 23, 0.34);
+            --ldc-card-accent-default: rgba(148, 163, 184, 0.42);
+            --ldc-card-especes-bg: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(30, 41, 59, 0.96));
+            --ldc-card-especes-accent: rgba(52, 211, 153, 0.7);
+            --ldc-card-cheque-bg: linear-gradient(180deg, rgba(59, 130, 246, 0.14), rgba(30, 41, 59, 0.96));
+            --ldc-card-cheque-accent: rgba(96, 165, 250, 0.7);
+            --ldc-card-cb-bg: linear-gradient(180deg, rgba(99, 102, 241, 0.14), rgba(30, 41, 59, 0.96));
+            --ldc-card-cb-accent: rgba(129, 140, 248, 0.7);
+            --ldc-card-prelever-bg: linear-gradient(180deg, rgba(249, 115, 22, 0.14), rgba(30, 41, 59, 0.96));
+            --ldc-card-prelever-accent: rgba(251, 146, 60, 0.72);
+            --ldc-card-offert-bg: linear-gradient(180deg, rgba(239, 68, 68, 0.14), rgba(30, 41, 59, 0.96));
+            --ldc-card-offert-accent: rgba(248, 113, 113, 0.68);
+            --ldc-card-appel-bg: linear-gradient(180deg, rgba(168, 85, 247, 0.14), rgba(30, 41, 59, 0.96));
+            --ldc-card-appel-accent: rgba(192, 132, 252, 0.68);
         }
 
         .ldc-page .panel,
@@ -86,10 +123,20 @@
         }
 
         .ldc-page .caisse-card {
-            background: var(--bg-primary);
-            border: 1px solid var(--border);
+            background: var(--ldc-card-bg);
+            border: 1px solid var(--ldc-card-border);
             border-radius: 12px;
-            box-shadow: none;
+            box-shadow: var(--ldc-card-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ldc-page .caisse-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 4px;
+            background: var(--ldc-card-accent-default);
         }
 
         .ldc-page .caisse-card-title,
@@ -107,7 +154,59 @@
         .ldc-page .caisse-card.is-prelever,
         .ldc-page .caisse-card.is-offert,
         .ldc-page .caisse-card.is-appel {
-            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .ldc-page .caisse-card.is-especes {
+            background: var(--ldc-card-especes-bg);
+        }
+
+        .ldc-page .caisse-card.is-especes::before {
+            background: var(--ldc-card-especes-accent);
+        }
+
+        .ldc-page .caisse-card.is-cheque {
+            background: var(--ldc-card-cheque-bg);
+        }
+
+        .ldc-page .caisse-card.is-cheque::before {
+            background: var(--ldc-card-cheque-accent);
+        }
+
+        .ldc-page .caisse-card.is-cb {
+            background: var(--ldc-card-cb-bg);
+        }
+
+        .ldc-page .caisse-card.is-cb::before {
+            background: var(--ldc-card-cb-accent);
+        }
+
+        .ldc-page .caisse-card.is-prelever {
+            background: var(--ldc-card-prelever-bg);
+        }
+
+        .ldc-page .caisse-card.is-prelever::before {
+            background: var(--ldc-card-prelever-accent);
+        }
+
+        .ldc-page .caisse-card.is-offert {
+            background: var(--ldc-card-offert-bg);
+        }
+
+        .ldc-page .caisse-card.is-offert::before {
+            background: var(--ldc-card-offert-accent);
+        }
+
+        .ldc-page .caisse-card.is-appel {
+            background: var(--ldc-card-appel-bg);
+        }
+
+        .ldc-page .caisse-card.is-appel::before {
+            background: var(--ldc-card-appel-accent);
+        }
+
+        .ldc-page .caisse-card:hover {
+            box-shadow: var(--ldc-card-shadow-hover);
             color: var(--text-primary);
         }
 

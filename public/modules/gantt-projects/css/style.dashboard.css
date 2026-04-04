@@ -26,6 +26,11 @@
     --overlay: rgba(18, 31, 33, 0.5);
     --white: #fffdf8;
     --shadow: 0 18px 55px rgba(40, 58, 59, 0.14);
+    --reorder-cursor-start: rgba(92, 168, 255, 0.92);
+    --reorder-cursor-end: rgba(143, 124, 255, 0.92);
+    --reorder-cursor-outline: rgba(255, 255, 255, 0.14);
+    --reorder-cursor-glow: rgba(92, 168, 255, 0.28);
+    --reorder-cursor-dot-glow: rgba(92, 168, 255, 0.16);
     --radius-xl: 28px;
     --font-body: "Inter", "Segoe UI", sans-serif;
     --font-heading: "Poppins", "Inter", sans-serif;
@@ -60,6 +65,11 @@ html.dark .gantt-dashboard-page:not(.theme-light),
     --overlay: rgba(5, 8, 19, 0.74);
     --white: #ffffff;
     --shadow: 0 22px 60px rgba(0, 0, 0, 0.36);
+    --reorder-cursor-start: rgba(251, 191, 36, 0.98);
+    --reorder-cursor-end: rgba(249, 115, 22, 0.98);
+    --reorder-cursor-outline: rgba(255, 245, 210, 0.22);
+    --reorder-cursor-glow: rgba(249, 115, 22, 0.38);
+    --reorder-cursor-dot-glow: rgba(251, 191, 36, 0.26);
 }
 
 .gantt-dashboard-page.theme-light{
@@ -938,6 +948,7 @@ body.gantt-planning-layout-hidden .app-content > .gantt-dashboard-page{
 .gantt-dashboard-page .timeline-row{
     min-height: calc(44px * var(--timeline-scale));
     border-bottom: 1px solid var(--line);
+    position: relative;
 }
 
 .gantt-dashboard-page .timeline-row.is-drop-target .lane{
@@ -950,6 +961,31 @@ body.gantt-planning-layout-hidden .app-content > .gantt-dashboard-page{
 
 .gantt-dashboard-page .timeline-row.is-child-drop-target .row-label{
     background: linear-gradient(90deg, rgba(54, 211, 153, 0.14), rgba(54, 211, 153, 0.04));
+}
+
+.gantt-dashboard-page .timeline-row.is-row-reorder-target-before::after,
+.gantt-dashboard-page .timeline-row.is-row-reorder-target-after::after{
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--reorder-cursor-start), var(--reorder-cursor-end));
+    box-shadow: 0 0 0 1px var(--reorder-cursor-outline), 0 6px 16px var(--reorder-cursor-glow);
+    pointer-events: none;
+    z-index: 12;
+}
+
+.gantt-dashboard-page .timeline-row.is-row-reorder-target-before::after{
+    top: -2px;
+}
+
+.gantt-dashboard-page .timeline-row.is-row-reorder-target-after::after{
+    bottom: -2px;
+}
+
+.gantt-dashboard-page .timeline-row.is-row-reordering{
+    opacity: 0.66;
 }
 
 .gantt-dashboard-page .row-label{
@@ -1019,6 +1055,38 @@ body.gantt-planning-layout-hidden .app-content > .gantt-dashboard-page{
 
 .gantt-dashboard-page .project-tree-label{
     position: relative;
+}
+
+.gantt-dashboard-page .timeline-row-reorder-handle{
+    flex: 0 0 auto;
+    width: calc(26px * var(--timeline-scale));
+    height: calc(26px * var(--timeline-scale));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    cursor: grab;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.gantt-dashboard-page .timeline-row-reorder-handle:hover,
+.gantt-dashboard-page .timeline-row-reorder-handle:focus-visible{
+    background: rgba(92, 168, 255, 0.12);
+    border-color: rgba(92, 168, 255, 0.18);
+    color: var(--accent-blue);
+    outline: none;
+}
+
+.gantt-dashboard-page .timeline-row-reorder-handle:active{
+    cursor: grabbing;
+}
+
+.gantt-dashboard-page .timeline-row-reorder-handle .bi{
+    pointer-events: none;
+    line-height: 1;
 }
 
 .gantt-dashboard-page .timeline-tree-indent{

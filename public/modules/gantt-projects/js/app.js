@@ -56,6 +56,7 @@ const PROJECT_TYPES = [
     "Projet non transverse"
 ];
 const PROJECT_MODAL_DEFAULT_HELP = "La timeline reste alignée sur des demi-mois, mais vous pouvez piloter ici les dates de début et de fin du projet.";
+const TIMELINE_ROW_REORDER_MIME = "application/x-gantt-row-reorder";
 const EMPTY_PROJECT_TYPE_FILTER = "__empty__";
 
 const DEFAULT_PROJECT_TASK_COLUMNS = ["idReadable", "summary", "assignee", "dueDate", "state"];
@@ -221,6 +222,7 @@ const TIMELINE_ZOOM_STEP = 0.1;
 const TIMELINE_ZOOM_MIN = 0.7;
 const TIMELINE_ZOOM_MAX = 1.5;
 let interaction = null;
+let timelineRowReorder = null;
 let appStarted = false;
 let projectsSyncTimeout = null;
 let projectsSyncInFlight = false;
@@ -996,6 +998,8 @@ function bindStaticEvents() {
     dom.timelineRows.addEventListener("dragover", onTimelineDragOver);
     dom.timelineRows.addEventListener("dragleave", onTimelineDragLeave);
     dom.timelineRows.addEventListener("drop", onTimelineDrop);
+    dom.timelineRows.addEventListener("dragstart", onTimelineRowReorderDragStart);
+    dom.timelineRows.addEventListener("dragend", onTimelineRowReorderDragEnd);
     dom.timelineRows.addEventListener("click", onTimelineClick);
     dom.timelineRows.addEventListener("pointerdown", onTimelinePointerDown);
 
@@ -1154,10 +1158,22 @@ function renderScheduledRow(rowData) {
     const projectTypeMarkup = project.projectType
         ? `<span class="chip project-type-chip">${escapeHtml(project.projectType)}</span>`
         : "";
+    const reorderHandleMarkup = `
+        <button
+            class="timeline-row-reorder-handle"
+            type="button"
+            draggable="true"
+            data-row-reorder-handle="${escapeHtml(project.id)}"
+            aria-label="Changer l'ordre du projet ${escapeHtml(project.title || project.ref || project.id)}"
+            title="Changer l'ordre dans la timeline"
+        >
+            <i class="bi bi-grip-vertical" aria-hidden="true"></i>
+        </button>`;
 
     return `
         <div class="${rowClasses.join(" ")}" data-project-id="${escapeHtml(project.id)}" style="--tree-depth:${depth};">
             <div class="row-label timeline-sticky compact-row-label project-tree-label">
+                ${reorderHandleMarkup}
                 <span class="timeline-tree-indent" aria-hidden="true"></span>
                 <h3>${escapeHtml(rowTitle || project.title || project.ref || "Projet sans nom")}</h3>
                 <div class="service-line compact-inline">
@@ -1518,6 +1534,34 @@ function onProjectStatusEditorFocusOut(event) {
 }
 
 function onTimelineDragOver(event) {
+    const rowReorderProjectId = timelineRowReorder?.projectId
+        || event.dataTransfer?.getData(TIMELINE_ROW_REORDER_MIME)
+        || "";
+    if (rowReorderProjectId) {
+        const rowReorderDropTarget = getTimelineRowReorderDropTarget(event, rowReorderProjectId);
+        const parentDropTarget = getTimelineParentDropTargetFromElement(event.target, rowReorderProjectId);
+        if (!rowReorderDropTarget && !parentDropTarget) {
+            return;
+        }
+
+        event.preventDefault();
+        clearDropTargets();
+
+        if (rowReorderDropTarget) {
+            rowReorderDropTarget.row.classList.add(
+                rowReorderDropTarget.position === "before"
+                    ? "is-row-reorder-target-before"
+                    : "is-row-reorder-target-after"
+            );
+            return;
+        }
+
+        if (parentDropTarget?.row) {
+            parentDropTarget.row.classList.add("is-child-drop-target");
+        }
+        return;
+    }
+
     const draggedProjectId = event.dataTransfer?.getData("text/plain") || "";
     const parentDropTarget = getTimelineParentDropTargetFromElement(event.target, draggedProjectId);
     const lane = event.target.closest(".lane");
@@ -1546,10 +1590,53 @@ function onTimelineDragLeave(event) {
     if (currentRow && currentRow !== nextRow) {
         currentRow.classList.remove("is-drop-target");
         currentRow.classList.remove("is-child-drop-target");
+        currentRow.classList.remove("is-row-reorder-target-before");
+        currentRow.classList.remove("is-row-reorder-target-after");
     }
 }
 
 function onTimelineDrop(event) {
+    const rowReorderProjectId = timelineRowReorder?.projectId
+        || event.dataTransfer?.getData(TIMELINE_ROW_REORDER_MIME)
+        || "";
+    if (rowReorderProjectId) {
+        const rowReorderDropTarget = getTimelineRowReorderDropTarget(event, rowReorderProjectId);
+        const parentDropTarget = getTimelineParentDropTargetFromElement(event.target, rowReorderProjectId);
+        if (!rowReorderDropTarget && !parentDropTarget) {
+            return;
+        }
+
+        event.preventDefault();
+        clearDropTargets();
+
+        const project = findProject(rowReorderProjectId);
+        if (!project) {
+            return;
+        }
+
+        if (rowReorderDropTarget) {
+            const targetProject = findProject(rowReorderDropTarget.projectId);
+            if (!targetProject) {
+                return;
+            }
+
+            if (moveTimelineProjectRelativeTo(project, targetProject, rowReorderDropTarget.position)) {
+                persistState();
+                render();
+            }
+            return;
+        }
+
+        if (parentDropTarget) {
+            const parentProject = findProject(parentDropTarget.projectId);
+            if (parentProject && assignProjectToParent(project, parentProject, { expandParent: true })) {
+                persistState();
+                render();
+            }
+        }
+        return;
+    }
+
     const lane = event.target.closest(".lane");
     const projectId = event.dataTransfer.getData("text/plain");
     const project = findProject(projectId);
@@ -1592,6 +1679,10 @@ function onTimelineDrop(event) {
 }
 
 function onTimelineClick(event) {
+    if (event.target.closest("[data-row-reorder-handle]")) {
+        return;
+    }
+
     const treeToggle = event.target.closest("[data-toggle-children]");
     if (treeToggle) {
         toggleTimelineProjectExpanded(treeToggle.dataset.toggleChildren);
@@ -1714,7 +1805,7 @@ function onPointerMove(event) {
     previewBar(interaction.barElement, nextStartIndex, nextDuration);
 
     if (interaction.type === "move") {
-        syncPointerParentDropTarget(event.clientX, event.clientY, interaction.projectId);
+        syncPointerTimelineDropTarget(event.clientX, event.clientY, interaction.projectId);
     } else {
         clearDropTargets();
     }
@@ -1728,12 +1819,23 @@ function onPointerUp(event) {
     const project = findProject(interaction.projectId);
     if (project) {
         const shouldOpenModal = interaction.type === "move" && !interaction.moved;
+        const rowReorderDropTarget = interaction.type === "move" && interaction.moved
+            ? getTimelineRowReorderDropTargetFromPoint(event.clientX, event.clientY, interaction.projectId)
+            : null;
         const parentDropTarget = interaction.type === "move" && interaction.moved
             ? getTimelineParentDropTargetFromPoint(event.clientX, event.clientY, interaction.projectId)
             : null;
 
         if (shouldOpenModal) {
             openProjectModal(project);
+        } else if (rowReorderDropTarget) {
+            const targetProject = findProject(rowReorderDropTarget.projectId);
+            if (targetProject && moveTimelineProjectRelativeTo(project, targetProject, rowReorderDropTarget.position)) {
+                persistState();
+                render();
+            } else {
+                render();
+            }
         } else if (parentDropTarget) {
             const parentProject = findProject(parentDropTarget.projectId);
             if (parentProject && assignProjectToParent(project, parentProject, { expandParent: true })) {
@@ -1755,6 +1857,44 @@ function onPointerUp(event) {
     interaction = null;
     clearDropTargets();
     removeRootClass("is-scrubbing");
+}
+
+function onTimelineRowReorderDragStart(event) {
+    const handle = event.target.closest("[data-row-reorder-handle]");
+    if (!handle) {
+        return;
+    }
+
+    const projectId = String(handle.dataset.rowReorderHandle || "").trim();
+    const project = findProject(projectId);
+    if (!project || !isScheduled(project)) {
+        event.preventDefault();
+        return;
+    }
+
+    timelineRowReorder = { projectId };
+    event.dataTransfer?.setData(TIMELINE_ROW_REORDER_MIME, projectId);
+    event.dataTransfer?.setData("text/plain", projectId);
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+    }
+
+    handle.closest(".timeline-row")?.classList.add("is-row-reordering");
+    addRootClass("is-row-reordering");
+}
+
+function onTimelineRowReorderDragEnd(event) {
+    if (!timelineRowReorder) {
+        return;
+    }
+
+    event.target.closest(".timeline-row")?.classList.remove("is-row-reordering");
+    dom.timelineRows
+        .querySelectorAll(".timeline-row.is-row-reordering")
+        .forEach((row) => row.classList.remove("is-row-reordering"));
+    timelineRowReorder = null;
+    clearDropTargets();
+    removeRootClass("is-row-reordering");
 }
 
 function scheduleProject(project, slotIndex, options = {}) {
@@ -3494,6 +3634,56 @@ function clearProjectSchedule(project, options = {}) {
     }
 }
 
+function getProjectSubtreeProjects(projectId, options = {}) {
+    const normalizedProjectId = String(projectId || "").trim();
+    if (!normalizedProjectId) {
+        return [];
+    }
+
+    const scheduledOnly = options.scheduledOnly === true;
+    const subtreeProjects = [];
+    const projectIdsToVisit = [normalizedProjectId];
+    const visitedProjectIds = new Set();
+
+    while (projectIdsToVisit.length > 0) {
+        const currentProjectId = projectIdsToVisit.shift();
+        if (!currentProjectId || visitedProjectIds.has(currentProjectId)) {
+            continue;
+        }
+
+        visitedProjectIds.add(currentProjectId);
+        const project = findProject(currentProjectId);
+        if (!project) {
+            continue;
+        }
+
+        if (!scheduledOnly || isScheduled(project)) {
+            subtreeProjects.push(project);
+        }
+
+        getProjectChildren(currentProjectId, { scheduledOnly }).forEach((childProject) => {
+            projectIdsToVisit.push(childProject.id);
+        });
+    }
+
+    return subtreeProjects;
+}
+
+function getProjectSubtreeProjectIds(projectId, options = {}) {
+    return new Set(getProjectSubtreeProjects(projectId, options).map((project) => project.id));
+}
+
+function getProjectSubtreeMaxLane(projectId) {
+    const subtreeProjects = getProjectSubtreeProjects(projectId, { scheduledOnly: true })
+        .filter((project) => Number.isFinite(project.lane));
+
+    if (!subtreeProjects.length) {
+        return null;
+    }
+
+    return Math.max(...subtreeProjects.map((project) => Number(project.lane)));
+}
+
 function sanitizeDuration(value) {
     if (!Number.isFinite(Number(value))) {
         return null;
@@ -3589,6 +3779,95 @@ function syncProjectScheduleHierarchy(project) {
     syncChildProjectSchedules(project.id);
     normalizeLanes();
     sanitizeExpandedProjectIds();
+}
+
+function getTimelineRowReorderDropTarget(event, draggedProjectId) {
+    const normalizedDraggedProjectId = String(draggedProjectId || "").trim();
+    if (!normalizedDraggedProjectId) {
+        return null;
+    }
+
+    const draggedSubtreeProjectIds = getProjectSubtreeProjectIds(normalizedDraggedProjectId, { scheduledOnly: true });
+    const rows = Array.from(dom.timelineRows.querySelectorAll(".timeline-row[data-project-id]"));
+    let bestCandidate = null;
+
+    rows.forEach((row) => {
+        const targetProjectId = String(row.dataset.projectId || "").trim();
+        if (!targetProjectId || targetProjectId === normalizedDraggedProjectId || draggedSubtreeProjectIds.has(targetProjectId)) {
+            return;
+        }
+
+        const rect = row.getBoundingClientRect();
+        const insertionThreshold = Math.min(12, Math.max(6, Math.round(rect.height * 0.18)));
+        const distanceToTop = Math.abs(event.clientY - rect.top);
+        const distanceToBottom = Math.abs(event.clientY - rect.bottom);
+
+        if (distanceToTop <= insertionThreshold) {
+            if (!bestCandidate || distanceToTop < bestCandidate.distance) {
+                bestCandidate = {
+                    row,
+                    projectId: targetProjectId,
+                    position: "before",
+                    distance: distanceToTop
+                };
+            }
+        }
+
+        if (distanceToBottom <= insertionThreshold) {
+            if (!bestCandidate || distanceToBottom < bestCandidate.distance) {
+                bestCandidate = {
+                    row,
+                    projectId: targetProjectId,
+                    position: "after",
+                    distance: distanceToBottom
+                };
+            }
+        }
+    });
+
+    if (!bestCandidate) {
+        return null;
+    }
+
+    return {
+        row: bestCandidate.row,
+        projectId: bestCandidate.projectId,
+        position: bestCandidate.position
+    };
+}
+
+function moveTimelineProjectRelativeTo(project, targetProject, position) {
+    if (!project || !targetProject || !["before", "after"].includes(position)) {
+        return false;
+    }
+
+    const nextParentProjectId = normalizeProjectParentId(targetProject.parentProjectId, targetProject.id || "");
+    if (
+        nextParentProjectId
+        && (project.id === nextParentProjectId || wouldCreateProjectCycle(project.id, nextParentProjectId))
+    ) {
+        window.alert("Un projet ne peut pas être déplacé dans l'un de ses propres sous-projets.");
+        return false;
+    }
+
+    const anchorLane = position === "after"
+        ? getProjectSubtreeMaxLane(targetProject.id)
+        : targetProject.lane;
+    const fallbackLane = Number.isFinite(targetProject.lane) ? Number(targetProject.lane) : getNextLane();
+
+    project.parentProjectId = nextParentProjectId;
+    project.lane = position === "before"
+        ? (Number.isFinite(anchorLane) ? Number(anchorLane) - 0.5 : fallbackLane - 0.5)
+        : (Number.isFinite(anchorLane) ? Number(anchorLane) + 0.5 : fallbackLane + 0.5);
+
+    syncProjectScheduleHierarchy(project);
+
+    if (nextParentProjectId) {
+        setTimelineProjectExpanded(nextParentProjectId, true, { persist: false, render: false });
+        expandTimelineAncestors(nextParentProjectId);
+    }
+
+    return true;
 }
 
 function assignProjectToParent(project, parentProject, options = {}) {
@@ -6097,8 +6376,25 @@ function getTimelineParentDropTargetFromPoint(clientX, clientY, draggedProjectId
     return getTimelineParentDropTargetFromElement(document.elementFromPoint(clientX, clientY), draggedProjectId);
 }
 
-function syncPointerParentDropTarget(clientX, clientY, draggedProjectId = "") {
+function getTimelineRowReorderDropTargetFromPoint(clientX, clientY, draggedProjectId = "") {
+    return getTimelineRowReorderDropTarget({
+        clientY,
+        target: document.elementFromPoint(clientX, clientY)
+    }, draggedProjectId);
+}
+
+function syncPointerTimelineDropTarget(clientX, clientY, draggedProjectId = "") {
     clearDropTargets();
+    const rowReorderDropTarget = getTimelineRowReorderDropTargetFromPoint(clientX, clientY, draggedProjectId);
+    if (rowReorderDropTarget?.row) {
+        rowReorderDropTarget.row.classList.add(
+            rowReorderDropTarget.position === "before"
+                ? "is-row-reorder-target-before"
+                : "is-row-reorder-target-after"
+        );
+        return;
+    }
+
     const parentDropTarget = getTimelineParentDropTargetFromPoint(clientX, clientY, draggedProjectId);
     if (parentDropTarget?.row) {
         parentDropTarget.row.classList.add("is-child-drop-target");
@@ -6106,9 +6402,11 @@ function syncPointerParentDropTarget(clientX, clientY, draggedProjectId = "") {
 }
 
 function clearDropTargets() {
-    dom.timelineRows.querySelectorAll(".is-drop-target, .is-child-drop-target").forEach((row) => {
+    dom.timelineRows.querySelectorAll(".is-drop-target, .is-child-drop-target, .is-row-reorder-target-before, .is-row-reorder-target-after").forEach((row) => {
         row.classList.remove("is-drop-target");
         row.classList.remove("is-child-drop-target");
+        row.classList.remove("is-row-reorder-target-before");
+        row.classList.remove("is-row-reorder-target-after");
     });
 }
 
