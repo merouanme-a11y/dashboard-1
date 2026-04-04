@@ -140,13 +140,16 @@ class MenuConfigService
 
         $storage = $this->loadMenuConfigStorage();
         $menuStorage = $storage['menus'][$menuType] ?? $this->createEmptyMenuStorageBucket($menuType);
-        $defaultMenu = $menuStorage['default'] !== [] ? $menuStorage['default'] : $this->getDefaultMenuConfigByType($menuType);
+        $defaultMenu = $this->normalizeResolvedMenuItems(
+            $menuStorage['default'] !== [] ? $menuStorage['default'] : $this->getDefaultMenuConfigByType($menuType),
+            $menuType
+        );
 
         if ($selectorType === 'user' && $selectorValue !== '') {
             if (array_key_exists($selectorValue, $menuStorage['users'])) {
                 return $this->resolvedMenuConfigCache[$cacheKey] = [
                     'menu_type' => $menuType,
-                    'menu' => $menuStorage['users'][$selectorValue],
+                    'menu' => $this->normalizeResolvedMenuItems($menuStorage['users'][$selectorValue], $menuType),
                     'scope' => 'user',
                     'source' => 'user',
                     'source_label' => 'Configuration specifique utilisateur',
@@ -158,7 +161,7 @@ class MenuConfigService
             if ($profileType !== '' && array_key_exists($profileType, $menuStorage['profiles'])) {
                 return $this->resolvedMenuConfigCache[$cacheKey] = [
                     'menu_type' => $menuType,
-                    'menu' => $menuStorage['profiles'][$profileType],
+                    'menu' => $this->normalizeResolvedMenuItems($menuStorage['profiles'][$profileType], $menuType),
                     'scope' => 'user',
                     'source' => 'profile',
                     'source_label' => 'Herite du profil ' . $profileType,
@@ -179,7 +182,7 @@ class MenuConfigService
             if (array_key_exists($selectorValue, $menuStorage['profiles'])) {
                 return $this->resolvedMenuConfigCache[$cacheKey] = [
                     'menu_type' => $menuType,
-                    'menu' => $menuStorage['profiles'][$selectorValue],
+                    'menu' => $this->normalizeResolvedMenuItems($menuStorage['profiles'][$selectorValue], $menuType),
                     'scope' => 'profile',
                     'source' => 'profile',
                     'source_label' => 'Configuration specifique profil',
@@ -868,6 +871,36 @@ class MenuConfigService
         }
 
         return $normalized;
+    }
+
+    private function normalizeResolvedMenuItems(array $menu, string $menuType): array
+    {
+        $menuType = $this->normalizeMenuType($menuType);
+        if ($menuType !== 'sidebar') {
+            return $this->normalizeMenuHierarchy($menu);
+        }
+
+        $normalized = $this->normalizeMenuHierarchy($menu);
+        $existingPages = [];
+
+        foreach ($normalized as $item) {
+            $page = trim((string) ($item['page'] ?? ''));
+            if ($page !== '') {
+                $existingPages[$page] = true;
+            }
+        }
+
+        foreach ($this->buildDefaultSidebarMenuConfig() as $defaultItem) {
+            $page = trim((string) ($defaultItem['page'] ?? ''));
+            if ($page === '' || isset($existingPages[$page])) {
+                continue;
+            }
+
+            $normalized[] = $defaultItem;
+            $existingPages[$page] = true;
+        }
+
+        return $this->normalizeMenuHierarchy($normalized);
     }
 
     private function isMenuConfigList(mixed $value): bool
