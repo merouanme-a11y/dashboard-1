@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/meha0348/public_html
+    - /bin/mkdir -p "$DEPLOYPATH"
+    - /usr/bin/rsync -a --exclude='.git/' --exclude='.cpanel.yml' ./ "$DEPLOYPATH"/
