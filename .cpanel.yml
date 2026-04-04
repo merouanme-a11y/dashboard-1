@@ -5,6 +5,7 @@ deployment:
     - export REPOPATH=/home/meha0348/repositories/dashboard-1
     - /bin/mkdir -p "$DEPLOYPATH"
     - /usr/bin/rsync -a --exclude='.git/' --exclude='.cpanel.yml' ./ "$DEPLOYPATH"/
+    - /bin/sh -c 'if [ -f "$DEPLOYPATH/vendor/autoload.php" ] && [ ! -f "$REPOPATH/vendor/autoload.php" ]; then /usr/bin/rsync -a "$DEPLOYPATH/vendor/" "$REPOPATH/vendor/"; fi; if [ -f "$REPOPATH/vendor/autoload.php" ] && [ ! -f "$DEPLOYPATH/vendor/autoload.php" ]; then /usr/bin/rsync -a "$REPOPATH/vendor/" "$DEPLOYPATH/vendor/"; fi'
     - /bin/sh -c 'chmod 711 /home/meha0348 || true'
     - /bin/sh -c 'chmod 755 /home/meha0348/repositories || true'
     - /bin/sh -c 'for target in "$REPOPATH" "$DEPLOYPATH"; do if [ -d "$target" ]; then find "$target" -type d -exec chmod 755 {} \; && find "$target" -type f -exec chmod 644 {} \; ; fi; done'
