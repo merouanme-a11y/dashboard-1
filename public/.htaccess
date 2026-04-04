@@ -2,7 +2,7 @@
     SetEnv APP_ENV prod
     SetEnv APP_DEBUG 0
     SetEnv APP_HTTP_CACHE 0
-    SetEnv DEFAULT_URI https://khaki-ant-895855.hostingersite.com
+    SetEnv DEFAULT_URI https://merouan.meha0348.odns.fr
     SetEnv XDEBUG_MODE off
 </IfModule>
 

@@ -4,4 +4,8 @@ deployment:
     - export DEPLOYPATH=/home/meha0348/public_html
     - /bin/mkdir -p "$DEPLOYPATH"
     - /usr/bin/rsync -a --exclude='.git/' --exclude='.cpanel.yml' ./ "$DEPLOYPATH"/
+    - /bin/sh -c 'find "$DEPLOYPATH" -type d -exec chmod 755 {} \;'
+    - /bin/sh -c 'find "$DEPLOYPATH" -type f -exec chmod 644 {} \;'
+    - /bin/sh -c 'if [ -f "$DEPLOYPATH/.htaccess" ]; then chmod 644 "$DEPLOYPATH/.htaccess"; fi'
+    - /bin/sh -c 'if [ -f "$DEPLOYPATH/public/.htaccess" ]; then chmod 644 "$DEPLOYPATH/public/.htaccess"; fi'
     - /bin/sh -c 'cd "$DEPLOYPATH" && if command -v php >/dev/null 2>&1; then APP_ENV=prod APP_DEBUG=0 php bin/console cache:clear --env=prod --no-debug; fi'
