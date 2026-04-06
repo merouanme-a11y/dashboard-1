@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Utilisateur;
 use App\Repository\UtilisateurRepository;
 use App\Service\GanttLegacyRuntime;
+use App\Service\GanttViewStateService;
 use App\Service\ModuleService;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -21,6 +22,7 @@ final class GanttProjectsController extends AbstractController
     public function __construct(
         private ModuleService $moduleService,
         private GanttLegacyRuntime $ganttLegacyRuntime,
+        private GanttViewStateService $ganttViewStateService,
         private UtilisateurRepository $utilisateurRepository,
         private KernelInterface $kernel,
     ) {}
@@ -46,9 +48,11 @@ final class GanttProjectsController extends AbstractController
                 ),
                 'availableProfiles' => $this->utilisateurRepository->findDistinctProfileTypes(),
                 'sharedSettings' => $this->readSharedSettings(),
+                'sharedViewState' => $this->ganttViewStateService->getState(),
                 'routes' => [
                     'session' => $this->generateUrl('app_gantt_projects_session'),
                     'settings' => $this->generateUrl('app_gantt_projects_api_settings'),
+                    'viewState' => $this->generateUrl('app_gantt_projects_api_view_state'),
                     'projects' => $this->generateUrl('app_gantt_projects_api_projects'),
                     'createProject' => $this->generateUrl('app_gantt_projects_api_create_project'),
                     'projectUsers' => $this->generateUrl('app_gantt_projects_api_project_users'),

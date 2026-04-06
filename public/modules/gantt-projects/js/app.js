@@ -1,4 +1,4 @@
-﻿const STORAGE_KEY = "adep-gantt-planner-state-v1";
+﻿const STORAGE_KEY = "adep-gantt-planner-state-v2";
 const GANTT_CONFIG = window.__GANTT_CONFIG__ || {};
 const GANTT_ROUTE_CONFIG = GANTT_CONFIG.routes || {};
 const GANTT_BASE_URL = String(GANTT_CONFIG.baseUrl || "./gantt-projets").replace(/\/$/, "");
@@ -9,6 +9,7 @@ const GANTT_TICKET_DETAIL_URL_PATTERN = String(
 );
 const API_ROUTES = {
     session: String(GANTT_ROUTE_CONFIG.session || `${GANTT_BASE_URL}/api/session`),
+    viewState: String(GANTT_ROUTE_CONFIG.viewState || `${GANTT_BASE_URL}/api/view-state`),
     login: String(GANTT_ROUTE_CONFIG.login || `${GANTT_BASE_URL}/api/login`),
     logout: String(GANTT_ROUTE_CONFIG.logout || `${GANTT_BASE_URL}/api/logout`),
     projects: String(GANTT_ROUTE_CONFIG.projects || `${GANTT_BASE_URL}/api/projects`),
@@ -229,6 +230,9 @@ let appStarted = false;
 let projectsSyncTimeout = null;
 let projectsSyncInFlight = false;
 let projectsSyncQueued = false;
+let viewStateSyncTimeout = null;
+let viewStateSyncInFlight = false;
+let viewStateSyncQueued = false;
 let themeObserver = null;
 let projectModalTasksRequestToken = 0;
 let projectModalTeamRequestToken = 0;
@@ -371,14 +375,15 @@ async function startApplication() {
     appStarted = true;
 
     try {
-        const [seedProjects, servicesPayload, projectUsersPayload] = await Promise.all([
+        const [seedProjects, servicesPayload, projectUsersPayload, viewStatePayload] = await Promise.all([
             loadProjects(),
             loadServices().catch(() => ({ services: {} })),
-            loadProjectUsers().catch(() => ({ users: [] }))
+            loadProjectUsers().catch(() => ({ users: [] })),
+            loadViewState().catch(() => ({ settings: GANTT_CONFIG.sharedViewState || {} }))
         ]);
         applyServiceColors(servicesPayload?.services || {});
         state.projectUsers = Array.isArray(projectUsersPayload?.users) ? projectUsersPayload.users : [];
-        hydrateState(seedProjects, { preferSeedPlanning: true });
+        hydrateState(seedProjects, viewStatePayload?.settings || GANTT_CONFIG.sharedViewState || {});
         render();
     } catch (error) {
         console.error(error);
@@ -599,6 +604,10 @@ async function loadProjectUsers() {
     return rememberApiResponse("projectUsers", "all", FRONTEND_CACHE_TTLS.projectUsers, () => apiRequest(API_ROUTES.projectUsers));
 }
 
+async function loadViewState() {
+    return rememberApiResponse("viewState", "shared", 5_000, () => apiRequest(API_ROUTES.viewState));
+}
+
 async function loadYouTrackProjectTeam(projectKey) {
     const normalizedProjectKey = String(projectKey || "").trim();
     if (!normalizedProjectKey) {
@@ -751,7 +760,7 @@ async function onImportSourceFile(event) {
         const payload = await uploadSourceFile(file);
         const servicesPayload = await loadServices().catch(() => ({ services: {} }));
         applyServiceColors(servicesPayload?.services || {});
-        hydrateState(payload.projects || [], { preferSeedPlanning: true });
+        hydrateState(payload.projects || [], buildSharedViewStatePayload());
         persistState();
         render();
 
@@ -840,19 +849,12 @@ function clearApplicationData() {
     }
 }
 
-function hydrateState(seedProjects, options = {}) {
-    const savedState = readSavedState();
-    const savedSettings = { ...(savedState.settings || {}) };
-
-    // Force the drop default back to 1 month when an older browser state kept a larger value.
-    if (Number(savedSettings.defaultDuration) !== DEFAULT_SETTINGS.defaultDuration) {
-        savedSettings.defaultDuration = DEFAULT_SETTINGS.defaultDuration;
-    }
-
-    state.settings = { ...DEFAULT_SETTINGS, ...savedSettings };
+function hydrateState(seedProjects, sharedSettings = {}) {
+    state.settings = { ...DEFAULT_SETTINGS, ...(sharedSettings || {}) };
     state.settings.displayMode = normalizeDisplayMode(state.settings.displayMode);
     state.settings.backlogView = normalizeBacklogView(state.settings.backlogView);
     state.settings.expandedProjectIds = normalizeExpandedProjectIds(state.settings.expandedProjectIds);
+    state.settings.search = "";
 
     state.projects = seedProjects.map((project) => normalizeProjectForState(project));
 
@@ -3331,6 +3333,7 @@ function resetPlanning() {
 
     localStorage.removeItem(STORAGE_KEY);
     populateServiceFilter();
+    persistState();
     render();
 }
 
@@ -5615,6 +5618,7 @@ function syncProjectExactDatesWithSchedule(project) {
 function persistState() {
     writeSerializableStateToStorage();
     scheduleProjectsSync();
+    scheduleViewStateSync();
 }
 
 function writeSerializableStateToStorage() {
@@ -5717,6 +5721,26 @@ function buildProjectPersistencePayload(project) {
         ownerEmail: project.ownerEmail ?? null,
         teamMembers: getProjectTeamMembers(project),
         taskColumns: getProjectTaskColumns(project)
+    };
+}
+
+function buildSharedViewStatePayload() {
+    return {
+        timelineStart: state.settings.timelineStart,
+        visibleMonths: Number(state.settings.visibleMonths),
+        monthWidth: Number(state.settings.monthWidth),
+        timelineZoom: Number(getTimelineZoom()),
+        defaultDuration: Number(state.settings.defaultDuration),
+        showTodayMarker: state.settings.showTodayMarker !== false,
+        showTimelineProgress: state.settings.showTimelineProgress !== false,
+        showPlanningSidebar: state.settings.showPlanningSidebar !== false,
+        showSettingsPanel: state.settings.showSettingsPanel !== false,
+        displayMode: normalizeDisplayMode(state.settings.displayMode),
+        serviceFilter: String(state.settings.serviceFilter || "all"),
+        typeFilter: String(state.settings.typeFilter || "all"),
+        statusFilter: String(state.settings.statusFilter || "all"),
+        backlogView: normalizeBacklogView(state.settings.backlogView),
+        expandedProjectIds: normalizeExpandedProjectIds(state.settings.expandedProjectIds)
     };
 }
 
@@ -5893,6 +5917,50 @@ function getProjectStatusMeta(value, project = null) {
 
 function normalizeBacklogView(value) {
     return value === "table" ? "table" : "cards";
+}
+
+function scheduleViewStateSync() {
+    if (!appStarted) {
+        return;
+    }
+
+    viewStateSyncQueued = true;
+
+    if (viewStateSyncTimeout !== null) {
+        clearTimeout(viewStateSyncTimeout);
+    }
+
+    viewStateSyncTimeout = window.setTimeout(() => {
+        viewStateSyncTimeout = null;
+        flushViewStateSync();
+    }, 150);
+}
+
+async function flushViewStateSync() {
+    if (!viewStateSyncQueued || viewStateSyncInFlight) {
+        return;
+    }
+
+    viewStateSyncQueued = false;
+    viewStateSyncInFlight = true;
+
+    try {
+        invalidateApiCache("viewState", "shared");
+        await apiRequest(API_ROUTES.viewState, {
+            method: "POST",
+            body: JSON.stringify({
+                settings: buildSharedViewStatePayload()
+            })
+        });
+    } catch (error) {
+        console.error("Impossible de synchroniser l'affichage partage du Gantt.", error);
+    } finally {
+        viewStateSyncInFlight = false;
+
+        if (viewStateSyncQueued) {
+            flushViewStateSync();
+        }
+    }
 }
 
 function getBacklogView() {

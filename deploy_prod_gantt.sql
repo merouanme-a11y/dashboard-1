@@ -1,7 +1,7 @@
 ﻿-- ============================================================
--- DASHBOARD - Synchronisation des donnees PROD
+-- DASHBOARD - Synchronisation Gantt PROD
 -- Genere automatiquement depuis la base locale
--- Genere le : 2026-04-06 23:29:00
+-- Genere le : 2026-04-06 23:29:51
 -- Base source : meha0348_dashboard
 -- ============================================================
 SET NAMES utf8mb4;
@@ -9,17 +9,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 DELETE FROM `projet_services`;
 DELETE FROM `projets`;
-DELETE FROM `user_page_preference`;
-DELETE FROM `permission`;
-DELETE FROM `page_icon`;
-DELETE FROM `page_title`;
-DELETE FROM `page`;
-DELETE FROM `theme_setting`;
-DELETE FROM `service_color`;
 DELETE FROM `services`;
-DELETE FROM `department`;
-DELETE FROM `module`;
-DELETE FROM `utilisateur`;
 
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -32,11 +22,6 @@ DELETE FROM `utilisateur`;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-
-LOCK TABLES `department` WRITE;
-/*!40000 ALTER TABLE `department` DISABLE KEYS */;
-/*!40000 ALTER TABLE `department` ENABLE KEYS */;
-UNLOCK TABLES;
 
 LOCK TABLES `services` WRITE;
 /*!40000 ALTER TABLE `services` DISABLE KEYS */;
@@ -57,23 +42,6 @@ INSERT INTO `services` (`id`, `name`, `color`) VALUES (14,'Service Entreprise','
 INSERT INTO `services` (`id`, `name`, `color`) VALUES (15,'Sinistre','#a10f67');
 INSERT INTO `services` (`id`, `name`, `color`) VALUES (1522,'Multi Services','#1d6f74');
 /*!40000 ALTER TABLE `services` ENABLE KEYS */;
-UNLOCK TABLES;
-
-LOCK TABLES `module` WRITE;
-/*!40000 ALTER TABLE `module` DISABLE KEYS */;
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (1,'profile','Mon Profil','bi bi-person-circle','app_profile',1,0);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (2,'tickets','Tickets','bi-ticket-perforated','app_tickets',1,30);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (3,'stats','Statistiques','bi-bar-chart','app_stats',1,31);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (4,'page_title_icons','Icones des pages','bi-images','admin_page_icons',1,200);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (5,'page_titles','Libelles des pages','bi-pencil-square','admin_page_titles',1,210);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (6,'menus','Gestion du menu','bi-folder','admin_menus',1,220);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (7,'pages','Pages','bi-window-stack','admin_pages',1,225);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (8,'utilisateurs','Utilisateurs','bi-people','admin_utilisateurs',1,230);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (9,'annuaire','Annuaire des contacts','bi bi-person-lines-fill','app_annuaire',1,10);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (10,'gantt_projects','Planning projets','bi-diagram-3','app_gantt_projects',1,32);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (11,'livre_de_caisse','Livre de caisse','bi-cash-stack','app_livre_de_caisse',1,110);
-INSERT INTO `module` (`id`, `name`, `label`, `icon`, `route_name`, `is_active`, `sort_order`) VALUES (12,'bi','Business Intelligence','bi-graph-up-arrow','app_bi',1,240);
-/*!40000 ALTER TABLE `module` ENABLE KEYS */;
 UNLOCK TABLES;
 
 LOCK TABLES `projets` WRITE;
@@ -188,127 +156,6 @@ INSERT INTO `projet_services` (`project_id`, `service_id`, `created_at`) VALUES 
 INSERT INTO `projet_services` (`project_id`, `service_id`, `created_at`) VALUES ('prja45e47bd',7,'2026-04-06 21:26:16');
 INSERT INTO `projet_services` (`project_id`, `service_id`, `created_at`) VALUES ('prja6f3cc72',1522,'2026-04-06 21:26:16');
 /*!40000 ALTER TABLE `projet_services` ENABLE KEYS */;
-UNLOCK TABLES;
-
-LOCK TABLES `utilisateur` WRITE;
-/*!40000 ALTER TABLE `utilisateur` DISABLE KEYS */;
-INSERT INTO `utilisateur` (`id`, `nom`, `prenom`, `email`, `adresse`, `code_postal`, `service`, `telephone`, `numero_court`, `mot_de_passe`, `photo`, `roles`, `created_at`, `updated_at`, `reset_password_token`, `reset_password_expires_at`, `agence`, `departement`, `darkmode`, `force_password_change`, `profile_type`) VALUES (1,'Hamzaoui','Merouan','merouan@me.com',NULL,'34500','IT','0651510899','4540','$2y$13$atd8tY31nkRZAm6bC.RYve9fC3wLRpmKRKaeY.F08VtFHHWxCENWK',NULL,'[\"ROLE_ADMIN\"]','2026-03-30 07:47:03','2026-04-03 19:41:56',NULL,NULL,'Baie-Mahault','971 - Guadeloupe',0,0,'Admin');
-INSERT INTO `utilisateur` (`id`, `nom`, `prenom`, `email`, `adresse`, `code_postal`, `service`, `telephone`, `numero_court`, `mot_de_passe`, `photo`, `roles`, `created_at`, `updated_at`, `reset_password_token`, `reset_password_expires_at`, `agence`, `departement`, `darkmode`, `force_password_change`, `profile_type`) VALUES (2,'AT','Sébastien','test@test.fr',NULL,'34500','IT','0651510899','4518','$2y$13$eN/T6jTFmhgFYyQDw4vxeO/uJ3lE5hsZvVXrE4Z/DZw5r9FEfFIjW',NULL,'[]','2026-04-02 08:47:47',NULL,NULL,NULL,NULL,'34 - Hérault',0,1,'Employe');
-/*!40000 ALTER TABLE `utilisateur` ENABLE KEYS */;
-UNLOCK TABLES;
-
-LOCK TABLES `page` WRITE;
-/*!40000 ALTER TABLE `page` DISABLE KEYS */;
-INSERT INTO `page` (`id`, `created_by_id`, `slug`, `title`, `content`, `keywords`, `is_active`, `created_at`, `updated_at`, `show_title`, `show_breadcrumb`) VALUES (1,1,'page-test','Page test','<p>test</p>\r\n<p><img style=\"width: auto !important; max-width: 100% !important; height: auto !important\" src=\"/dashboard/public/uploads/images/editor/editor_image_20260330094808_photo-Merouan.png\" alt=\"photo-Merouan.png\"></p>',NULL,1,'2026-03-30 09:48:13','2026-03-30 09:49:14',0,0);
-/*!40000 ALTER TABLE `page` ENABLE KEYS */;
-UNLOCK TABLES;
-
-LOCK TABLES `page_icon` WRITE;
-/*!40000 ALTER TABLE `page_icon` DISABLE KEYS */;
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (1,'admin_menus','bi-folder','bootstrap','#FFC800');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (2,'admin_page_icons','bi-images','bootstrap','#3BF751');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (3,'admin_page_titles','bi-pencil-square','bootstrap','#003B99');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (4,'admin_modules','bi-puzzle','bootstrap','#FF0000');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (5,'admin_pages','bi-file-earmark-text','bootstrap','#00FFAA');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (6,'admin_parametrage','bi-gear','bootstrap','#FF7300');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (7,'admin_services','bi-file-earmark-text','bootstrap','#B8EC27');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (8,'admin_theme','bi-palette','bootstrap','#FF00F7');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (9,'admin_utilisateurs','bi-file-earmark-text','bootstrap','#00D5FF');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (10,'app_annuaire','bi-people','bootstrap','#0091FF');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (11,'app_profile_create','bi-people','bootstrap','#F73B6A');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (12,'app_gantt_projects','bi-diagram-3','bootstrap','#FB00FF');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (13,'app_stats','bi-bar-chart','bootstrap','#FE0606');
-INSERT INTO `page_icon` (`id`, `page_path`, `icon`, `icon_library`, `color`) VALUES (14,'app_dashboard','bi-house','bootstrap','#FFFFFF');
-/*!40000 ALTER TABLE `page_icon` ENABLE KEYS */;
-UNLOCK TABLES;
-
-LOCK TABLES `page_title` WRITE;
-/*!40000 ALTER TABLE `page_title` DISABLE KEYS */;
-/*!40000 ALTER TABLE `page_title` ENABLE KEYS */;
-UNLOCK TABLES;
-
-LOCK TABLES `permission` WRITE;
-/*!40000 ALTER TABLE `permission` DISABLE KEYS */;
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (1,'admin_menus',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (2,'admin_page_icons',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (3,'admin_page_titles',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (4,'admin_modules',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (5,'admin_pages',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (6,'admin_parametrage',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (7,'admin_services',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (8,'admin_theme',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (9,'admin_utilisateurs',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (10,'app_annuaire',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (11,'app_communication',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (12,'app_compta',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (13,'app_controleinterne',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (14,'app_profile_create',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (15,'app_marketing',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (16,'app_profile',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (17,'dynamic_page_1',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (18,'app_gantt_projects',NULL,1,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (19,'app_prestation',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (20,'app_production',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (21,'app_gantt_projects_api_projects',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (22,'app_relationclient',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (23,'app_rh',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (24,'app_serviceentreprise',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (25,'app_sinistre',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (26,'app_stats',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (27,'app_tickets',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (28,'app_vente',NULL,0,2);
-INSERT INTO `permission` (`id`, `page_path`, `role`, `is_allowed`, `utilisateur_id`) VALUES (29,'app_dashboard',NULL,0,2);
-/*!40000 ALTER TABLE `permission` ENABLE KEYS */;
-UNLOCK TABLES;
-
-LOCK TABLES `service_color` WRITE;
-/*!40000 ALTER TABLE `service_color` DISABLE KEYS */;
-/*!40000 ALTER TABLE `service_color` ENABLE KEYS */;
-UNLOCK TABLES;
-
-LOCK TABLES `theme_setting` WRITE;
-/*!40000 ALTER TABLE `theme_setting` DISABLE KEYS */;
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (1,'active_template','template2');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (2,'site_title','');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (3,'site_tagline','');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (4,'logo_path','uploads/images/theme/site_logo_20260330083735_logo-adep-bleu.svg');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (5,'logo_size','65');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (6,'sticky_header_enabled','1');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (7,'primary_button_color','#3B82F6');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (8,'dark_primary_button_color','#3B82F6');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (9,'page_icon_library','bootstrap');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (10,'user_info','1');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (11,'header_right_menu','1');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (12,'dark_mode_toggle','1');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (13,'app_background_color','#FFFFFF');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (14,'header_background_color','#F8FAFC');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (15,'menu_background_color','#F8FAFC');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (16,'menu_text_color','#475569');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (17,'heading_color','#0F172A');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (18,'primary_button_text_color','#FFFFFF');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (19,'dark_app_background_color','#0F172A');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (20,'dark_header_background_color','#0F172A');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (21,'dark_menu_background_color','#1E293B');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (22,'dark_menu_text_color','#CBD5E1');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (23,'dark_heading_color','#F8FAFC');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (24,'dark_primary_button_text_color','#FFFFFF');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (25,'body_font','system-ui');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (26,'body_font_size','16');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (27,'menu_font','system-ui');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (28,'menu_font_size','15');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (29,'heading_font','system-ui');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (30,'heading_font_size','32');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (31,'button_font','system-ui');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (32,'button_font_size','15');
-INSERT INTO `theme_setting` (`id`, `setting_key`, `setting_value`) VALUES (33,'button_radius','10');
-/*!40000 ALTER TABLE `theme_setting` ENABLE KEYS */;
-UNLOCK TABLES;
-
-LOCK TABLES `user_page_preference` WRITE;
-/*!40000 ALTER TABLE `user_page_preference` DISABLE KEYS */;
-INSERT INTO `user_page_preference` (`id`, `utilisateur_id`, `page_key`, `preference_payload`, `created_at`, `updated_at`) VALUES (1,1,'stats','{\"defaultProject\":\"MTN\",\"projects\":{\"MTN\":{\"layout\":[{\"id\":\"card-state-a-faire\",\"fraction\":\"2\\/8\"},{\"id\":\"card-state-en-cours\",\"fraction\":\"1\\/8\"},{\"id\":\"card-state-en-cours-snl\",\"fraction\":\"1\\/8\"},{\"id\":\"card-state-en-attente\",\"fraction\":\"1\\/8\"},{\"id\":\"card-state-standby\",\"fraction\":\"1\\/8\"},{\"id\":\"card-state-fait\",\"fraction\":\"1\\/8\"},{\"id\":\"card-total\",\"fraction\":\"1\\/8\"},{\"id\":\"card-states\",\"fraction\":\"4\\/8\"},{\"id\":\"card-services\",\"fraction\":\"4\\/8\"},{\"id\":\"card-users\",\"fraction\":\"8\\/8\"},{\"id\":\"card-table\",\"fraction\":\"8\\/8\"}],\"visibility\":[{\"id\":\"card-state-a-faire\",\"hidden\":false},{\"id\":\"card-state-en-cours\",\"hidden\":false},{\"id\":\"card-state-en-cours-snl\",\"hidden\":false},{\"id\":\"card-state-en-attente\",\"hidden\":false},{\"id\":\"card-state-standby\",\"hidden\":false},{\"id\":\"card-state-fait\",\"hidden\":false},{\"id\":\"card-total\",\"hidden\":false},{\"id\":\"card-states\",\"hidden\":false},{\"id\":\"card-services\",\"hidden\":false},{\"id\":\"card-users\",\"hidden\":false},{\"id\":\"card-table\",\"hidden\":false}],\"colors\":[{\"id\":\"card-state-a-faire\",\"bgColor\":\"#3476df\",\"textColor\":\"#ffffff\"},{\"id\":\"card-state-en-cours\",\"bgColor\":\"#ffae00\",\"textColor\":\"#ffffff\"},{\"id\":\"card-state-en-cours-snl\",\"bgColor\":\"#ff6600\",\"textColor\":\"#ffffff\"},{\"id\":\"card-state-en-attente\",\"bgColor\":\"#9900ff\",\"textColor\":\"#ffffff\"},{\"id\":\"card-state-standby\",\"bgColor\":\"#3a0061\",\"textColor\":\"#ffffff\"},{\"id\":\"card-state-fait\",\"bgColor\":\"#b5c200\",\"textColor\":\"#ffffff\"},{\"id\":\"card-total\",\"bgColor\":null,\"textColor\":\"#ffffff\"}]}}}','2026-03-30 09:28:29','2026-04-04 08:21:03');
-INSERT INTO `user_page_preference` (`id`, `utilisateur_id`, `page_key`, `preference_payload`, `created_at`, `updated_at`) VALUES (2,1,'bi','{\"defaultConnection\":\"\",\"defaultFile\":\"pipeline_mensuel.csv\",\"selectedPageId\":\"page-t2akzv0\",\"pages\":[{\"id\":\"page-bi-1\",\"name\":\"Page BI principale\",\"connectionId\":\"\",\"fileId\":\"pipeline_mensuel.csv\",\"filters\":[],\"widgets\":[{\"id\":\"widget-rdgqo77\",\"type\":\"table\",\"title\":\"Tableau detaille\",\"layout\":\"4\\/8\",\"dimensionColumn\":\"\",\"valueColumn\":\"\",\"aggregation\":\"count\",\"displayMode\":\"chart\",\"format\":\"\",\"color\":\"#ec4899\",\"bgColor\":null,\"textColor\":null,\"titleColor\":null,\"valueColor\":null,\"alignment\":\"left\",\"textSize\":15,\"valueSize\":48,\"cardHeight\":220,\"hideTitle\":false,\"hideText\":false,\"hidden\":false,\"maxItems\":10},{\"id\":\"widget-mte34mi\",\"type\":\"doughnut\",\"title\":\"Distribution annulaire\",\"layout\":\"4\\/8\",\"dimensionColumn\":\"\",\"valueColumn\":\"\",\"aggregation\":\"count\",\"displayMode\":\"chart\",\"format\":\"\",\"color\":\"#f59e0b\",\"bgColor\":null,\"textColor\":null,\"titleColor\":null,\"valueColor\":null,\"alignment\":\"left\",\"textSize\":15,\"valueSize\":48,\"cardHeight\":220,\"hideTitle\":false,\"hideText\":false,\"hidden\":false,\"maxItems\":8},{\"id\":\"widget-ys6m4b7\",\"type\":\"bar\",\"title\":\"Compteur global\",\"layout\":\"4\\/8\",\"dimensionColumn\":\"tickets_resolus\",\"valueColumn\":\"taux_satisfaction\",\"aggregation\":\"sum\",\"displayMode\":\"chart\",\"format\":\"percent\",\"color\":\"#aa42f0\",\"bgColor\":null,\"textColor\":null,\"titleColor\":null,\"valueColor\":null,\"alignment\":\"left\",\"textSize\":15,\"valueSize\":48,\"cardHeight\":220,\"hideTitle\":false,\"hideText\":false,\"hidden\":false,\"maxItems\":8},{\"id\":\"widget-l02a0dh\",\"type\":\"line\",\"title\":\"Evolution dans le temps\",\"layout\":\"4\\/8\",\"dimensionColumn\":\"\",\"valueColumn\":\"\",\"aggregation\":\"count\",\"displayMode\":\"chart\",\"format\":\"\",\"color\":\"#06b6d4\",\"bgColor\":null,\"textColor\":null,\"titleColor\":null,\"valueColor\":null,\"alignment\":\"left\",\"textSize\":15,\"valueSize\":48,\"cardHeight\":220,\"hideTitle\":false,\"hideText\":false,\"hidden\":false,\"maxItems\":8}]},{\"id\":\"page-t2akzv0\",\"name\":\"Nouvelle page BI - Merouan\",\"connectionId\":\"direction-commerciale\",\"fileId\":\"pipeline_mensuel.csv\",\"filters\":[{\"column\":\"Agence\",\"value\":\"Baie-Mahault\"},{\"column\":\"Date\",\"value\":\"2026-04-02\"},{\"column\":\"Statut\",\"value\":\"Gagne\"}],\"widgets\":[{\"id\":\"widget-z7dp5pc\",\"type\":\"counter\",\"title\":\"KPI\",\"layout\":\"1\\/8\",\"dimensionColumn\":\"Departement\",\"valueColumn\":\"Agence\",\"aggregation\":\"sum\",\"displayMode\":\"chart\",\"format\":\"number\",\"color\":\"#ffffff\",\"bgColor\":\"#ff00ae\",\"textColor\":\"#ffffff\",\"titleColor\":\"#000000\",\"valueColor\":\"#ffffff\",\"alignment\":\"center\",\"textSize\":19,\"valueSize\":52,\"cardHeight\":75,\"hideTitle\":false,\"hideText\":true,\"hidden\":false,\"maxItems\":3},{\"id\":\"widget-lumhs7n\",\"type\":\"counter\",\"title\":\"KPI copie\",\"layout\":\"1\\/8\",\"dimensionColumn\":\"Departement\",\"valueColumn\":\"Agence\",\"aggregation\":\"sum\",\"displayMode\":\"chart\",\"format\":\"number\",\"color\":\"#ffffff\",\"bgColor\":\"#ff00ae\",\"textColor\":\"#ffffff\",\"titleColor\":\"#000000\",\"valueColor\":\"#ffffff\",\"alignment\":\"center\",\"textSize\":19,\"valueSize\":52,\"cardHeight\":75,\"hideTitle\":false,\"hideText\":true,\"hidden\":false,\"maxItems\":3},{\"id\":\"widget-s4uuhdn\",\"type\":\"counter\",\"title\":\"KPI copie copie\",\"layout\":\"1\\/8\",\"dimensionColumn\":\"Departement\",\"valueColumn\":\"Agence\",\"aggregation\":\"sum\",\"displayMode\":\"chart\",\"format\":\"number\",\"color\":\"#ffffff\",\"bgColor\":\"#ff00ae\",\"textColor\":\"#ffffff\",\"titleColor\":\"#000000\",\"valueColor\":\"#ffffff\",\"alignment\":\"center\",\"textSize\":19,\"valueSize\":52,\"cardHeight\":75,\"hideTitle\":false,\"hideText\":true,\"hidden\":false,\"maxItems\":3},{\"id\":\"widget-nf400j5\",\"type\":\"table\",\"title\":\"Tableau detaille\",\"layout\":\"7\\/8\",\"dimensionColumn\":\"Agence\",\"valueColumn\":\"Montant\",\"aggregation\":\"count\",\"displayMode\":\"chart\",\"format\":\"\",\"color\":\"#0f766e\",\"bgColor\":null,\"textColor\":null,\"titleColor\":null,\"valueColor\":null,\"alignment\":\"left\",\"textSize\":15,\"valueSize\":42,\"cardHeight\":320,\"hideTitle\":false,\"hideText\":false,\"hidden\":false,\"maxItems\":10},{\"id\":\"widget-nusxohj\",\"type\":\"bar\",\"title\":\"Repartition par categorie\",\"layout\":\"4\\/8\",\"dimensionColumn\":\"Agence\",\"valueColumn\":\"Montant\",\"aggregation\":\"sum\",\"displayMode\":\"chart\",\"format\":\"currency\",\"color\":\"#591fe0\",\"bgColor\":null,\"textColor\":null,\"titleColor\":\"#4099f2\",\"valueColor\":null,\"alignment\":\"left\",\"textSize\":15,\"valueSize\":42,\"cardHeight\":300,\"hideTitle\":false,\"hideText\":false,\"hidden\":false,\"maxItems\":11},{\"id\":\"widget-6vop6uk\",\"type\":\"bar-horizontal\",\"title\":\"Classement horizontal\",\"layout\":\"3\\/8\",\"dimensionColumn\":\"Commercial\",\"valueColumn\":\"Montant\",\"aggregation\":\"sum\",\"displayMode\":\"chart\",\"format\":\"\",\"color\":\"#00d9ff\",\"bgColor\":null,\"textColor\":null,\"titleColor\":null,\"valueColor\":null,\"alignment\":\"left\",\"textSize\":19,\"valueSize\":42,\"cardHeight\":300,\"hideTitle\":false,\"hideText\":false,\"hidden\":false,\"maxItems\":15}]}]}','2026-04-05 15:13:04','2026-04-06 21:09:34');
-/*!40000 ALTER TABLE `user_page_preference` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 

@@ -1,5 +1,5 @@
 param(
-    [string]$OutputPath = (Join-Path $PSScriptRoot '..\deploy_prod_data.sql')
+    [string]$OutputPath = (Join-Path $PSScriptRoot '..\deploy_prod_gantt.sql')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,38 +78,18 @@ if (-not (Test-Path $outputDirectory)) {
 $tablesToClear = @(
     'projet_services',
     'projets',
-    'user_page_preference',
-    'permission',
-    'page_icon',
-    'page_title',
-    'page',
-    'theme_setting',
-    'service_color',
-    'services',
-    'department',
-    'module',
-    'utilisateur'
+    'services'
 )
 
 $tablesToDump = @(
-    'department',
     'services',
-    'module',
     'projets',
-    'projet_services',
-    'utilisateur',
-    'page',
-    'page_icon',
-    'page_title',
-    'permission',
-    'service_color',
-    'theme_setting',
-    'user_page_preference'
+    'projet_services'
 )
 
 $header = @(
     '-- ============================================================',
-    '-- DASHBOARD - Synchronisation des donnees PROD',
+    '-- DASHBOARD - Synchronisation Gantt PROD',
     '-- Genere automatiquement depuis la base locale',
     "-- Genere le : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
     "-- Base source : $($connection.Database)",
@@ -158,4 +138,4 @@ $footer = @(
     $footer
 ) | Set-Content -Path $resolvedOutputPath -Encoding UTF8
 
-Write-Output "Export SQL genere : $resolvedOutputPath"
+Write-Output "Export SQL Gantt genere : $resolvedOutputPath"

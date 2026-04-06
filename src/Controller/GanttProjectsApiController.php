@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Utilisateur;
 use App\Service\GanttLegacyRuntime;
+use App\Service\GanttViewStateService;
 use App\Service\ModuleService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -23,6 +24,7 @@ final class GanttProjectsApiController extends AbstractController
     public function __construct(
         private ModuleService $moduleService,
         private GanttLegacyRuntime $ganttLegacyRuntime,
+        private GanttViewStateService $ganttViewStateService,
         private KernelInterface $kernel,
     ) {}
 
@@ -34,6 +36,29 @@ final class GanttProjectsApiController extends AbstractController
         return new JsonResponse([
             'user' => $this->ganttLegacyRuntime->createFrontendUserPayload($user),
             'settings' => $this->readSharedSettings(),
+            'viewState' => $this->ganttViewStateService->getState(),
+        ]);
+    }
+
+    #[Route('/api/view-state', name: 'app_gantt_projects_api_view_state', methods: ['GET', 'POST'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
+    public function viewState(Request $request): JsonResponse
+    {
+        $this->bootAndGetUser();
+
+        if ($request->isMethod('GET')) {
+            return new JsonResponse([
+                'settings' => $this->ganttViewStateService->getState(),
+            ]);
+        }
+
+        $payload = $this->readJsonRequest($request);
+        $settings = $this->ganttViewStateService->saveState(
+            is_array($payload['settings'] ?? null) ? $payload['settings'] : []
+        );
+
+        return new JsonResponse([
+            'saved' => true,
+            'settings' => $settings,
         ]);
     }
 
