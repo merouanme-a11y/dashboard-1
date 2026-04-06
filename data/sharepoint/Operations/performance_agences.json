@@ -1,0 +1,11 @@
+[
+  {"date":"2026-04-01","agence":"Paris Republique","region":"Ile-de-France","tickets_resolus":42,"taux_satisfaction":91,"temps_traitement":2.6,"cloture":"Oui"},
+  {"date":"2026-04-01","agence":"Lyon Centre","region":"Auvergne-Rhone-Alpes","tickets_resolus":33,"taux_satisfaction":88,"temps_traitement":3.1,"cloture":"Oui"},
+  {"date":"2026-04-01","agence":"Baie-Mahault","region":"Guadeloupe","tickets_resolus":18,"taux_satisfaction":84,"temps_traitement":4.8,"cloture":"Non"},
+  {"date":"2026-04-02","agence":"Paris Republique","region":"Ile-de-France","tickets_resolus":47,"taux_satisfaction":93,"temps_traitement":2.3,"cloture":"Oui"},
+  {"date":"2026-04-02","agence":"Lyon Centre","region":"Auvergne-Rhone-Alpes","tickets_resolus":29,"taux_satisfaction":86,"temps_traitement":3.6,"cloture":"Non"},
+  {"date":"2026-04-02","agence":"Baie-Mahault","region":"Guadeloupe","tickets_resolus":21,"taux_satisfaction":87,"temps_traitement":4.2,"cloture":"Oui"},
+  {"date":"2026-04-03","agence":"Paris Republique","region":"Ile-de-France","tickets_resolus":51,"taux_satisfaction":95,"temps_traitement":2.1,"cloture":"Oui"},
+  {"date":"2026-04-03","agence":"Lyon Centre","region":"Auvergne-Rhone-Alpes","tickets_resolus":38,"taux_satisfaction":89,"temps_traitement":3.0,"cloture":"Oui"},
+  {"date":"2026-04-03","agence":"Baie-Mahault","region":"Guadeloupe","tickets_resolus":24,"taux_satisfaction":88,"temps_traitement":4.0,"cloture":"Oui"}
+]

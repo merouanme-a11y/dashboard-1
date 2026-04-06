@@ -11,6 +11,9 @@ use Doctrine\ORM\EntityManagerInterface;
 class PagePermissionService
 {
     private const ALWAYS_ACCESSIBLE_ROUTES = ['admin_menus'];
+    private const PROFILE_RESTRICTED_ROUTES = [
+        'app_livre_de_caisse_management' => ['Gestionnaire'],
+    ];
 
     /**
      * @var array<string, bool>|null
@@ -136,6 +139,10 @@ class PagePermissionService
             return true;
         }
 
+        if (!$this->isAudienceAllowedForRoute($routeName, $user)) {
+            return false;
+        }
+
         $userPermissions = $this->getUserPermissions($user);
         if (isset($userPermissions[$routeName])) {
             $userPermission = $userPermissions[$routeName];
@@ -154,6 +161,31 @@ class PagePermissionService
         }
 
         return true;
+    }
+
+    private function isAudienceAllowedForRoute(string $routeName, Utilisateur $user): bool
+    {
+        $allowedProfiles = self::PROFILE_RESTRICTED_ROUTES[$routeName] ?? null;
+        if (!is_array($allowedProfiles) || $allowedProfiles === []) {
+            return true;
+        }
+
+        if (in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+            return true;
+        }
+
+        $effectiveProfileType = trim($user->getEffectiveProfileType());
+        if ($effectiveProfileType === '') {
+            return false;
+        }
+
+        foreach ($allowedProfiles as $allowedProfile) {
+            if (strcasecmp($effectiveProfileType, (string) $allowedProfile) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function isManagedRoute(string $routeName): bool

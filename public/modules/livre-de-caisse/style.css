@@ -1788,3 +1788,116 @@ body.has-modal-open {
         align-self: flex-end;
     }
 }
+
+.ldc-page .ldc-management-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    align-items: end;
+}
+
+.ldc-page .ldc-management-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.ldc-page .ldc-management-filter-field label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--ldc-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.ldc-page .ldc-management-date-control {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.ldc-page .ldc-management-date-nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    border: 1px solid var(--ldc-border);
+    background: var(--ldc-surface);
+    color: var(--ldc-text);
+    box-shadow: var(--ldc-shadow);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.ldc-page .ldc-management-date-nav:hover {
+    transform: translateY(-1px);
+    background: var(--ldc-surface-alt);
+    border-color: color-mix(in srgb, var(--ldc-blue) 26%, var(--ldc-border));
+    color: var(--ldc-blue);
+    box-shadow: 0 14px 28px color-mix(in srgb, var(--ldc-blue) 14%, transparent);
+}
+
+.ldc-page .ldc-management-date-nav svg {
+    width: 16px;
+    height: 16px;
+}
+
+.ldc-page .ldc-management-filter-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.ldc-page .ldc-management-table td,
+.ldc-page .ldc-management-table th {
+    vertical-align: middle;
+}
+
+.ldc-page .ldc-management-disabled-eye {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    color: var(--ldc-text-light);
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    cursor: not-allowed;
+}
+
+.ldc-page .ldc-management-back {
+    min-width: auto;
+}
+
+.ldc-page .ldc-management-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.ldc-page .ldc-management-closed-note {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 14px;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    background: rgba(16, 185, 129, 0.08);
+    color: var(--ldc-text);
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .ldc-page .ldc-management-filter-actions {
+        width: 100%;
+    }
+
+    .ldc-page .ldc-management-filter-actions .btn-action {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+}

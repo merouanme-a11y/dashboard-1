@@ -4,6 +4,8 @@ namespace App\Controller;
 
 use App\Entity\Utilisateur;
 use App\Service\LivreDeCaisseLegacyRuntime;
+use App\Service\LivreDeCaisseManagementService;
+use App\Service\ModuleService;
 use PDO;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Asset\Packages;
@@ -23,17 +25,23 @@ use ZipArchive;
 #[IsGranted('IS_AUTHENTICATED_FULLY')]
 final class LivreDeCaisseController extends AbstractController
 {
+    private const MODULE_NAME = 'livre_de_caisse';
+
     public function __construct(
+        private ModuleService $moduleService,
         private LivreDeCaisseLegacyRuntime $livreDeCaisseLegacyRuntime,
+        private LivreDeCaisseManagementService $livreDeCaisseManagementService,
         private Packages $packages,
     ) {}
 
     #[Route('', name: 'app_livre_de_caisse', methods: ['GET', 'POST'], defaults: ['_managed_page_path' => 'app_livre_de_caisse'])]
     public function index(Request $request): Response
     {
+        $this->ensureModuleIsActive();
+
         $user = $this->getRequiredUser();
         $pdo = $this->livreDeCaisseLegacyRuntime->bootForUser($user);
-        $businessDate = ldcResolveBusinessDate((string) $request->query->get('date', ''));
+        $businessDate = $this->resolveBusinessDate((string) $request->query->get('date', ''));
         $pageBaseUrl = $this->generateUrl('app_livre_de_caisse');
         $listingPageBaseUrl = $this->generateUrl('app_livre_de_caisse_listing');
         $pageUrlBuilder = $this->createDateAwareUrlBuilder($pageBaseUrl, $businessDate);
@@ -187,6 +195,8 @@ final class LivreDeCaisseController extends AbstractController
     #[Route('/listing', name: 'app_livre_de_caisse_listing', methods: ['GET'], defaults: ['_managed_page_path' => 'app_livre_de_caisse_listing'])]
     public function listing(Request $request): Response
     {
+        $this->ensureModuleIsActive();
+
         $user = $this->getRequiredUser();
         $pdo = $this->livreDeCaisseLegacyRuntime->bootForUser($user);
         $agenceContext = ldcGetAgenceContext($this->livreDeCaisseLegacyRuntime->createFrontendUserPayload($user));
@@ -202,7 +212,7 @@ final class LivreDeCaisseController extends AbstractController
         };
 
         if ((string) $request->query->get('download_attachments', '0') === '1') {
-            $downloadDate = ldcResolveBusinessDate((string) $request->query->get('date', ''));
+            $downloadDate = $this->resolveBusinessDate((string) $request->query->get('date', ''));
             $attachments = ldcFetchAttachmentsByBusinessDate($pdo, $downloadDate);
             $archiveFileName = sprintf(
                 'LDC_%s_%s_%s_pieces-jointes',
@@ -216,7 +226,7 @@ final class LivreDeCaisseController extends AbstractController
 
         $flash = $this->popLegacyFlash($request->getSession());
         $highlightDate = $request->query->has('highlight_date')
-            ? ldcResolveBusinessDate((string) $request->query->get('highlight_date'))
+            ? $this->resolveBusinessDate((string) $request->query->get('highlight_date'))
             : '';
         $historyBooks = ldcFetchDailyBooks($pdo);
         $totalEntries = array_reduce(
@@ -246,6 +256,101 @@ final class LivreDeCaisseController extends AbstractController
 
         return $this->render('livre_de_caisse/page.html.twig', [
             'pageTitle' => 'Listing livre de caisse agence',
+            'content' => $content,
+        ]);
+    }
+
+    #[Route('/gestion', name: 'app_livre_de_caisse_management', methods: ['GET'], defaults: ['_managed_page_path' => 'app_livre_de_caisse_management'])]
+    public function management(Request $request): Response
+    {
+        $this->ensureModuleIsActive();
+
+        $user = $this->getRequiredUser();
+        $this->ensureManagementAccess($user);
+
+        $pdo = $this->livreDeCaisseLegacyRuntime->bootForUser($user);
+        $businessDate = $this->resolveBusinessDate((string) $request->query->get('date', ''));
+        $departementFilter = trim((string) $request->query->get('departement', ''));
+        $statusFilter = trim((string) $request->query->get('etat', 'all'));
+        if (!in_array($statusFilter, ['all', 'closed', 'in_progress', 'empty'], true)) {
+            $statusFilter = 'all';
+        }
+
+        $agencyBooks = $this->livreDeCaisseManagementService->buildAgencyOverview(
+            $pdo,
+            $businessDate,
+            $departementFilter,
+            $statusFilter
+        );
+        $pageBaseUrl = $this->generateUrl('app_livre_de_caisse_management');
+        $buildPageUrl = static function (array $params = []) use ($pageBaseUrl): string {
+            $query = array_filter(
+                $params,
+                static fn ($value): bool => $value !== null && $value !== ''
+            );
+
+            return $query === [] ? $pageBaseUrl : ($pageBaseUrl . '?' . http_build_query($query));
+        };
+
+        foreach ($agencyBooks as &$agencyBook) {
+            $agencyBook['detail_url'] = $this->generateUrl('app_livre_de_caisse_management_detail', [
+                'date' => $businessDate,
+                'departement' => (string) ($agencyBook['departement'] ?? ''),
+                'agence' => (string) ($agencyBook['agence'] ?? ''),
+            ]);
+        }
+        unset($agencyBook);
+
+        $content = $this->renderPhpTemplate($this->getParameter('kernel.project_dir') . '/templates/livre_de_caisse/partials/management.php', [
+            'agencyBooks' => $agencyBooks,
+            'businessDate' => $businessDate,
+            'departementFilter' => $departementFilter,
+            'statusFilter' => $statusFilter,
+            'departementOptions' => $this->livreDeCaisseManagementService->getDepartementOptions(),
+            'buildPageUrl' => $buildPageUrl,
+            'listingUrl' => $this->generateUrl('app_livre_de_caisse_listing'),
+            'cssUrl' => $this->packages->getUrl('modules/livre-de-caisse/style.css'),
+            'cssVersion' => $this->getAssetVersion('public/modules/livre-de-caisse/style.css'),
+        ]);
+
+        return $this->render('livre_de_caisse/page.html.twig', [
+            'pageTitle' => 'Gestion - Livres de caisse',
+            'content' => $content,
+        ]);
+    }
+
+    #[Route('/gestion/detail', name: 'app_livre_de_caisse_management_detail', methods: ['GET'], defaults: ['_managed_page_path' => 'app_livre_de_caisse_management'])]
+    public function managementDetail(Request $request): Response
+    {
+        $this->ensureModuleIsActive();
+
+        $user = $this->getRequiredUser();
+        $this->ensureManagementAccess($user);
+
+        $businessDate = $this->resolveBusinessDate((string) $request->query->get('date', ''));
+        $departement = trim((string) $request->query->get('departement', ''));
+        $agence = trim((string) $request->query->get('agence', ''));
+        if ($agence === '') {
+            throw $this->createNotFoundException('Agence introuvable.');
+        }
+
+        $pdo = $this->livreDeCaisseLegacyRuntime->bootForUser($user);
+        $detail = $this->livreDeCaisseManagementService->buildAgencyDetail($pdo, $businessDate, $departement, $agence);
+        $backUrl = $this->generateUrl('app_livre_de_caisse_management', [
+            'date' => $businessDate,
+            'departement' => $departement,
+        ]);
+
+        $content = $this->renderPhpTemplate($this->getParameter('kernel.project_dir') . '/templates/livre_de_caisse/partials/management_detail.php', [
+            'detail' => $detail,
+            'businessDate' => $businessDate,
+            'backUrl' => $backUrl,
+            'cssUrl' => $this->packages->getUrl('modules/livre-de-caisse/style.css'),
+            'cssVersion' => $this->getAssetVersion('public/modules/livre-de-caisse/style.css'),
+        ]);
+
+        return $this->render('livre_de_caisse/page.html.twig', [
+            'pageTitle' => 'Gestion - Livres de caisse',
             'content' => $content,
         ]);
     }
@@ -532,6 +637,40 @@ final class LivreDeCaisseController extends AbstractController
         require $templatePath;
 
         return (string) ob_get_clean();
+    }
+
+    private function ensureModuleIsActive(): void
+    {
+        if (!$this->moduleService->isActive(self::MODULE_NAME)) {
+            throw $this->createNotFoundException('Module indisponible.');
+        }
+    }
+
+    private function resolveBusinessDate(?string $value = null): string
+    {
+        if (function_exists('ldcResolveBusinessDate')) {
+            return ldcResolveBusinessDate($value);
+        }
+
+        $normalized = trim((string) $value);
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $normalized);
+
+        return $date instanceof \DateTimeImmutable
+            ? $date->format('Y-m-d')
+            : (new \DateTimeImmutable('today'))->format('Y-m-d');
+    }
+
+    private function ensureManagementAccess(Utilisateur $user): void
+    {
+        if (in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+            return;
+        }
+
+        if (strcasecmp($user->getEffectiveProfileType(), 'Gestionnaire') === 0) {
+            return;
+        }
+
+        throw $this->createAccessDeniedException('Acces reserve aux gestionnaires.');
     }
 
     private function getRequiredUser(): Utilisateur

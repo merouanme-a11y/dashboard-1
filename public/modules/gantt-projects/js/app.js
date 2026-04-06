@@ -34,10 +34,11 @@ const DEFAULT_SETTINGS = {
     showTimelineProgress: true,
     showPlanningSidebar: true,
     showSettingsPanel: true,
+    displayMode: "simple",
     serviceFilter: "all",
     typeFilter: "all",
     statusFilter: "all",
-    backlogView: "cards",
+    backlogView: "table",
     search: "",
     expandedProjectIds: []
 };
@@ -182,6 +183,7 @@ const dom = {
     todayButton: document.querySelector("#todayButton"),
     exportButton: document.querySelector("#exportButton"),
     resetButton: document.querySelector("#resetButton"),
+    toggleDisplayModeButton: document.querySelector("#toggleDisplayModeButton"),
     togglePlanningSidebarButton: document.querySelector("#togglePlanningSidebarButton"),
     timelineZoomOutButton: document.querySelector("#timelineZoomOutButton"),
     timelineZoomInButton: document.querySelector("#timelineZoomInButton"),
@@ -848,6 +850,7 @@ function hydrateState(seedProjects, options = {}) {
     }
 
     state.settings = { ...DEFAULT_SETTINGS, ...savedSettings };
+    state.settings.displayMode = normalizeDisplayMode(state.settings.displayMode);
     state.settings.backlogView = normalizeBacklogView(state.settings.backlogView);
     state.settings.expandedProjectIds = normalizeExpandedProjectIds(state.settings.expandedProjectIds);
 
@@ -932,6 +935,9 @@ function bindStaticEvents() {
 
     dom.exportButton.addEventListener("click", exportPlanning);
     dom.resetButton.addEventListener("click", resetPlanning);
+    if (dom.toggleDisplayModeButton) {
+        dom.toggleDisplayModeButton.addEventListener("click", toggleDisplayMode);
+    }
     dom.togglePlanningSidebarButton.addEventListener("click", togglePlanningSidebar);
     dom.timelineZoomOutButton.addEventListener("click", () => adjustTimelineZoom(-TIMELINE_ZOOM_STEP));
     dom.timelineZoomInButton.addEventListener("click", () => adjustTimelineZoom(TIMELINE_ZOOM_STEP));
@@ -1040,11 +1046,13 @@ function syncControls() {
     dom.timelineZoomValue.textContent = formatTimelineZoom(getTimelineZoom());
     dom.timelineZoomOutButton.disabled = getTimelineZoom() <= TIMELINE_ZOOM_MIN;
     dom.timelineZoomInButton.disabled = getTimelineZoom() >= TIMELINE_ZOOM_MAX;
+    dom.root.classList.toggle("is-simple-display", isSimpleDisplayMode());
     syncPlanningSidebarToggle();
     syncTodayMarkerToggle();
     syncTimelineProgressToggle();
     syncBacklogViewToggle();
     syncSettingsPanelToggle();
+    syncDisplayModeToggle();
     syncServiceColorControls();
 }
 
@@ -1119,6 +1127,7 @@ function renderDropRow() {
 
 function renderScheduledRow(rowData) {
     const project = rowData.project;
+    const isSimpleDisplay = isSimpleDisplayMode();
     const depth = Number(rowData.depth || 0);
     const hasChildren = Boolean(rowData.hasChildren);
     const expanded = Boolean(rowData.expanded);
@@ -1152,6 +1161,10 @@ function renderScheduledRow(rowData) {
         .map((value) => String(value || "").trim())
         .filter(Boolean)
         .join(" | ");
+    const simpleRowSubtitle = [project.ref, project.service]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .join(" · ");
     const removeButtonTitle = project.parentProjectId
         ? "Supprimer la liaison avec le projet parent"
         : "Retirer le projet";
@@ -1169,17 +1182,27 @@ function renderScheduledRow(rowData) {
         >
             <i class="bi bi-grip-vertical" aria-hidden="true"></i>
         </button>`;
+    const rowMetaMarkup = isSimpleDisplay
+        ? `<div class="row-subtitle">${escapeHtml(simpleRowSubtitle || "Aucune information complementaire")}</div>`
+        : `<div class="service-line compact-inline">
+                    ${tokenizeService(project.service).map((token) => `<span class="chip">${escapeHtml(token)}</span>`).join("")}
+                    ${projectTypeMarkup}
+                </div>`;
+    const barLabelMarkup = isSimpleDisplay
+        ? `<strong class="bar-label-simple">${inlineTitleMarkup || inlineRefMarkup || `<span class="bar-title-text">Projet sans nom</span>`}</strong>`
+        : `<strong>
+                                ${inlineRefMarkup}
+                                ${inlineSeparatorMarkup}
+                                ${inlineTitleMarkup}
+                            </strong>`;
 
     return `
         <div class="${rowClasses.join(" ")}" data-project-id="${escapeHtml(project.id)}" style="--tree-depth:${depth};">
             <div class="row-label timeline-sticky compact-row-label project-tree-label">
                 ${reorderHandleMarkup}
                 <span class="timeline-tree-indent" aria-hidden="true"></span>
-                <h3>${escapeHtml(rowTitle || project.title || project.ref || "Projet sans nom")}</h3>
-                <div class="service-line compact-inline">
-                    ${tokenizeService(project.service).map((token) => `<span class="chip">${escapeHtml(token)}</span>`).join("")}
-                    ${projectTypeMarkup}
-                </div>
+                <h3>${escapeHtml(isSimpleDisplay ? (project.title || project.ref || "Projet sans nom") : (rowTitle || project.title || project.ref || "Projet sans nom"))}</h3>
+                ${rowMetaMarkup}
             </div>
             <div class="lane" data-project-lane="${escapeHtml(project.id)}">
                 <div
@@ -1192,11 +1215,7 @@ function renderScheduledRow(rowData) {
                     <div class="bar-main">
                         <div class="bar-title-line">
                             ${toggleMarkup}
-                            <strong>
-                                ${inlineRefMarkup}
-                                ${inlineSeparatorMarkup}
-                                ${inlineTitleMarkup}
-                            </strong>
+                            ${barLabelMarkup}
                         </div>
                     </div>
                     <button class="bar-remove" type="button" title="${escapeHtml(removeButtonTitle)}" aria-label="${escapeHtml(removeButtonTitle)}" data-unschedule="${escapeHtml(project.id)}">×</button>
@@ -1254,7 +1273,7 @@ function renderProjectMetaSummary(project) {
     const projectType = normalizeProjectType(project.projectType);
     const parentProject = getProjectParent(project);
 
-    if (projectType) {
+    if (!isSimpleDisplayMode() && projectType) {
         summaryParts.push(projectType);
     }
 
@@ -2037,6 +2056,12 @@ function toggleSettingsPanel() {
     render();
 }
 
+function toggleDisplayMode() {
+    state.settings.displayMode = isSimpleDisplayMode() ? "detailed" : "simple";
+    persistState();
+    render();
+}
+
 function adjustTimelineZoom(delta) {
     const currentZoom = getTimelineZoom();
     const nextZoom = clamp(roundTimelineZoom(currentZoom + delta), TIMELINE_ZOOM_MIN, TIMELINE_ZOOM_MAX);
@@ -2120,6 +2145,27 @@ function syncSettingsPanelToggle() {
         isVisible ? "Masquer les réglages" : "Afficher les réglages"
     );
     dom.toggleSettingsPanelButton.title = isVisible ? "Masquer les réglages" : "Afficher les réglages";
+}
+
+function syncDisplayModeToggle() {
+    if (!dom.toggleDisplayModeButton) {
+        return;
+    }
+
+    const isSimpleDisplay = isSimpleDisplayMode();
+
+    dom.toggleDisplayModeButton.classList.toggle("is-active", isSimpleDisplay);
+    dom.toggleDisplayModeButton.setAttribute("aria-pressed", String(isSimpleDisplay));
+    dom.toggleDisplayModeButton.setAttribute(
+        "aria-label",
+        isSimpleDisplay ? "Activer l'affichage detaille" : "Activer l'affichage simple"
+    );
+    dom.toggleDisplayModeButton.title = isSimpleDisplay
+        ? "Activer l'affichage detaille"
+        : "Activer l'affichage simple";
+    dom.toggleDisplayModeButton.innerHTML = isSimpleDisplay
+        ? `<i class="bi bi-list-ul" aria-hidden="true"></i>`
+        : `<i class="bi bi-grid-3x2-gap" aria-hidden="true"></i>`;
 }
 
 function openProjectModal(project) {
@@ -5851,6 +5897,14 @@ function normalizeBacklogView(value) {
 
 function getBacklogView() {
     return normalizeBacklogView(state.settings.backlogView);
+}
+
+function normalizeDisplayMode(value) {
+    return value === "detailed" ? "detailed" : "simple";
+}
+
+function isSimpleDisplayMode() {
+    return normalizeDisplayMode(state.settings.displayMode) === "simple";
 }
 
 function renderProjectStatusOptions(selectedStatus) {

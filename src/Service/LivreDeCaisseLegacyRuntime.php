@@ -74,6 +74,8 @@ class LivreDeCaisseLegacyRuntime
                 reference_key VARCHAR(64) DEFAULT NULL,
                 attachment_entry_id BIGINT UNSIGNED DEFAULT NULL,
                 business_date DATE NOT NULL,
+                departement VARCHAR(255) NOT NULL DEFAULT "",
+                agence VARCHAR(255) NOT NULL DEFAULT "",
                 date_saisie DATETIME DEFAULT NULL,
                 chrono INT DEFAULT NULL,
                 type_affaire VARCHAR(64) NOT NULL DEFAULT "",
@@ -136,6 +138,8 @@ class LivreDeCaisseLegacyRuntime
 
         $this->tryExec($pdo, "ALTER TABLE livredecaisse MODIFY COLUMN record_type ENUM('entry','daily_state','attachment') NOT NULL DEFAULT 'entry'");
         $this->tryExec($pdo, "ALTER TABLE livredecaisse ADD COLUMN attachment_entry_id BIGINT UNSIGNED DEFAULT NULL AFTER reference_key");
+        $this->tryExec($pdo, "ALTER TABLE livredecaisse ADD COLUMN departement VARCHAR(255) NOT NULL DEFAULT '' AFTER business_date");
+        $this->tryExec($pdo, "ALTER TABLE livredecaisse ADD COLUMN agence VARCHAR(255) NOT NULL DEFAULT '' AFTER departement");
         $this->tryExec($pdo, "ALTER TABLE livredecaisse ADD COLUMN num_remise_especes VARCHAR(120) NOT NULL DEFAULT '' AFTER appel_cotisation");
         $this->tryExec($pdo, "ALTER TABLE livredecaisse ADD COLUMN num_remise_cheque VARCHAR(120) NOT NULL DEFAULT '' AFTER num_remise_especes");
         $this->tryExec($pdo, "ALTER TABLE livredecaisse ADD COLUMN attachment_file_name VARCHAR(255) NOT NULL DEFAULT '' AFTER num_remise_cheque");

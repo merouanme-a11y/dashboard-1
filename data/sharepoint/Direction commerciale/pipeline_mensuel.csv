@@ -1,0 +1,13 @@
+Date;Agence;Departement;Commercial;Canal;Statut;Montant;Objectif;TauxConversion
+2026-04-01;Paris Republique;75 - Paris;Sonia Martin;Digital;Gagne;12450;15000;83
+2026-04-01;Lyon Centre;69 - Rhone;Karim Dubois;Agence;En cours;9850;11000;71
+2026-04-01;Baie-Mahault;971 - Guadeloupe;Lina Albert;Telephone;Perdu;3200;9000;36
+2026-04-02;Paris Republique;75 - Paris;Sonia Martin;Digital;En cours;11300;15000;75
+2026-04-02;Lyon Centre;69 - Rhone;Karim Dubois;Partenaire;Gagne;14150;11000;92
+2026-04-02;Baie-Mahault;971 - Guadeloupe;Lina Albert;Agence;Gagne;8750;9000;79
+2026-04-03;Paris Republique;75 - Paris;Sonia Martin;Digital;Gagne;15800;15000;96
+2026-04-03;Lyon Centre;69 - Rhone;Karim Dubois;Telephone;En cours;10100;11000;74
+2026-04-03;Baie-Mahault;971 - Guadeloupe;Lina Albert;Digital;En cours;6900;9000;63
+2026-04-04;Paris Republique;75 - Paris;Sonia Martin;Partenaire;En cours;13200;15000;82
+2026-04-04;Lyon Centre;69 - Rhone;Karim Dubois;Agence;Gagne;14990;11000;94
+2026-04-04;Baie-Mahault;971 - Guadeloupe;Lina Albert;Telephone;Gagne;9150;9000;88

@@ -8,6 +8,7 @@
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
     upload_dir: '%kernel.project_dir%/public/uploads'
+    bi_sharepoint_data_dir: '%kernel.project_dir%/data/sharepoint'
     legacy_directory_db_name: 'mydash83'
     youtrack_url: 'https://maintenance.adep.com'
     youtrack_token: 'perm-TWVyb3Vhbg==.NTAtMTA=.VmHAxQFu0LsdFFg1p86ORO4nkelUus'
@@ -66,6 +67,10 @@ services:
             $youTrackUrl: '%youtrack_url%'
             $youTrackToken: '%youtrack_token%'
             $youTrackProject: '%youtrack_project%'
+
+    App\Service\SharePointDataService:
+        arguments:
+            $dataDirectory: '%bi_sharepoint_data_dir%'
 
     App\Service\GanttLegacyRuntime:
         arguments:

@@ -1,0 +1,359 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Business Intelligence{% endblock %}
+
+{% block stylesheets %}
+    <link href="{{ asset('modules/stats/css/stats.css') }}" rel="stylesheet">
+    <link href="{{ asset('modules/bi/css/bi.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+    <script>
+        window.__BI_CONFIG__ = {{ {
+            connectionsUrl: biConnectionsUrl,
+            filesUrl: biFilesUrl,
+            datasetUrl: biDatasetUrl,
+            preferencesUrl: biPreferencesUrl,
+            preferencesCsrfToken: csrf_token('bi_preferences'),
+            preloadedConnections: biPreloadedConnections,
+            preloadedConnectionId: biPreloadedConnectionId,
+            preloadedFiles: biPreloadedFiles,
+            preloadedFileId: biPreloadedFileId,
+            preloadedDataset: biPreloadedDataset,
+            builderOptions: biBuilderOptions,
+            suggestedWidgets: biSuggestedWidgets,
+            preferences: biPreferencesPayload,
+            canEdit: biCanEdit,
+            settingsUrl: biSettingsUrl,
+            uploadSourceUrl: biUploadSourceUrl,
+            settingsCsrfToken: csrf_token('bi_settings'),
+            moduleSettings: biModuleSettings
+        }|json_encode|raw }};
+    </script>
+
+    <div class="bi-container">
+        <div class="stats-toolbar bi-toolbar">
+            <div class="stats-toolbar-field">
+                <label for="biConnectionSelect">Connexion SharePoint</label>
+                <select id="biConnectionSelect" class="stats-select"></select>
+            </div>
+
+            <div class="stats-toolbar-field">
+                <label for="biFileSelect">Fichier source</label>
+                <select id="biFileSelect" class="stats-select"></select>
+            </div>
+
+            <div class="stats-toolbar-field bi-page-field">
+                <label for="biPageSelect">Page BI</label>
+                <div class="bi-page-controls">
+                    <select id="biPageSelect" class="stats-select"></select>
+                    <button id="biAddPageBtn" type="button" class="stats-edit-button bi-icon-button" title="Nouvelle page" aria-label="Nouvelle page"{{ biCanEdit ? '' : ' hidden' }}><i class="bi bi-file-earmark-plus"></i></button>
+                    <button id="biDuplicatePageBtn" type="button" class="stats-edit-button bi-icon-button" title="Dupliquer la page" aria-label="Dupliquer la page"{{ biCanEdit ? '' : ' hidden' }}><i class="bi bi-copy"></i></button>
+                    <button id="biDeletePageBtn" type="button" class="stats-edit-button bi-icon-button" title="Supprimer la page" aria-label="Supprimer la page"{{ biCanEdit ? '' : ' hidden' }}><i class="bi bi-trash3"></i></button>
+                </div>
+            </div>
+
+            <button id="biSettingsBtn" type="button" class="stats-edit-button bi-icon-button" title="Parametres du module BI" aria-label="Parametres du module BI"{{ biCanEdit ? '' : ' hidden' }}>
+                <i class="bi bi-gear"></i>
+            </button>
+
+            <button id="biEditModeBtn" type="button" class="stats-edit-button bi-icon-button" title="Activer le mode de modification" aria-label="Modifier la page BI"{{ biCanEdit ? '' : ' hidden' }}>
+                <i class="bi bi-pencil-square"></i>
+            </button>
+
+            <button id="biRefreshBtn" type="button" class="stats-edit-button bi-icon-button" title="Recharger les donnees" aria-label="Actualiser">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+
+            <span id="biSaveStatus" class="stats-save-status bi-status-pill" hidden></span>
+        </div>
+
+        <div id="biBuilderTopbar" class="bi-builder-topbar" hidden>
+            <div class="bi-builder-topbar-label">
+                Outils de creation
+            </div>
+            <div id="biWidgetPalette" class="bi-widget-palette"></div>
+            <button id="biAddFilterBtn" type="button" class="stats-edit-button bi-filter-add">Ajouter un filtre</button>
+        </div>
+
+        <div id="biLoading" class="stats-loading">
+            <p>Chargement du module BI...</p>
+        </div>
+
+        <div id="biShell" class="bi-shell" hidden>
+            <div class="bi-main">
+                <div id="biFiltersBar" class="bi-filters-bar" hidden></div>
+                <div id="biWidgetsGrid" class="cards-grid-flex bi-grid"></div>
+                <div id="biEmptyState" class="stats-empty" hidden>
+                    Ajoutez un premier composant depuis la palette pour construire votre page BI.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="biWidgetModal" class="bi-modal" hidden>
+        <div class="bi-modal-backdrop" data-modal-close="widget"></div>
+        <div class="bi-modal-dialog bi-widget-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="biWidgetModalTitle">
+            <div class="bi-modal-header">
+                <div>
+                    <h3 id="biWidgetModalTitle">Configuration du bloc</h3>
+                    <span id="biInspectorHint" class="bi-modal-subtitle">Selectionnez un composant</span>
+                </div>
+                <button id="biWidgetModalClose" type="button" class="bi-modal-close" aria-label="Fermer la configuration du bloc">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div id="biInspectorEmpty" class="bi-inspector-empty">
+                Aucun composant selectionne.
+            </div>
+
+            <form id="biInspectorForm" class="bi-inspector-form" hidden>
+                <div class="bi-inspector-main">
+                <section class="bi-inspector-section bi-inspector-section--structure">
+                    <div class="bi-inspector-section-head">
+                        <h4>Structure du bloc</h4>
+                        <p>Reglez le format general, la largeur et la hauteur de la carte.</p>
+                    </div>
+                    <div class="bi-inspector-section-grid">
+                        <div class="bi-inspector-field bi-inspector-field-wide">
+                            <label for="biWidgetTitle">Titre</label>
+                            <input id="biWidgetTitle" type="text" class="stats-select bi-text-input">
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetType">Type de composant</label>
+                            <select id="biWidgetType" class="stats-select"></select>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetLayout">Largeur</label>
+                            <select id="biWidgetLayout" class="stats-select"></select>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetAlignment">Alignement</label>
+                            <select id="biWidgetAlignment" class="stats-select">
+                                <option value="left">Gauche</option>
+                                <option value="center">Centre</option>
+                                <option value="right">Droite</option>
+                            </select>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetCardHeight">Hauteur de la carte</label>
+                            <div class="bi-range-field">
+                                <input id="biWidgetCardHeight" type="range" min="75" max="520" step="5">
+                                <span id="biWidgetCardHeightValue" class="bi-range-value">75 px</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="bi-inspector-section bi-inspector-section--data">
+                    <div class="bi-inspector-section-head">
+                        <h4>Donnees</h4>
+                        <p>Choisissez les colonnes utilisees et le mode de calcul du composant.</p>
+                    </div>
+                    <div class="bi-inspector-section-grid">
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetDimension">Colonne de regroupement</label>
+                            <select id="biWidgetDimension" class="stats-select"></select>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetValue">Colonne de valeur</label>
+                            <select id="biWidgetValue" class="stats-select"></select>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetAggregation">Mode de calcul</label>
+                            <select id="biWidgetAggregation" class="stats-select"></select>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetFormat">Format</label>
+                            <select id="biWidgetFormat" class="stats-select">
+                                <option value="">Standard</option>
+                                <option value="currency">Monetaire</option>
+                                <option value="percent">Pourcentage</option>
+                                <option value="number">Nombre</option>
+                            </select>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetMaxItems">Nombre maximum d elements</label>
+                            <div class="bi-range-field">
+                                <input id="biWidgetMaxItems" type="range" min="3" max="20" step="1">
+                                <span id="biWidgetMaxItemsValue" class="bi-range-value">8</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="bi-inspector-section bi-inspector-section--display">
+                    <div class="bi-inspector-section-head">
+                        <h4>Affichage et couleurs</h4>
+                        <p>Reglez la densite visuelle, l'alignement et le style du bloc depuis cette zone.</p>
+                    </div>
+                    <div class="bi-inspector-section-grid">
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetTextSize">Taille des textes</label>
+                            <div class="bi-range-field">
+                                <input id="biWidgetTextSize" type="range" min="12" max="22" step="1">
+                                <span id="biWidgetTextSizeValue" class="bi-range-value">15 px</span>
+                            </div>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label for="biWidgetValueSize">Taille des valeurs</label>
+                            <div class="bi-range-field">
+                                <input id="biWidgetValueSize" type="range" min="24" max="72" step="2">
+                                <span id="biWidgetValueSizeValue" class="bi-range-value">48 px</span>
+                            </div>
+                        </div>
+
+                        <div class="bi-inspector-field bi-inspector-field-wide">
+                            <label>Couleurs du bloc</label>
+                            <div class="bi-modal-color-grid">
+                                <div class="bi-modal-color-field">
+                                    <span>Graphique</span>
+                                    <div class="bi-modal-color-controls">
+                                        <button id="biWidgetChartColor" type="button" class="bi-color-trigger bi-color-trigger-large" title="Couleur du graphique" aria-label="Couleur du graphique"></button>
+                                        <input id="biWidgetChartColorInput" type="color" class="bi-color-native-input bi-color-native-input-inline" aria-label="Choisir la couleur du graphique">
+                                        <input id="biWidgetChartColorHex" type="text" class="bi-color-hex-input bi-color-hex-input-inline" placeholder="#FFFFFF" maxlength="7" aria-label="Code couleur du graphique">
+                                    </div>
+                                </div>
+                                <div class="bi-modal-color-field">
+                                    <span>Fond</span>
+                                    <div class="bi-modal-color-controls">
+                                        <button id="biWidgetBgColor" type="button" class="bi-color-trigger bi-color-trigger-large" title="Couleur de fond" aria-label="Couleur de fond"></button>
+                                        <input id="biWidgetBgColorInput" type="color" class="bi-color-native-input bi-color-native-input-inline" aria-label="Choisir la couleur de fond">
+                                        <input id="biWidgetBgColorHex" type="text" class="bi-color-hex-input bi-color-hex-input-inline" placeholder="#FFFFFF" maxlength="7" aria-label="Code couleur de fond">
+                                    </div>
+                                </div>
+                                <div class="bi-modal-color-field">
+                                    <span>Texte</span>
+                                    <div class="bi-modal-color-controls">
+                                        <button id="biWidgetTextColor" type="button" class="bi-color-trigger bi-color-trigger-large" title="Couleur du texte" aria-label="Couleur du texte"></button>
+                                        <input id="biWidgetTextColorInput" type="color" class="bi-color-native-input bi-color-native-input-inline" aria-label="Choisir la couleur du texte">
+                                        <input id="biWidgetTextColorHex" type="text" class="bi-color-hex-input bi-color-hex-input-inline" placeholder="#FFFFFF" maxlength="7" aria-label="Code couleur du texte">
+                                    </div>
+                                </div>
+                                <div class="bi-modal-color-field">
+                                    <span>Titre</span>
+                                    <div class="bi-modal-color-controls">
+                                        <button id="biWidgetTitleColor" type="button" class="bi-color-trigger bi-color-trigger-large" title="Couleur du titre" aria-label="Couleur du titre"></button>
+                                        <input id="biWidgetTitleColorInput" type="color" class="bi-color-native-input bi-color-native-input-inline" aria-label="Choisir la couleur du titre">
+                                        <input id="biWidgetTitleColorHex" type="text" class="bi-color-hex-input bi-color-hex-input-inline" placeholder="#FFFFFF" maxlength="7" aria-label="Code couleur du titre">
+                                    </div>
+                                </div>
+                                <div class="bi-modal-color-field">
+                                    <span>Valeurs</span>
+                                    <div class="bi-modal-color-controls">
+                                        <button id="biWidgetValueColor" type="button" class="bi-color-trigger bi-color-trigger-large" title="Couleur des valeurs" aria-label="Couleur des valeurs"></button>
+                                        <input id="biWidgetValueColorInput" type="color" class="bi-color-native-input bi-color-native-input-inline" aria-label="Choisir la couleur des valeurs">
+                                        <input id="biWidgetValueColorHex" type="text" class="bi-color-hex-input bi-color-hex-input-inline" placeholder="#FFFFFF" maxlength="7" aria-label="Code couleur des valeurs">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label class="bi-toggle-field" for="biWidgetHideTitle">
+                                <input id="biWidgetHideTitle" type="checkbox">
+                                <span>Masquer le titre</span>
+                            </label>
+                        </div>
+
+                        <div class="bi-inspector-field">
+                            <label class="bi-toggle-field" for="biWidgetHideText">
+                                <input id="biWidgetHideText" type="checkbox">
+                                <span>Masquer les textes</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+                </div>
+
+                <aside class="bi-inspector-side">
+                <section class="bi-inspector-section bi-inspector-section--preview bi-inspector-preview-section">
+                    <div class="bi-inspector-section-head">
+                        <h4>Apercu</h4>
+                        <p>Visualisez directement l'impact des reglages sur le bloc avant de fermer la configuration.</p>
+                    </div>
+                    <div id="biWidgetPreview" class="bi-inspector-preview"></div>
+                </section>
+                </aside>
+            </form>
+        </div>
+    </div>
+
+    <div id="biSettingsModal" class="bi-modal" hidden>
+        <div class="bi-modal-backdrop" data-modal-close="settings"></div>
+        <div class="bi-modal-dialog bi-settings-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="biSettingsModalTitle">
+            <div class="bi-modal-header">
+                <div>
+                    <h3 id="biSettingsModalTitle">Parametres du module BI</h3>
+                    <span class="bi-modal-subtitle">Ajoutez des sources locales ou des URLs SharePoint directes.</span>
+                </div>
+                <button id="biSettingsModalClose" type="button" class="bi-modal-close" aria-label="Fermer les parametres du module BI">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="bi-settings-sections">
+                <section class="bi-settings-card">
+                    <div class="bi-settings-card-header">
+                        <h4>Importer un fichier sur le site</h4>
+                        <p>CSV et JSON sont supportes. Le fichier sera disponible comme source BI.</p>
+                    </div>
+                    <form id="biUploadSourceForm" class="bi-settings-form" enctype="multipart/form-data">
+                        <div class="bi-settings-form-grid">
+                            <div class="bi-inspector-field">
+                                <label for="biUploadSourceLabel">Libelle de la source</label>
+                                <input id="biUploadSourceLabel" name="label" type="text" class="stats-select bi-text-input" placeholder="Ex. Performance agences">
+                            </div>
+                            <div class="bi-inspector-field">
+                                <label for="biUploadSourceFile">Fichier</label>
+                                <input id="biUploadSourceFile" name="sourceFile" type="file" class="stats-select bi-file-input" accept=".csv,.json">
+                            </div>
+                        </div>
+                        <button type="submit" class="stats-edit-button">Importer la source</button>
+                    </form>
+                </section>
+
+                <section class="bi-settings-card">
+                    <div class="bi-settings-card-header">
+                        <h4>Ajouter une URL SharePoint</h4>
+                        <p>Collez une URL directe vers un fichier CSV ou JSON publie.</p>
+                    </div>
+                    <form id="biRemoteSourceForm" class="bi-settings-form">
+                        <div class="bi-settings-form-grid">
+                            <div class="bi-inspector-field">
+                                <label for="biRemoteSourceLabel">Libelle</label>
+                                <input id="biRemoteSourceLabel" name="label" type="text" class="stats-select bi-text-input" placeholder="Ex. SharePoint ventes">
+                            </div>
+                            <div class="bi-inspector-field bi-inspector-field-wide">
+                                <label for="biRemoteSourceUrl">URL SharePoint</label>
+                                <input id="biRemoteSourceUrl" name="url" type="url" class="stats-select bi-text-input" placeholder="https://.../fichier.csv">
+                            </div>
+                        </div>
+                        <button type="submit" class="stats-edit-button">Ajouter l'URL</button>
+                    </form>
+                </section>
+
+                <section class="bi-settings-card">
+                    <div class="bi-settings-card-header">
+                        <h4>Sources configurees</h4>
+                        <p>Retrouvez ici toutes les sources BI disponibles dans le selecteur de connexion.</p>
+                    </div>
+                    <div id="biSettingsSourcesList" class="bi-settings-sources-list"></div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3/dist/chart.min.js"></script>
+    <script src="{{ asset('modules/bi/js/bi.js') }}"></script>
+{% endblock %}

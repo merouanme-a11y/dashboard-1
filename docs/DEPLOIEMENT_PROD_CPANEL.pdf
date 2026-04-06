@@ -1,0 +1,610 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Type /Pages /Count 7 /Kids [5 0 R 7 0 R 9 0 R 11 0 R 13 0 R 15 0 R 17 0 R] >>
+endobj
+4 0 obj
+<< /Length 2542 >>
+stream
+BT
+/F1 11 Tf
+0 g
+/F2 18 Tf
+1 0 0 1 50 782 Tm
+(Procedure de deploiement production cPanel) Tj
+/F1 11 Tf
+/F2 13 Tf
+1 0 0 1 50 750 Tm
+(Objectif) Tj
+/F1 11 Tf
+1 0 0 1 50 723 Tm
+(Recreer un hebergement de production pour le projet `dashboard-1` a partir du local, sur) Tj
+1 0 0 1 50 708 Tm
+(cPanel, avec le meme nom de domaine :) Tj
+1 0 0 1 50 685 Tm
+(`https://merouan.meha0348.odns.fr`) Tj
+1 0 0 1 50 662 Tm
+(Cette procedure est adaptee au fonctionnement actuel du projet.) Tj
+/F2 13 Tf
+1 0 0 1 50 639 Tm
+(Architecture cible) Tj
+/F1 11 Tf
+1 0 0 1 50 612 Tm
+(- Depot Git cPanel : `/home/meha0348/repositories/dashboard-1`) Tj
+1 0 0 1 50 597 Tm
+(- Dossier web du domaine : `/home/meha0348/public_html`) Tj
+1 0 0 1 50 582 Tm
+(- Domaine : `merouan.meha0348.odns.fr`) Tj
+1 0 0 1 50 567 Tm
+(- Deploiement : pilote par `.cpanel.yml`) Tj
+1 0 0 1 50 544 Tm
+(Important :) Tj
+1 0 0 1 50 521 Tm
+(- Le domaine ne doit pas pointer vers `/home/meha0348/repositories/dashboard-1`) Tj
+1 0 0 1 50 506 Tm
+(- Le domaine doit pointer vers `/home/meha0348/public_html`) Tj
+/F2 13 Tf
+1 0 0 1 50 483 Tm
+(1. Preparation locale) Tj
+/F1 11 Tf
+1 0 0 1 50 456 Tm
+(Avant toute mise en production, verifier sur le PC :) Tj
+1 0 0 1 50 433 Tm
+(1. Le projet fonctionne bien en local.) Tj
+1 0 0 1 50 418 Tm
+(2. Tous les changements de code a deployer sont commites.) Tj
+1 0 0 1 50 403 Tm
+(3. Tous les commits sont pushes sur `origin/main`.) Tj
+1 0 0 1 50 388 Tm
+(4. Les fichiers suivants existent dans le depot :) Tj
+1 0 0 1 50 373 Tm
+(   - `.cpanel.yml`) Tj
+1 0 0 1 50 358 Tm
+(   - `.env.prod`) Tj
+1 0 0 1 50 343 Tm
+(   - `.htaccess`) Tj
+1 0 0 1 50 328 Tm
+(   - `public/.htaccess`) Tj
+1 0 0 1 50 313 Tm
+(   - `menu_config.json`) Tj
+1 0 0 1 50 298 Tm
+(5. Les assets necessaires sont bien suivis par Git, notamment :) Tj
+1 0 0 1 50 283 Tm
+(   - `public/assets/bootstrap-icons/bootstrap-icons.css`) Tj
+1 0 0 1 50 268 Tm
+(   - `public/assets/bootstrap-icons/fonts/bootstrap-icons.woff`) Tj
+1 0 0 1 50 253 Tm
+(   - `public/assets/bootstrap-icons/fonts/bootstrap-icons.woff2`) Tj
+1 0 0 1 50 230 Tm
+(Commandes utiles en local :) Tj
+1 0 0 1 50 207 Tm
+(git status) Tj
+1 0 0 1 50 192 Tm
+(git log --oneline -n 5) Tj
+1 0 0 1 50 177 Tm
+(git push origin main) Tj
+/F2 13 Tf
+1 0 0 1 50 146 Tm
+(2. Export de la base locale) Tj
+/F1 11 Tf
+1 0 0 1 50 119 Tm
+(Le projet ne depend pas seulement de Git. Le menu, les modules, les permissions, les pages) Tj
+1 0 0 1 50 104 Tm
+(et une partie de l'affichage viennent de la base de donnees.) Tj
+1 0 0 1 50 81 Tm
+(Il faut donc exporter la base locale.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 2117 >>
+stream
+BT
+/F1 11 Tf
+0 g
+1 0 0 1 50 782 Tm
+(Points a retenir :) Tj
+1 0 0 1 50 759 Tm
+(- Git transporte le code) Tj
+1 0 0 1 50 744 Tm
+(- MySQL transporte les donnees) Tj
+1 0 0 1 50 729 Tm
+(- `menu_config.json` transporte une partie de la configuration de menu) Tj
+1 0 0 1 50 706 Tm
+(Faire un export complet de la base locale en SQL.) Tj
+/F2 13 Tf
+1 0 0 1 50 683 Tm
+(3. Preparation de l'hebergement cPanel) Tj
+/F1 11 Tf
+1 0 0 1 50 656 Tm
+(Dans cPanel :) Tj
+1 0 0 1 50 633 Tm
+(1. Creer le domaine ou rattacher le domaine `merouan.meha0348.odns.fr`) Tj
+1 0 0 1 50 618 Tm
+(2. Verifier que le `Document Root` du domaine est :) Tj
+1 0 0 1 50 595 Tm
+(/home/meha0348/public_html) Tj
+1 0 0 1 50 564 Tm
+(3. Activer SSL) Tj
+1 0 0 1 50 549 Tm
+(4. Regler la version PHP en `8.2` minimum) Tj
+1 0 0 1 50 534 Tm
+(5. Creer une base MySQL et un utilisateur MySQL) Tj
+1 0 0 1 50 519 Tm
+(6. Noter :) Tj
+1 0 0 1 50 504 Tm
+(   - nom de la base) Tj
+1 0 0 1 50 489 Tm
+(   - utilisateur MySQL) Tj
+1 0 0 1 50 474 Tm
+(   - mot de passe MySQL) Tj
+/F2 13 Tf
+1 0 0 1 50 451 Tm
+(4. Creation du depot Git dans cPanel) Tj
+/F1 11 Tf
+1 0 0 1 50 424 Tm
+(Dans `Git Version Control` :) Tj
+1 0 0 1 50 401 Tm
+(1. Cloner le depot dans :) Tj
+1 0 0 1 50 378 Tm
+(/home/meha0348/repositories/dashboard-1) Tj
+1 0 0 1 50 347 Tm
+(2. Choisir la branche `main`) Tj
+1 0 0 1 50 324 Tm
+(Verification a faire dans le terminal cPanel :) Tj
+1 0 0 1 50 301 Tm
+(cd /home/meha0348/repositories/dashboard-1) Tj
+1 0 0 1 50 286 Tm
+(git status) Tj
+1 0 0 1 50 271 Tm
+(git log --oneline -n 5) Tj
+/F2 13 Tf
+1 0 0 1 50 240 Tm
+(5. Configuration d'environnement en production) Tj
+/F1 11 Tf
+1 0 0 1 50 213 Tm
+(Dans le dossier du repo serveur, creer un fichier non versionne :) Tj
+1 0 0 1 50 190 Tm
+(/home/meha0348/repositories/dashboard-1/.env.prod.local) Tj
+1 0 0 1 50 159 Tm
+(Contenu type :) Tj
+1 0 0 1 50 136 Tm
+(APP_ENV=prod) Tj
+1 0 0 1 50 121 Tm
+(APP_DEBUG=0) Tj
+1 0 0 1 50 106 Tm
+(APP_SECRET=ton_secret) Tj
+1 0 0 1 50 91 Tm
+(DEFAULT_URI=https://merouan.meha0348.odns.fr) Tj
+1 0 0 1 50 76 Tm
+(DATABASE_URL="mysql://USER:PASS@127.0.0.1:3306/DBNAME?serverVersion=8.0.32&charset=utf8mb4") Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 2027 >>
+stream
+BT
+/F1 11 Tf
+0 g
+1 0 0 1 50 766 Tm
+(Recommandation :) Tj
+1 0 0 1 50 743 Tm
+(- creer aussi `.env.local` avec les memes valeurs si le projet ou certaines commandes) Tj
+1 0 0 1 64 728 Tm
+(console l'utilisent) Tj
+1 0 0 1 50 705 Tm
+(Ne jamais commiter ces secrets dans Git.) Tj
+/F2 13 Tf
+1 0 0 1 50 682 Tm
+(6. Dependances PHP) Tj
+/F1 11 Tf
+1 0 0 1 50 655 Tm
+(Le projet Symfony a besoin du dossier `vendor/`.) Tj
+1 0 0 1 50 632 Tm
+(Cas 1 : Composer existe sur le serveur) Tj
+1 0 0 1 50 609 Tm
+(- laisser `.cpanel.yml` lancer l'installation) Tj
+1 0 0 1 50 586 Tm
+(Cas 2 : Composer n'existe pas sur le serveur) Tj
+1 0 0 1 50 563 Tm
+(- preparer `vendor/` depuis le local) Tj
+1 0 0 1 50 548 Tm
+(- uploader l'archive ou le dossier dans :) Tj
+1 0 0 1 50 525 Tm
+(/home/meha0348/repositories/dashboard-1/vendor) Tj
+1 0 0 1 50 494 Tm
+(Verification :) Tj
+1 0 0 1 50 471 Tm
+(ls /home/meha0348/repositories/dashboard-1/vendor/autoload.php) Tj
+/F2 13 Tf
+1 0 0 1 50 440 Tm
+(7. Import de la base de donnees) Tj
+/F1 11 Tf
+1 0 0 1 50 413 Tm
+(Dans phpMyAdmin :) Tj
+1 0 0 1 50 390 Tm
+(1. Selectionner la base de production) Tj
+1 0 0 1 50 375 Tm
+(2. Faire une sauvegarde si besoin) Tj
+1 0 0 1 50 360 Tm
+(3. Importer le fichier SQL exporte depuis le local) Tj
+1 0 0 1 50 337 Tm
+(Important :) Tj
+1 0 0 1 50 314 Tm
+(- si tu veux la meme prod que le local, il faut la meme base) Tj
+1 0 0 1 50 299 Tm
+(- si le menu est different, verifier aussi l'utilisateur connecte) Tj
+/F2 13 Tf
+1 0 0 1 50 276 Tm
+(8. Premier deploiement cPanel) Tj
+/F1 11 Tf
+1 0 0 1 50 249 Tm
+(Dans `Git Version Control` :) Tj
+1 0 0 1 50 226 Tm
+(1. Ouvrir le repo `dashboard-1`) Tj
+1 0 0 1 50 211 Tm
+(2. Cliquer `Update from Remote`) Tj
+1 0 0 1 50 196 Tm
+(3. Puis cliquer `Deploy HEAD Commit`) Tj
+1 0 0 1 50 173 Tm
+(Le fichier `.cpanel.yml` actuel copie le projet vers :) Tj
+1 0 0 1 50 150 Tm
+(/home/meha0348/public_html) Tj
+1 0 0 1 50 119 Tm
+(Il gere aussi :) Tj
+1 0 0 1 50 96 Tm
+(- la copie des fichiers) Tj
+1 0 0 1 50 81 Tm
+(- une tentative d'installation Composer si disponible) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 1964 >>
+stream
+BT
+/F1 11 Tf
+0 g
+1 0 0 1 50 782 Tm
+(- la remise des permissions) Tj
+1 0 0 1 50 767 Tm
+(- le vidage du cache Symfony) Tj
+/F2 13 Tf
+1 0 0 1 50 744 Tm
+(9. Si le bouton Deploy est grise) Tj
+/F1 11 Tf
+1 0 0 1 50 717 Tm
+(cPanel desactive le deploiement si le depot n'est pas propre.) Tj
+1 0 0 1 50 694 Tm
+(Verification :) Tj
+1 0 0 1 50 671 Tm
+(cd /home/meha0348/repositories/dashboard-1) Tj
+1 0 0 1 50 656 Tm
+(git status) Tj
+1 0 0 1 50 625 Tm
+(Si le depot contient des modifications locales :) Tj
+1 0 0 1 50 602 Tm
+(git stash push -u -m "clean before deploy") Tj
+1 0 0 1 50 571 Tm
+(Puis :) Tj
+1 0 0 1 50 548 Tm
+(git status) Tj
+1 0 0 1 50 517 Tm
+(Il faut retrouver un depot propre avant de relancer `Deploy HEAD Commit`.) Tj
+/F2 13 Tf
+1 0 0 1 50 494 Tm
+(10. Verification apres deploiement) Tj
+/F1 11 Tf
+1 0 0 1 50 467 Tm
+(Verifier :) Tj
+1 0 0 1 50 444 Tm
+(1. La page d'accueil) Tj
+1 0 0 1 50 429 Tm
+(2. La page de login) Tj
+1 0 0 1 50 414 Tm
+(3. Les icones) Tj
+1 0 0 1 50 399 Tm
+(4. Les menus) Tj
+1 0 0 1 50 384 Tm
+(5. Les modules) Tj
+1 0 0 1 50 369 Tm
+(6. Les pages dynamiques) Tj
+1 0 0 1 50 346 Tm
+(URLs a tester :) Tj
+1 0 0 1 50 323 Tm
+(https://merouan.meha0348.odns.fr/) Tj
+1 0 0 1 50 308 Tm
+(https://merouan.meha0348.odns.fr/login) Tj
+1 0 0 1 50 293 Tm
+(https://merouan.meha0348.odns.fr/assets/bootstrap-icons/bootstrap-icons.css) Tj
+1 0 0 1 50 262 Tm
+(Si les icones ne s'affichent pas :) Tj
+1 0 0 1 50 239 Tm
+(- verifier que les fichiers `public/assets/bootstrap-icons/` existent bien dans la prod) Tj
+1 0 0 1 50 224 Tm
+(- verifier qu'ils ne sont pas ignores par Git) Tj
+/F2 13 Tf
+1 0 0 1 50 201 Tm
+(11. Si le site affiche une erreur 403) Tj
+/F1 11 Tf
+1 0 0 1 50 174 Tm
+(Cause frequente :) Tj
+1 0 0 1 50 151 Tm
+(- mauvais droits sur `.htaccess`) Tj
+1 0 0 1 50 136 Tm
+(- mauvais `Document Root`) Tj
+1 0 0 1 50 121 Tm
+(- domaine pointe sur le repo au lieu de `public_html`) Tj
+1 0 0 1 50 98 Tm
+(Commandes utiles :) Tj
+1 0 0 1 50 75 Tm
+(chmod 711 /home/meha0348) Tj
+ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Length 2267 >>
+stream
+BT
+/F1 11 Tf
+0 g
+1 0 0 1 50 782 Tm
+(chmod 755 /home/meha0348/repositories) Tj
+1 0 0 1 50 767 Tm
+(find /home/meha0348/repositories/dashboard-1 -type d -exec chmod 755 {} \\;) Tj
+1 0 0 1 50 752 Tm
+(find /home/meha0348/repositories/dashboard-1 -type f -exec chmod 644 {} \\;) Tj
+1 0 0 1 50 737 Tm
+(find /home/meha0348/public_html -type d -exec chmod 755 {} \\;) Tj
+1 0 0 1 50 722 Tm
+(find /home/meha0348/public_html -type f -exec chmod 644 {} \\;) Tj
+1 0 0 1 50 691 Tm
+(Verifications :) Tj
+1 0 0 1 50 668 Tm
+(- `Document Root` du domaine) Tj
+1 0 0 1 50 653 Tm
+(- presence de `.htaccess`) Tj
+1 0 0 1 50 638 Tm
+(- droits sur les fichiers) Tj
+/F2 13 Tf
+1 0 0 1 50 615 Tm
+(12. Si le site affiche une erreur 500) Tj
+/F1 11 Tf
+1 0 0 1 50 588 Tm
+(Causes frequentes :) Tj
+1 0 0 1 50 565 Tm
+(- `vendor/` absent) Tj
+1 0 0 1 50 550 Tm
+(- mauvaise variable `DATABASE_URL`) Tj
+1 0 0 1 50 535 Tm
+(- cache Symfony obsolete) Tj
+1 0 0 1 50 520 Tm
+(- permissions incorrectes sur certains fichiers vendor) Tj
+1 0 0 1 50 497 Tm
+(Commandes utiles :) Tj
+1 0 0 1 50 474 Tm
+(cd /home/meha0348/repositories/dashboard-1) Tj
+1 0 0 1 50 459 Tm
+(php bin/console cache:clear --env=prod --no-debug) Tj
+1 0 0 1 50 444 Tm
+(tail -n 80 error_log) Tj
+1 0 0 1 50 429 Tm
+(tail -n 80 var/log/prod.log) Tj
+1 0 0 1 50 398 Tm
+(Verifier aussi :) Tj
+1 0 0 1 50 375 Tm
+(ls /home/meha0348/repositories/dashboard-1/vendor/autoload.php) Tj
+/F2 13 Tf
+1 0 0 1 50 344 Tm
+(13. Points specifiques a ce projet) Tj
+/F1 11 Tf
+1 0 0 1 50 317 Tm
+(Pour ce projet, il faut faire attention a :) Tj
+1 0 0 1 50 294 Tm
+(- la base de donnees) Tj
+1 0 0 1 50 279 Tm
+(- `menu_config.json`) Tj
+1 0 0 1 50 264 Tm
+(- les permissions utilisateur) Tj
+1 0 0 1 50 249 Tm
+(- les modules actifs) Tj
+1 0 0 1 50 234 Tm
+(- le cache) Tj
+1 0 0 1 50 219 Tm
+(- les assets d'icones) Tj
+1 0 0 1 50 196 Tm
+(Le menu peut etre different entre local et prod meme avec le meme code si :) Tj
+1 0 0 1 50 173 Tm
+(- la base n'est pas identique) Tj
+1 0 0 1 50 158 Tm
+(- l'utilisateur connecte n'est pas le meme) Tj
+1 0 0 1 50 143 Tm
+(- les permissions ne sont pas les memes) Tj
+1 0 0 1 50 128 Tm
+(- les modules ne sont pas tous actifs) Tj
+/F2 13 Tf
+1 0 0 1 50 105 Tm
+(14. Routine normale ensuite) Tj
+/F1 11 Tf
+1 0 0 1 50 78 Tm
+(Pour les mises a jour futures :) Tj
+ET
+endstream
+endobj
+13 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 12 0 R >>
+endobj
+14 0 obj
+<< /Length 1939 >>
+stream
+BT
+/F1 11 Tf
+0 g
+1 0 0 1 50 782 Tm
+(1. Modifier et tester en local) Tj
+1 0 0 1 50 767 Tm
+(2. Commit) Tj
+1 0 0 1 50 752 Tm
+(3. Push vers GitHub) Tj
+1 0 0 1 50 737 Tm
+(4. Dans cPanel :) Tj
+1 0 0 1 50 722 Tm
+(   - `Update from Remote`) Tj
+1 0 0 1 50 707 Tm
+(   - `Deploy HEAD Commit`) Tj
+1 0 0 1 50 692 Tm
+(5. Reimporter la base si les donnees locales doivent remplacer la prod) Tj
+/F2 13 Tf
+1 0 0 1 50 669 Tm
+(15. Checklist finale) Tj
+/F1 11 Tf
+1 0 0 1 50 642 Tm
+(Avant mise en ligne :) Tj
+1 0 0 1 50 619 Tm
+(- code pousse sur `main`) Tj
+1 0 0 1 50 604 Tm
+(- `.cpanel.yml` present) Tj
+1 0 0 1 50 589 Tm
+(- `.env.prod.local` cree sur le serveur) Tj
+1 0 0 1 50 574 Tm
+(- base de production creee) Tj
+1 0 0 1 50 559 Tm
+(- dump SQL importe) Tj
+1 0 0 1 50 544 Tm
+(- `vendor/` disponible) Tj
+1 0 0 1 50 529 Tm
+(- domaine pointe vers `public_html`) Tj
+1 0 0 1 50 514 Tm
+(- SSL actif) Tj
+1 0 0 1 50 499 Tm
+(- cache vide) Tj
+1 0 0 1 50 476 Tm
+(Apres mise en ligne :) Tj
+1 0 0 1 50 453 Tm
+(- `/` fonctionne) Tj
+1 0 0 1 50 438 Tm
+(- `/login` fonctionne) Tj
+1 0 0 1 50 423 Tm
+(- les icones sont visibles) Tj
+1 0 0 1 50 408 Tm
+(- le bon utilisateur peut se connecter) Tj
+1 0 0 1 50 393 Tm
+(- les menus correspondent au local) Tj
+1 0 0 1 50 378 Tm
+(- les modules attendus apparaissent) Tj
+/F2 13 Tf
+1 0 0 1 50 355 Tm
+(Emplacements importants) Tj
+/F1 11 Tf
+1 0 0 1 50 328 Tm
+(Repo Git :) Tj
+1 0 0 1 50 305 Tm
+(/home/meha0348/repositories/dashboard-1) Tj
+1 0 0 1 50 274 Tm
+(Dossier web :) Tj
+1 0 0 1 50 251 Tm
+(/home/meha0348/public_html) Tj
+1 0 0 1 50 220 Tm
+(Fichier d'environnement prod a creer :) Tj
+1 0 0 1 50 197 Tm
+(/home/meha0348/repositories/dashboard-1/.env.prod.local) Tj
+/F2 13 Tf
+1 0 0 1 50 166 Tm
+(Fichiers importants du projet) Tj
+/F1 11 Tf
+1 0 0 1 50 139 Tm
+(- `.cpanel.yml`) Tj
+1 0 0 1 50 124 Tm
+(- `.env.prod`) Tj
+1 0 0 1 50 109 Tm
+(- `.htaccess`) Tj
+1 0 0 1 50 94 Tm
+(- `public/.htaccess`) Tj
+1 0 0 1 50 79 Tm
+(- `menu_config.json`) Tj
+ET
+endstream
+endobj
+15 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 14 0 R >>
+endobj
+16 0 obj
+<< /Length 595 >>
+stream
+BT
+/F1 11 Tf
+0 g
+1 0 0 1 50 782 Tm
+(- `composer.json`) Tj
+/F2 13 Tf
+1 0 0 1 50 759 Tm
+(Conclusion) Tj
+/F1 11 Tf
+1 0 0 1 50 732 Tm
+(La cle pour ne rien rater est simple :) Tj
+1 0 0 1 50 709 Tm
+(- le code vient de Git) Tj
+1 0 0 1 50 694 Tm
+(- les donnees viennent de MySQL) Tj
+1 0 0 1 50 679 Tm
+(- les secrets viennent des fichiers `.env*.local`) Tj
+1 0 0 1 50 664 Tm
+(- le domaine doit pointer vers `public_html`) Tj
+1 0 0 1 50 649 Tm
+(- le deploiement doit passer par cPanel et `.cpanel.yml`) Tj
+1 0 0 1 50 626 Tm
+(Si un seul de ces elements manque, la prod peut etre differente du local.) Tj
+ET
+endstream
+endobj
+17 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 16 0 R >>
+endobj
+18 0 obj
+<< /Type /Catalog /Pages 3 0 R >>
+endobj
+xref
+0 19
+0000000000 65535 f 
+0000000015 00000 n 
+0000000085 00000 n 
+0000000160 00000 n 
+0000000257 00000 n 
+0000002851 00000 n 
+0000002987 00000 n 
+0000005156 00000 n 
+0000005292 00000 n 
+0000007371 00000 n 
+0000007507 00000 n 
+0000009524 00000 n 
+0000009662 00000 n 
+0000011982 00000 n 
+0000012120 00000 n 
+0000014112 00000 n 
+0000014250 00000 n 
+0000014897 00000 n 
+0000015035 00000 n 
+trailer
+<< /Size 19 /Root 18 0 R >>
+startxref
+15085
+%%EOF

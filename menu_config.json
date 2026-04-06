@@ -62,7 +62,7 @@
                     "label": "Listing livre de caisse",
                     "icon": "bi-journal-text",
                     "folder": "pages",
-                    "parent_page": null,
+                    "parent_page": "app_livre_de_caisse",
                     "icon_only": false
                 }
             ],
@@ -128,7 +128,7 @@
                         "label": "Listing livre de caisse",
                         "icon": "bi-journal-text",
                         "folder": "pages",
-                        "parent_page": null,
+                        "parent_page": "app_livre_de_caisse",
                         "icon_only": false
                     },
                     {
@@ -253,6 +253,15 @@
                         "icon_only": false
                     },
                     {
+                        "page": "app_bi",
+                        "url": "/dashboard-1/bi",
+                        "label": "Business Intelligence",
+                        "icon": "bi-file-earmark-text",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
                         "page": "app_livre_de_caisse",
                         "url": "/dashboard-1/livre-de-caisse",
                         "label": "Livre de caisse",
@@ -265,9 +274,18 @@
                         "page": "app_livre_de_caisse_listing",
                         "url": "/dashboard-1/livre-de-caisse/listing",
                         "label": "Listing livre de caisse agence",
-                        "icon": "bi-file-earmark-text",
+                        "icon": "bi-cash-stack",
                         "folder": "pages",
-                        "parent_page": null,
+                        "parent_page": "app_livre_de_caisse",
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_livre_de_caisse_management",
+                        "url": "/dashboard-1/livre-de-caisse/gestion",
+                        "label": "Gestion - Livres de caisse",
+                        "icon": "bi-cash-stack",
+                        "folder": "pages",
+                        "parent_page": "app_livre_de_caisse",
                         "icon_only": false
                     }
                 ],
@@ -296,7 +314,7 @@
                         "label": "Listing livre de caisse",
                         "icon": "bi-journal-text",
                         "folder": "pages",
-                        "parent_page": null,
+                        "parent_page": "app_livre_de_caisse",
                         "icon_only": false
                     }
                 ]

@@ -8,6 +8,17 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class ModuleService
 {
+    private const ROUTE_MODULE_ALIASES = [
+        'app_livre_de_caisse_listing' => 'app_livre_de_caisse',
+        'app_livre_de_caisse_management' => 'app_livre_de_caisse',
+        'app_bi_connections' => 'app_bi',
+        'app_bi_files' => 'app_bi',
+        'app_bi_dataset' => 'app_bi',
+        'app_bi_preferences' => 'app_bi',
+        'app_bi_settings' => 'app_bi',
+        'app_bi_upload_source' => 'app_bi',
+    ];
+
     /**
      * @var Module[]|null
      */
@@ -22,6 +33,11 @@ class ModuleService
      * @var array<string, Module>|null
      */
     private ?array $modulesByNameCache = null;
+
+    /**
+     * @var array<string, Module>|null
+     */
+    private ?array $modulesByRouteCache = null;
 
     public function __construct(
         private ModuleRepository $moduleRepository,
@@ -67,6 +83,25 @@ class ModuleService
         return $module?->isActive() ?? false;
     }
 
+    public function getModuleForRoute(string $routeName): ?Module
+    {
+        $routeName = trim($routeName);
+        if ($routeName === '') {
+            return null;
+        }
+
+        $resolvedRouteName = self::ROUTE_MODULE_ALIASES[$routeName] ?? $routeName;
+
+        return $this->getModulesByRoute()[$resolvedRouteName] ?? null;
+    }
+
+    public function isRouteEnabled(string $routeName): bool
+    {
+        $module = $this->getModuleForRoute($routeName);
+
+        return $module?->isActive() ?? true;
+    }
+
     public function toggleModule(string $moduleName): bool
     {
         $module = $this->moduleRepository->findByName($moduleName);
@@ -100,10 +135,31 @@ class ModuleService
         return $this->modulesByNameCache ?? [];
     }
 
+    /**
+     * @return array<string, Module>
+     */
+    public function getModulesByRoute(): array
+    {
+        if (is_array($this->modulesByRouteCache)) {
+            return $this->modulesByRouteCache;
+        }
+
+        $modulesByRoute = [];
+        foreach ($this->getAllModules() as $module) {
+            $routeName = trim((string) $module->getRouteName());
+            if ($routeName !== '') {
+                $modulesByRoute[$routeName] = $module;
+            }
+        }
+
+        return $this->modulesByRouteCache = $modulesByRoute;
+    }
+
     private function clearRuntimeCaches(): void
     {
         $this->allModulesCache = null;
         $this->activeModulesCache = null;
         $this->modulesByNameCache = null;
+        $this->modulesByRouteCache = null;
     }
 }

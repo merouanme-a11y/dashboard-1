@@ -480,6 +480,11 @@ function ldcGetAgenceContext(?array $user = null): array
     ];
 }
 
+function ldcCurrentAgenceSnapshot(): array
+{
+    return ldcGetAgenceContext(app_current_livre_de_caisse_user());
+}
+
 function ldcFormatInputDate(?string $value): string
 {
     $value = trim((string) $value);
@@ -1145,11 +1150,14 @@ function ldcGetBordereauNumberRecursive(PDO $pdo, string $businessDate, array $v
 
 function ldcUpsertDailyState(PDO $pdo, float $fondCaisseDebut, string $businessDate, string $userId = ''): array
 {
+    $agenceSnapshot = ldcCurrentAgenceSnapshot();
     $stmt = $pdo->prepare(
         "INSERT INTO livredecaisse (
             record_type,
             reference_key,
             business_date,
+            departement,
+            agence,
             fond_caisse_debut,
             fond_caisse_confirme_at,
             num_remise_especes,
@@ -1160,6 +1168,8 @@ function ldcUpsertDailyState(PDO $pdo, float $fondCaisseDebut, string $businessD
             'daily_state',
             'daily_state',
             :business_date,
+            :departement,
+            :agence,
             :fond_caisse_debut,
             NOW(),
             :num_remise_especes,
@@ -1168,6 +1178,8 @@ function ldcUpsertDailyState(PDO $pdo, float $fondCaisseDebut, string $businessD
             :updated_by
         )
         ON DUPLICATE KEY UPDATE
+            departement = VALUES(departement),
+            agence = VALUES(agence),
             fond_caisse_debut = VALUES(fond_caisse_debut),
             fond_caisse_confirme_at = VALUES(fond_caisse_confirme_at),
             num_remise_especes = VALUES(num_remise_especes),
@@ -1180,6 +1192,8 @@ function ldcUpsertDailyState(PDO $pdo, float $fondCaisseDebut, string $businessD
 
     $stmt->execute([
         'business_date' => $businessDate,
+        'departement' => (string) ($agenceSnapshot['departement'] ?? ''),
+        'agence' => (string) ($agenceSnapshot['agence'] ?? ''),
         'fond_caisse_debut' => $fondCaisseDebut,
         'num_remise_especes' => $currentState['num_remise_especes'] ?? '',
         'num_remise_cheque' => $currentState['num_remise_cheque'] ?? '',
@@ -1192,11 +1206,14 @@ function ldcUpsertDailyState(PDO $pdo, float $fondCaisseDebut, string $businessD
 
 function ldcUpsertDailyRemises(PDO $pdo, string $businessDate, string $numRemiseEspeces, string $numRemiseCheque, string $userId = ''): array
 {
+    $agenceSnapshot = ldcCurrentAgenceSnapshot();
     $stmt = $pdo->prepare(
         "INSERT INTO livredecaisse (
             record_type,
             reference_key,
             business_date,
+            departement,
+            agence,
             num_remise_especes,
             num_remise_cheque,
             created_by,
@@ -1205,12 +1222,16 @@ function ldcUpsertDailyRemises(PDO $pdo, string $businessDate, string $numRemise
             'daily_state',
             'daily_state',
             :business_date,
+            :departement,
+            :agence,
             :num_remise_especes,
             :num_remise_cheque,
             :created_by,
             :updated_by
         )
         ON DUPLICATE KEY UPDATE
+            departement = VALUES(departement),
+            agence = VALUES(agence),
             num_remise_especes = VALUES(num_remise_especes),
             num_remise_cheque = VALUES(num_remise_cheque),
             updated_by = VALUES(updated_by),
@@ -1219,6 +1240,8 @@ function ldcUpsertDailyRemises(PDO $pdo, string $businessDate, string $numRemise
 
     $stmt->execute([
         'business_date' => $businessDate,
+        'departement' => (string) ($agenceSnapshot['departement'] ?? ''),
+        'agence' => (string) ($agenceSnapshot['agence'] ?? ''),
         'num_remise_especes' => trim($numRemiseEspeces),
         'num_remise_cheque' => trim($numRemiseCheque),
         'created_by' => $userId !== '' ? $userId : null,
@@ -1232,6 +1255,7 @@ function ldcCloseDailyState(PDO $pdo, string $businessDate, float $fondCaisseDeb
 {
     $resolvedDate = ldcResolveBusinessDate($businessDate);
     $currentState = ldcFetchDailyState($pdo, $resolvedDate);
+    $agenceSnapshot = ldcCurrentAgenceSnapshot();
     $depotOn = ldcNormalizeBooleanFlag($options['depot_on'] ?? 0);
     $depotEspece = $depotOn === 1 ? ldcNormalizeBooleanFlag($options['depot_espece'] ?? 0) : 0;
     $depotCheque = $depotOn === 1 ? ldcNormalizeBooleanFlag($options['depot_cheque'] ?? 0) : 0;
@@ -1251,6 +1275,8 @@ function ldcCloseDailyState(PDO $pdo, string $businessDate, float $fondCaisseDeb
             record_type,
             reference_key,
             business_date,
+            departement,
+            agence,
             fond_caisse_debut,
             fond_caisse_confirme_at,
             fond_caisse_fin,
@@ -1272,6 +1298,8 @@ function ldcCloseDailyState(PDO $pdo, string $businessDate, float $fondCaisseDeb
             'daily_state',
             'daily_state',
             :business_date,
+            :departement,
+            :agence,
             :fond_caisse_debut,
             NOW(),
             :fond_caisse_fin,
@@ -1291,6 +1319,8 @@ function ldcCloseDailyState(PDO $pdo, string $businessDate, float $fondCaisseDeb
             :updated_by
         )
         ON DUPLICATE KEY UPDATE
+            departement = VALUES(departement),
+            agence = VALUES(agence),
             fond_caisse_debut = VALUES(fond_caisse_debut),
             fond_caisse_confirme_at = VALUES(fond_caisse_confirme_at),
             fond_caisse_fin = VALUES(fond_caisse_fin),
@@ -1312,6 +1342,8 @@ function ldcCloseDailyState(PDO $pdo, string $businessDate, float $fondCaisseDeb
 
     $stmt->execute([
         'business_date' => $resolvedDate,
+        'departement' => (string) ($agenceSnapshot['departement'] ?? ''),
+        'agence' => (string) ($agenceSnapshot['agence'] ?? ''),
         'fond_caisse_debut' => $fondCaisseDebut,
         'fond_caisse_fin' => $fondCaisseFin,
         'bordereau_num' => $bordereauNum,
@@ -1555,8 +1587,11 @@ function ldcGetNextChrono(PDO $pdo): int
 
 function ldcPersistEntry(PDO $pdo, array $entry, string $userId = '', ?int $entryId = null): int
 {
+    $agenceSnapshot = ldcCurrentAgenceSnapshot();
     $basePayload = [
         'business_date' => $entry['business_date'],
+        'departement' => (string) ($agenceSnapshot['departement'] ?? ''),
+        'agence' => (string) ($agenceSnapshot['agence'] ?? ''),
         'date_saisie' => $entry['date_saisie'],
         'chrono' => $entry['chrono'],
         'type_affaire' => $entry['type_affaire'],
@@ -1598,6 +1633,8 @@ function ldcPersistEntry(PDO $pdo, array $entry, string $userId = '', ?int $entr
                 record_type,
                 reference_key,
                 business_date,
+                departement,
+                agence,
                 date_saisie,
                 chrono,
                 type_affaire,
@@ -1632,6 +1669,8 @@ function ldcPersistEntry(PDO $pdo, array $entry, string $userId = '', ?int $entr
                 :record_type,
                 :reference_key,
                 :business_date,
+                :departement,
+                :agence,
                 :date_saisie,
                 :chrono,
                 :type_affaire,
@@ -1675,6 +1714,8 @@ function ldcPersistEntry(PDO $pdo, array $entry, string $userId = '', ?int $entr
     $stmt = $pdo->prepare(
         "UPDATE livredecaisse SET
             business_date = :business_date,
+            departement = :departement,
+            agence = :agence,
             date_saisie = :date_saisie,
             chrono = :chrono,
             type_affaire = :type_affaire,

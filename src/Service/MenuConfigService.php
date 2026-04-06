@@ -11,6 +11,10 @@ class MenuConfigService
 {
     public const MENUS_MODULE = 'menus';
     private const DEFAULT_PROFILE_TYPES = ['Admin', 'Responsable', 'Superviseur', 'Employe'];
+    private const IMPLICIT_PARENT_PAGES = [
+        'app_livre_de_caisse_listing' => 'app_livre_de_caisse',
+        'app_livre_de_caisse_management' => 'app_livre_de_caisse',
+    ];
     private const ADMIN_ONLY_ROUTES = [
         'admin',
         'app_profile_create',
@@ -21,8 +25,6 @@ class MenuConfigService
     private ?array $usersDataCache = null;
     private ?array $availablePagesMapCache = null;
     private ?array $menuConfigStorageCache = null;
-    private ?array $modulesByRouteCache = null;
-    private ?array $activeModuleRoutesCache = null;
     private array $resolvedMenuConfigCache = [];
     private array $menuTreeCache = [];
     private array $firstAccessibleRouteCache = [];
@@ -541,7 +543,7 @@ class MenuConfigService
             return false;
         }
 
-        if (isset($this->getModulesByRoute()[$routeName]) && !isset($this->getActiveModuleRoutes()[$routeName])) {
+        if (!$this->moduleService->isRouteEnabled($routeName)) {
             return false;
         }
 
@@ -564,7 +566,6 @@ class MenuConfigService
         }
 
         $pages = [];
-        $modulesByRoute = $this->getModulesByRoute();
 
         foreach ($this->pageDisplayService->getConfigurablePages() as $page) {
             $routeName = trim((string) ($page['page_path'] ?? ''));
@@ -580,8 +581,9 @@ class MenuConfigService
                 $url = (string) ($page['route_path'] ?? '');
             }
 
-            $fallbackIcon = isset($modulesByRoute[$routeName])
-                ? trim((string) $modulesByRoute[$routeName]->getIcon())
+            $module = $this->moduleService->getModuleForRoute($routeName);
+            $fallbackIcon = $module !== null
+                ? trim((string) $module->getIcon())
                 : $this->pageDisplayService->getDefaultIconValue($routeName, 'bootstrap', 'bi-file-earmark-text', 'bootstrap');
 
             $pages[$routeName] = [
@@ -649,6 +651,32 @@ class MenuConfigService
                 'icon' => (string) $pageMeta['icon'],
                 'folder' => (string) $pageMeta['folder'],
                 'parent_page' => null,
+                'icon_only' => false,
+            ];
+        }
+
+        foreach ([
+            'app_livre_de_caisse_listing' => [
+                'label' => 'Listing livre de caisse',
+                'icon' => 'bi-journal-text',
+            ],
+            'app_livre_de_caisse_management' => [
+                'label' => 'Gestion - Livres de caisse',
+                'icon' => 'bi-buildings',
+            ],
+        ] as $routeName => $meta) {
+            if (!isset($availablePages['app_livre_de_caisse'], $availablePages[$routeName])) {
+                continue;
+            }
+
+            $pageMeta = $availablePages[$routeName];
+            $config[] = [
+                'page' => $routeName,
+                'url' => (string) $pageMeta['url'],
+                'label' => (string) ($pageMeta['label'] ?? $meta['label']),
+                'icon' => (string) $meta['icon'],
+                'folder' => (string) $pageMeta['folder'],
+                'parent_page' => 'app_livre_de_caisse',
                 'icon_only' => false,
             ];
         }
@@ -860,6 +888,11 @@ class MenuConfigService
             }
 
             $parentPage = trim((string) ($item['parent_page'] ?? ''));
+            $implicitParentPage = self::IMPLICIT_PARENT_PAGES[$page] ?? '';
+            if ($parentPage === '' && $implicitParentPage !== '' && isset($seen[$implicitParentPage])) {
+                $parentPage = $implicitParentPage;
+            }
+
             if ($parentPage === '' || $parentPage === $page || !isset($seen[$parentPage])) {
                 $item['parent_page'] = null;
             } else {
@@ -919,46 +952,6 @@ class MenuConfigService
     private function getStoragePath(): string
     {
         return $this->kernel->getProjectDir() . '/menu_config.json';
-    }
-
-    /**
-     * @return array<string, object>
-     */
-    private function getModulesByRoute(): array
-    {
-        if (is_array($this->modulesByRouteCache)) {
-            return $this->modulesByRouteCache;
-        }
-
-        $modulesByRoute = [];
-        foreach ($this->moduleService->getAllModules() as $module) {
-            $routeName = trim((string) $module->getRouteName());
-            if ($routeName !== '') {
-                $modulesByRoute[$routeName] = $module;
-            }
-        }
-
-        return $this->modulesByRouteCache = $modulesByRoute;
-    }
-
-    /**
-     * @return array<string, bool>
-     */
-    private function getActiveModuleRoutes(): array
-    {
-        if (is_array($this->activeModuleRoutesCache)) {
-            return $this->activeModuleRoutesCache;
-        }
-
-        $activeRoutes = [];
-        foreach ($this->moduleService->getActiveModules() as $module) {
-            $routeName = trim((string) $module->getRouteName());
-            if ($routeName !== '') {
-                $activeRoutes[$routeName] = true;
-            }
-        }
-
-        return $this->activeModuleRoutesCache = $activeRoutes;
     }
 
     private function clearMenuRuntimeCaches(): void

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/c/wamp/bin/php/php8.2.29/php.exe bin/console doctrine:migrations:status)",
+      "Bash(/c/wamp/bin/php/php8.2.29/php.exe bin/console doctrine:migrations:migrate --dry-run --env=prod)",
+      "Bash(/c/wamp/bin/php/php8.2.29/php.exe bin/console doctrine:schema:create --dump-sql)"
+    ]
+  }
+}
