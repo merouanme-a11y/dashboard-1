@@ -1,0 +1,220 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Generateur de quittancements{% endblock %}
+
+{% block stylesheets %}
+    <link href="{{ asset('modules/quittancement-generator/style.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+    <script>
+        window.__QG_APP__ = {{ {
+            year: year,
+            month: month,
+            dates: jsDates,
+            email: emailData,
+            defaultEmailData: defaultEmailData
+        }|json_encode|raw }};
+    </script>
+
+    <div class="qg-page">
+        <section class="qg-hero">
+            <div>
+                <h1>Generateur de quittancements</h1>
+                <p>Calculez les dates D3, D15, D25 et D27, adaptez le message email puis exportez les blocs SQL utiles.</p>
+            </div>
+            <div class="qg-hero-meta">
+                <span class="qg-pill">Version {{ appVersion }}</span>
+                <span class="qg-pill qg-pill-soft">ADEP IT</span>
+            </div>
+        </section>
+
+        <section class="qg-panel qg-panel-form">
+            <div class="qg-panel-head">
+                <h2>Parametrage</h2>
+                <p>Choisissez le mois de travail puis ajustez les dates si besoin.</p>
+            </div>
+
+            <form method="post" id="monthForm" class="qg-form-grid">
+                <input type="hidden" id="emailCustomized" name="email_customized" value="{{ emailCustomized ? '1' : '0' }}">
+
+                <div class="qg-field">
+                    <label for="year">Annee</label>
+                    <select id="year" name="year">
+                        {% for availableYear in availableYears %}
+                            <option value="{{ availableYear }}"{{ year == availableYear ? ' selected' : '' }}>{{ availableYear }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="qg-field">
+                    <label for="month">Mois</label>
+                    <select id="month" name="month">
+                        {% for monthNumber, monthLabel in monthNames %}
+                            <option value="{{ monthNumber }}"{{ month == monthNumber ? ' selected' : '' }}>{{ monthLabel }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="qg-callout">
+                    Si vous modifiez D3 sans toucher D15, D15 suit automatiquement a J+7. Si vous modifiez D25 sans toucher D27, D27 suit automatiquement a J-2.
+                </div>
+
+                <div class="qg-manual-grid">
+                    <div class="qg-field">
+                        <label for="d3_date">D3</label>
+                        <input type="date" id="d3_date" name="d3_date" value="{{ dateOverrides.d3 }}">
+                        <small>Actuel : {{ dates.d3.date_formatted }} a {{ dates.d3.time }}</small>
+                    </div>
+
+                    <div class="qg-field">
+                        <label for="d15_date">D15</label>
+                        <input type="date" id="d15_date" name="d15_date" value="{{ dateOverrides.d15 }}">
+                        <small>Actuel : {{ dates.d15.date_formatted }} a {{ dates.d15.time }}</small>
+                    </div>
+
+                    <div class="qg-field">
+                        <label for="d25_date">D25</label>
+                        <input type="date" id="d25_date" name="d25_date" value="{{ dateOverrides.d25 }}">
+                        <small>Actuel : {{ dates.d25.date_formatted }} a {{ dates.d25.time }}</small>
+                    </div>
+
+                    <div class="qg-field">
+                        <label for="d27_date">D27</label>
+                        <input type="date" id="d27_date" name="d27_date" value="{{ dateOverrides.d27 }}">
+                        <small>Actuel : {{ dates.d27.date_formatted }} a {{ dates.d27.time }}</small>
+                    </div>
+                </div>
+
+                <div class="qg-actions">
+                    <button type="submit" class="qg-button qg-button-primary">Appliquer les dates manuelles</button>
+                    <button type="button" class="qg-button qg-button-secondary" data-action="reset-dates">Revenir au calcul automatique</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="qg-panel qg-panel-dates">
+            <div class="qg-panel-head">
+                <h2>Dates calculees</h2>
+                <p>Les cartes se mettent a jour selon le mois choisi et vos ajustements manuels.</p>
+            </div>
+
+            <div class="qg-dates-grid">
+                <article class="qg-date-card">
+                    <span class="qg-date-tag">D3 - Rattrapage</span>
+                    <strong>{{ dates.d3.date_formatted }}</strong>
+                    <span>3e vendredi du mois</span>
+                    <em>{{ dates.d3.time }}</em>
+                </article>
+
+                <article class="qg-date-card">
+                    <span class="qg-date-tag">D15 - Quittancement</span>
+                    <strong>{{ dates.d15.date_formatted }}</strong>
+                    <span>Vendredi suivant D3</span>
+                    <em>{{ dates.d15.time }}</em>
+                </article>
+
+                <article class="qg-date-card">
+                    <span class="qg-date-tag">D25 - Sante collective</span>
+                    <strong>{{ dates.d25.date_formatted }}</strong>
+                    <span>Veille de fin de mois</span>
+                    <em>{{ dates.d25.time }}</em>
+                </article>
+
+                <article class="qg-date-card">
+                    <span class="qg-date-tag">D27 - Ajustement</span>
+                    <strong>{{ dates.d27.date_formatted }}</strong>
+                    <span>2 jours avant D25 si possible</span>
+                    <em>{{ dates.d27.time }}</em>
+                </article>
+            </div>
+        </section>
+
+        <section class="qg-panel">
+            <div class="qg-panel-head">
+                <h2>Email a envoyer</h2>
+                <p>Les champs restent modifiables et sont conserves tant que vous ne revenez pas au modele automatique.</p>
+            </div>
+
+            <div class="qg-content-grid">
+                <div class="qg-field qg-field-full">
+                    <label for="emailTo">Destinataires</label>
+                    <textarea id="emailTo" name="email_to" form="monthForm" class="qg-textarea">{{ emailData.to }}</textarea>
+                </div>
+
+                <div class="qg-field qg-field-full">
+                    <label for="emailCc">Cc</label>
+                    <textarea id="emailCc" name="email_cc" form="monthForm" class="qg-textarea">{{ emailData.cc }}</textarea>
+                </div>
+
+                <div class="qg-field qg-field-full">
+                    <label for="emailSubject">Objet</label>
+                    <input type="text" id="emailSubject" name="email_subject" form="monthForm" value="{{ emailData.subject }}">
+                </div>
+
+                <div class="qg-field qg-field-full">
+                    <label for="emailBody">Message</label>
+                    <textarea id="emailBody" name="email_body" form="monthForm" class="qg-textarea qg-textarea-large">{{ emailData.body }}</textarea>
+                </div>
+            </div>
+
+            <div class="qg-actions">
+                <button type="button" class="qg-button qg-button-primary" data-action="copy-email">Copier l'email</button>
+                <button type="button" class="qg-button qg-button-secondary" data-action="open-email">Ouvrir le client email</button>
+            </div>
+        </section>
+
+        <section class="qg-panel">
+            <div class="qg-panel-head">
+                <h2>Requetes SQL</h2>
+                <p>Chaque bloc peut etre copie individuellement ou exporte en un seul fichier.</p>
+            </div>
+
+            <div class="qg-sql-grid">
+                <article class="qg-sql-card">
+                    <div class="qg-sql-head">
+                        <h3>Bloc 1 - Rattrapage</h3>
+                        <button type="button" class="qg-button qg-button-ghost" data-copy-target="sqlRattrapage">Copier ce bloc</button>
+                    </div>
+                    <textarea readonly class="qg-sql-field" id="sqlRattrapage">{{ sqlSections.rattrapage }}</textarea>
+                </article>
+
+                <article class="qg-sql-card">
+                    <div class="qg-sql-head">
+                        <h3>Bloc 2 - Quittancement</h3>
+                        <button type="button" class="qg-button qg-button-ghost" data-copy-target="sqlQuittancement">Copier ce bloc</button>
+                    </div>
+                    <textarea readonly class="qg-sql-field" id="sqlQuittancement">{{ sqlSections.quittancement }}</textarea>
+                </article>
+
+                <article class="qg-sql-card">
+                    <div class="qg-sql-head">
+                        <h3>Bloc 3 - Sante collective</h3>
+                        <button type="button" class="qg-button qg-button-ghost" data-copy-target="sqlSanteCollective">Copier ce bloc</button>
+                    </div>
+                    <textarea readonly class="qg-sql-field" id="sqlSanteCollective">{{ sqlSections.sante_collective }}</textarea>
+                </article>
+            </div>
+
+            <div class="qg-actions">
+                <button type="button" class="qg-button qg-button-primary" data-action="copy-all-sql">Copier les 3 blocs</button>
+                <button type="button" class="qg-button qg-button-secondary" data-action="download-sql">Telecharger en .sql</button>
+            </div>
+        </section>
+
+        <section class="qg-panel">
+            <div class="qg-panel-head">
+                <h2>Exporter les donnees</h2>
+                <p>Recuperez les dates et les contenus en JSON, CSV ou PDF imprime.</p>
+            </div>
+
+            <div class="qg-actions">
+                <button type="button" class="qg-button qg-button-secondary" data-action="export-json">Exporter en JSON</button>
+                <button type="button" class="qg-button qg-button-secondary" data-action="export-csv">Exporter en CSV</button>
+                <button type="button" class="qg-button qg-button-secondary" data-action="print">Imprimer</button>
+            </div>
+        </section>
+    </div>
+
+    <script src="{{ asset('modules/quittancement-generator/app.js') }}"></script>
+{% endblock %}

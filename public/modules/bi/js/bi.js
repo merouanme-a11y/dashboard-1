@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", function () {
         addFilterBtn: document.getElementById("biAddFilterBtn"),
         loading: document.getElementById("biLoading"),
         shell: document.getElementById("biShell"),
+        dataFeedback: document.getElementById("biDataFeedback"),
         widgetsGrid: document.getElementById("biWidgetsGrid"),
         emptyState: document.getElementById("biEmptyState"),
         filtersBar: document.getElementById("biFiltersBar"),
@@ -24,6 +25,9 @@ document.addEventListener("DOMContentLoaded", function () {
         inspectorHint: document.getElementById("biInspectorHint"),
         inspectorEmpty: document.getElementById("biInspectorEmpty"),
         inspectorForm: document.getElementById("biInspectorForm"),
+        widgetDataDescription: document.getElementById("biWidgetDataDescription"),
+        widgetDataHint: document.getElementById("biWidgetDataHint"),
+        widgetDataBuilder: document.getElementById("biWidgetDataBuilder"),
         widgetPreview: document.getElementById("biWidgetPreview"),
         widgetTitle: document.getElementById("biWidgetTitle"),
         widgetType: document.getElementById("biWidgetType"),
@@ -31,12 +35,6 @@ document.addEventListener("DOMContentLoaded", function () {
         widgetAlignment: document.getElementById("biWidgetAlignment"),
         widgetCardHeight: document.getElementById("biWidgetCardHeight"),
         widgetCardHeightValue: document.getElementById("biWidgetCardHeightValue"),
-        widgetDimension: document.getElementById("biWidgetDimension"),
-        widgetValue: document.getElementById("biWidgetValue"),
-        widgetAggregation: document.getElementById("biWidgetAggregation"),
-        widgetFormat: document.getElementById("biWidgetFormat"),
-        widgetMaxItems: document.getElementById("biWidgetMaxItems"),
-        widgetMaxItemsValue: document.getElementById("biWidgetMaxItemsValue"),
         widgetTextSize: document.getElementById("biWidgetTextSize"),
         widgetTextSizeValue: document.getElementById("biWidgetTextSizeValue"),
         widgetValueSize: document.getElementById("biWidgetValueSize"),
@@ -60,12 +58,33 @@ document.addEventListener("DOMContentLoaded", function () {
         widgetHideText: document.getElementById("biWidgetHideText"),
         settingsModal: document.getElementById("biSettingsModal"),
         settingsModalClose: document.getElementById("biSettingsModalClose"),
+        settingsFeedback: document.getElementById("biSettingsFeedback"),
         uploadSourceForm: document.getElementById("biUploadSourceForm"),
         uploadSourceLabel: document.getElementById("biUploadSourceLabel"),
         uploadSourceFile: document.getElementById("biUploadSourceFile"),
         remoteSourceForm: document.getElementById("biRemoteSourceForm"),
         remoteSourceLabel: document.getElementById("biRemoteSourceLabel"),
         remoteSourceUrl: document.getElementById("biRemoteSourceUrl"),
+        apiSourceForm: document.getElementById("biApiSourceForm"),
+        apiSourceLabel: document.getElementById("biApiSourceLabel"),
+        apiSourceUrl: document.getElementById("biApiSourceUrl"),
+        apiSourceToken: document.getElementById("biApiSourceToken"),
+        editSourceCard: document.getElementById("biEditSourceCard"),
+        editSourceForm: document.getElementById("biEditSourceForm"),
+        editSourceId: document.getElementById("biEditSourceId"),
+        editSourceTitle: document.getElementById("biEditSourceTitle"),
+        editSourceDescription: document.getElementById("biEditSourceDescription"),
+        editSourceLabel: document.getElementById("biEditSourceLabel"),
+        editSourceUrlField: document.getElementById("biEditSourceUrlField"),
+        editSourceUrl: document.getElementById("biEditSourceUrl"),
+        editSourceUrlHelp: document.getElementById("biEditSourceUrlHelp"),
+        editSourceTokenField: document.getElementById("biEditSourceTokenField"),
+        editSourceToken: document.getElementById("biEditSourceToken"),
+        editSourceTokenHelp: document.getElementById("biEditSourceTokenHelp"),
+        editSourceInfoField: document.getElementById("biEditSourceInfoField"),
+        editSourceInfo: document.getElementById("biEditSourceInfo"),
+        editSourceSubmit: document.getElementById("biEditSourceSubmit"),
+        editSourceCancel: document.getElementById("biEditSourceCancel"),
         settingsSourcesList: document.getElementById("biSettingsSourcesList"),
     };
     const palette = ["#2563eb", "#1d4ed8", "#0f766e", "#10b981", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#dc2626", "#ec4899", "#be185d", "#8b5cf6", "#7c3aed", "#06b6d4", "#334155"];
@@ -81,6 +100,7 @@ document.addEventListener("DOMContentLoaded", function () {
         { type: "pie", label: "Graphique en secteurs", icon: "bi-pie-chart", defaultTitle: "Part par categorie" },
         { type: "doughnut", label: "Camembert annulaire", icon: "bi-circle", defaultTitle: "Distribution annulaire" },
         { type: "histogram", label: "Histogramme", icon: "bi-distribute-vertical", defaultTitle: "Distribution numerique" },
+        { type: "distribution-table", label: "Tableau de repartition", icon: "bi-list-columns-reverse", defaultTitle: "Repartition detaillee" },
         { type: "table", label: "Tableau de donnees", icon: "bi-table", defaultTitle: "Tableau detaille" },
     ];
     const state = {
@@ -91,6 +111,7 @@ document.addEventListener("DOMContentLoaded", function () {
         widgetCatalog: mergeWidgetCatalog(cfg.builderOptions?.widgets),
         preferences: normalizePreferences(cfg.preferences),
         moduleSettings: normalizeModuleSettings(cfg.moduleSettings),
+        microsoftAuthConfigured: Boolean(cfg.microsoftAuth?.configured),
         selectedPageId: "",
         selectedWidgetId: "",
         canEdit: Boolean(cfg.canEdit),
@@ -104,8 +125,11 @@ document.addEventListener("DOMContentLoaded", function () {
         saveTimer: 0,
         saveInFlight: false,
         saveQueued: false,
+        preferencesRevision: 0,
         saveStatusTimer: 0,
         activeColorPopover: null,
+        dataFeedbackMessage: String(cfg.preloadedDataset?._error || ""),
+        editingModuleSourceId: "",
     };
 
     state.selectedPageId = String(state.preferences.selectedPageId || state.preferences.pages[0]?.id || "page-bi-1");
@@ -142,6 +166,14 @@ document.addEventListener("DOMContentLoaded", function () {
         } else {
             setLoading(false);
             renderAll();
+        }
+
+        if (cfg.openSettingsOnLoad && dom.settingsModal) {
+            renderSettingsModal();
+            if (cfg.preloadedSettingsFeedback?.message) {
+                showSettingsFeedback(String(cfg.preloadedSettingsFeedback.message || ""), String(cfg.preloadedSettingsFeedback.type || ""));
+            }
+            openModal("settings");
         }
     }
 
@@ -234,7 +266,9 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         dom.settingsBtn?.addEventListener("click", function () {
-            if (!state.canEdit) return;
+            if (!(state.canEdit || state.microsoftAuthConfigured)) return;
+            clearSettingsFeedback();
+            resetEditSourceForm();
             renderSettingsModal();
             openModal("settings");
         });
@@ -271,9 +305,9 @@ document.addEventListener("DOMContentLoaded", function () {
             if (!state.canEdit || !state.editMode) return;
             if (event.target === dom.widgetsGrid) {
                 state.selectedWidgetId = "";
+                syncSelectedWidgetCardState();
                 closeModal("widget");
                 renderInspector();
-                renderWidgets();
             }
         });
 
@@ -347,6 +381,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         dom.uploadSourceForm?.addEventListener("submit", handleUploadSourceSubmit);
         dom.remoteSourceForm?.addEventListener("submit", handleRemoteSourceSubmit);
+        dom.apiSourceForm?.addEventListener("submit", handleApiSourceSubmit);
+        dom.editSourceForm?.addEventListener("submit", handleEditSourceSubmit);
+        dom.editSourceCancel?.addEventListener("click", function () {
+            resetEditSourceForm();
+        });
 
         bindInspectorEvents();
     }
@@ -397,42 +436,6 @@ document.addEventListener("DOMContentLoaded", function () {
             refreshWidgetAfterModalEdit();
         });
 
-        dom.widgetDimension?.addEventListener("change", function () {
-            const widget = getSelectedWidget();
-            if (!widget) return;
-            widget.dimensionColumn = String(dom.widgetDimension.value || "");
-            refreshWidgetAfterModalEdit({ rebuildInspector: true });
-        });
-
-        dom.widgetValue?.addEventListener("change", function () {
-            const widget = getSelectedWidget();
-            if (!widget) return;
-            widget.valueColumn = String(dom.widgetValue.value || "");
-            refreshWidgetAfterModalEdit({ rebuildInspector: true });
-        });
-
-        dom.widgetAggregation?.addEventListener("change", function () {
-            const widget = getSelectedWidget();
-            if (!widget) return;
-            widget.aggregation = String(dom.widgetAggregation.value || "count");
-            refreshWidgetAfterModalEdit({ rebuildInspector: true });
-        });
-
-        dom.widgetFormat?.addEventListener("change", function () {
-            const widget = getSelectedWidget();
-            if (!widget) return;
-            widget.format = String(dom.widgetFormat.value || "");
-            refreshWidgetAfterModalEdit();
-        });
-
-        dom.widgetMaxItems?.addEventListener("input", function () {
-            const widget = getSelectedWidget();
-            if (!widget) return;
-            widget.maxItems = clamp(parseInt(dom.widgetMaxItems.value, 10) || 8, 3, 20);
-            dom.widgetMaxItemsValue.textContent = String(widget.maxItems);
-            refreshWidgetAfterModalEdit();
-        });
-
         dom.widgetTextSize?.addEventListener("input", function () {
             const widget = getSelectedWidget();
             if (!widget) return;
@@ -476,15 +479,20 @@ document.addEventListener("DOMContentLoaded", function () {
         if (dom.addPageBtn) dom.addPageBtn.hidden = !showEditTools;
         if (dom.duplicatePageBtn) dom.duplicatePageBtn.hidden = !showEditTools;
         if (dom.deletePageBtn) dom.deletePageBtn.hidden = !showEditTools;
-        if (dom.settingsBtn) dom.settingsBtn.hidden = !state.canEdit;
+        if (dom.settingsBtn) dom.settingsBtn.hidden = !(state.canEdit || state.microsoftAuthConfigured);
         renderConnections();
         renderFiles();
         renderPages();
+        const hydratedWidgets = hydrateCurrentPageWidgetsForDataset();
         renderPalette();
         renderFiltersBar();
         renderWidgets();
         renderInspector();
+        renderDataFeedback();
         setLoading(false);
+        if (hydratedWidgets) {
+            scheduleSavePreferences();
+        }
     }
 
     function renderConnections() {
@@ -535,10 +543,11 @@ document.addEventListener("DOMContentLoaded", function () {
         if (name === "widget" && dom.widgetModal) {
             dom.widgetModal.hidden = true;
             destroyPreviewChart();
-            renderWidgets();
         }
         if (name === "settings" && dom.settingsModal) {
             dom.settingsModal.hidden = true;
+            clearSettingsFeedback();
+            resetEditSourceForm();
         }
         closeColorPopover();
         syncModalBodyState();
@@ -552,16 +561,55 @@ document.addEventListener("DOMContentLoaded", function () {
         document.body.classList.toggle("bi-modal-open", Boolean((dom.widgetModal && !dom.widgetModal.hidden) || (dom.settingsModal && !dom.settingsModal.hidden)));
     }
 
+    function captureWidgetModalState() {
+        const dialog = dom.widgetModal?.querySelector(".bi-widget-modal-dialog");
+        const inspectorMain = dom.inspectorForm?.querySelector(".bi-inspector-main");
+
+        return {
+            dialogScrollTop: dialog ? dialog.scrollTop : 0,
+            inspectorMainScrollTop: inspectorMain ? inspectorMain.scrollTop : 0,
+        };
+    }
+
+    function restoreWidgetModalState(snapshot) {
+        if (!snapshot) return;
+
+        const dialog = dom.widgetModal?.querySelector(".bi-widget-modal-dialog");
+        const inspectorMain = dom.inspectorForm?.querySelector(".bi-inspector-main");
+
+        if (dialog) {
+            dialog.scrollTop = Number(snapshot.dialogScrollTop || 0);
+        }
+
+        if (inspectorMain) {
+            inspectorMain.scrollTop = Number(snapshot.inspectorMainScrollTop || 0);
+        }
+    }
+
+    function syncSelectedWidgetCardState() {
+        if (!dom.widgetsGrid) {
+            return;
+        }
+
+        dom.widgetsGrid.querySelectorAll(".card[data-widget-id]").forEach(function (card) {
+            card.classList.toggle("bi-widget-selected", String(card.getAttribute("data-widget-id") || "") === String(state.selectedWidgetId || ""));
+        });
+    }
+
     function refreshWidgetAfterModalEdit(options) {
         const widget = getSelectedWidget();
         if (!widget) return;
 
         if (isWidgetModalOpen()) {
+            const modalState = captureWidgetModalState();
             if (options?.rebuildInspector) {
                 renderInspector();
+                restoreWidgetModalState(modalState);
             } else {
                 updateInspectorPreview(widget);
+                restoreWidgetModalState(modalState);
             }
+            refreshRenderedWidgetCard(widget);
         } else if (options?.full) {
             renderAll();
         } else {
@@ -571,12 +619,999 @@ document.addEventListener("DOMContentLoaded", function () {
         scheduleSavePreferences();
     }
 
+    function getWidgetDataDescription(widget) {
+        const type = String(widget?.type || "bar");
+
+        if (type === "counter") {
+            return "Choisissez simplement le calcul, la colonne et, si besoin, une valeur precise a compter.";
+        }
+
+        if (type === "kpi") {
+            return "Selectionnez la valeur principale du KPI.";
+        }
+
+        if (type === "percentage") {
+            return "Choisissez une categorie et, si besoin, une mesure ou une valeur precise a compter.";
+        }
+
+        if (type === "table") {
+            return "Choisissez une ligne et une valeur simple a afficher dans le tableau.";
+        }
+
+        if (type === "distribution-table") {
+            return "Choisissez une colonne pour afficher une repartition simple avec nombre, pourcentage et jauge coloree.";
+        }
+
+        if (type === "histogram") {
+            return "Choisissez une colonne numerique et le nombre de classes a afficher.";
+        }
+
+        return "Choisissez un axe X et une valeur simple a calculer, avec une valeur precise a compter si besoin.";
+    }
+
+    function getDimensionColumns(columns) {
+        const safeColumns = Array.isArray(columns) ? columns : [];
+        const preferred = safeColumns.filter(function (column) {
+            return ["string", "boolean", "date"].indexOf(String(column.type || "")) !== -1;
+        });
+
+        return preferred.length ? preferred : safeColumns;
+    }
+
+    function getNumericColumns(columns) {
+        const safeColumns = Array.isArray(columns) ? columns : [];
+        const preferred = safeColumns.filter(function (column) {
+            return String(column.type || "") === "number";
+        });
+
+        return preferred.length ? preferred : safeColumns;
+    }
+
+    function getMeasureColumnOptions(columns, aggregation, placeholder) {
+        const mode = String(aggregation || "count");
+        const columnChoices = mode === "count"
+            ? (Array.isArray(columns) ? columns : [])
+            : getNumericColumns(columns);
+        const optionLabel = placeholder || (
+            mode === "count"
+                ? "Toutes les lignes"
+                : (mode === "percentage"
+                    ? "Toutes les lignes ou colonne numerique"
+                    : "Selectionner une colonne numerique")
+        );
+
+        return [{ value: "", label: optionLabel }].concat(columnChoices.map(function (column) {
+            return { value: column.key, label: column.label };
+        }));
+    }
+
+    function createMeasureEntry(entry) {
+        return {
+            id: String(entry?.id || createId("measure")),
+            column: String(entry?.column || ""),
+            aggregation: String(entry?.aggregation || "count"),
+            matchValue: String(entry?.matchValue || ""),
+        };
+    }
+
+    function createFilterEntry(entry) {
+        return {
+            id: String(entry?.id || createId("filter")),
+            column: String(entry?.column || ""),
+            value: String(entry?.value || ""),
+        };
+    }
+
+    function defaultMeasureAggregationForWidget(widget) {
+        if (widget.type === "counter" || widget.type === "table" || widget.type === "distribution-table" || widget.type === "histogram") {
+            return "count";
+        }
+
+        if (widget.type === "percentage") {
+            return widget.valueColumn ? "sum" : "count";
+        }
+
+        return widget.valueColumn ? "sum" : "count";
+    }
+
+    function getCompatibleMeasureAggregation(value, fallback) {
+        const normalized = String(value || "");
+        if (["count", "sum", "avg"].indexOf(normalized) !== -1) {
+            return normalized;
+        }
+
+        return String(fallback || "count");
+    }
+
+    function ensureWidgetDataModel(widget) {
+        if (!Array.isArray(widget.chartDimensions)) {
+            widget.chartDimensions = widget.dimensionColumn ? [String(widget.dimensionColumn)] : [];
+        }
+
+        if (!Array.isArray(widget.rowDimensions)) {
+            widget.rowDimensions = widget.type === "table" && widget.dimensionColumn ? [String(widget.dimensionColumn)] : [];
+        }
+
+        widget.columnDimensions = [];
+
+        const legacyCounterItem = Array.isArray(widget.counterItems) && widget.counterItems.length
+            ? widget.counterItems[0]
+            : null;
+
+        if (!Array.isArray(widget.measures)) {
+            widget.measures = [createMeasureEntry({
+                column: legacyCounterItem?.column || widget.valueColumn || "",
+                aggregation: widget.aggregation && widget.aggregation !== "percentage"
+                    ? widget.aggregation
+                    : (legacyCounterItem?.aggregation || defaultMeasureAggregationForWidget(widget)),
+            })];
+        } else {
+            widget.measures = widget.measures.map(function (measure) {
+                if (measure && typeof measure === "object") {
+                    Object.assign(measure, createMeasureEntry(measure));
+                    return measure;
+                }
+
+                return createMeasureEntry(measure);
+            });
+        }
+
+        widget.chartDimensions = widget.chartDimensions.slice(0, 1).map(function (value) {
+            return String(value || "");
+        });
+        widget.rowDimensions = widget.rowDimensions.slice(0, 1).map(function (value) {
+            return String(value || "");
+        });
+        widget.columnDimensions = [];
+        widget.measures = widget.measures.slice(0, 1);
+        widget.widgetFilters = (Array.isArray(widget.widgetFilters) ? widget.widgetFilters : []).map(function (filter) {
+            if (filter && typeof filter === "object") {
+                Object.assign(filter, createFilterEntry(filter));
+                return filter;
+            }
+
+            return createFilterEntry(filter);
+        }).slice(0, 5);
+        widget.counterItems = [];
+        widget.filterColumn = "";
+        widget.filterValue = "";
+        widget.targetGoal = "";
+        widget.percentageBase = widget.type === "percentage" ? "group_share" : "";
+
+        if (widget.type !== "table") {
+            widget.rowDimensions = [];
+        }
+
+        if (!widget.measures.length) {
+            widget.measures.push(createMeasureEntry({ aggregation: defaultMeasureAggregationForWidget(widget) }));
+        }
+    }
+
+    function synchronizeLegacyWidgetFields(widget) {
+        ensureWidgetDataModel(widget);
+
+        const primaryMeasure = widget.measures[0] || createMeasureEntry({ aggregation: defaultMeasureAggregationForWidget(widget) });
+        syncWidgetFormatWithMeasure(widget, primaryMeasure);
+
+        if (widget.type === "table") {
+            widget.dimensionColumn = String(widget.rowDimensions[0] || "");
+        } else {
+            widget.dimensionColumn = String(widget.chartDimensions[0] || "");
+        }
+
+        widget.valueColumn = String(primaryMeasure?.column || "");
+        widget.aggregation = widget.type === "percentage"
+            ? "percentage"
+            : String(primaryMeasure?.aggregation || defaultMeasureAggregationForWidget(widget));
+        widget.filterColumn = "";
+        widget.filterValue = "";
+        widget.targetGoal = "";
+        widget.percentageBase = widget.type === "percentage" ? "group_share" : "";
+    }
+
+    function createBuilderZone(title, description, addLabel, onAdd, canAdd) {
+        const zone = document.createElement("div");
+        zone.className = "bi-data-zone";
+
+        const head = document.createElement("div");
+        head.className = "bi-data-zone-head";
+        head.innerHTML = '<div><h5>' + escapeHtml(title) + '</h5>' + (description ? '<p>' + escapeHtml(description) + '</p>' : '') + '</div>';
+
+        if (addLabel && typeof onAdd === "function") {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "stats-edit-button bi-data-add-button";
+            button.textContent = addLabel;
+            button.disabled = canAdd === false;
+            button.addEventListener("click", function (event) {
+                event.preventDefault();
+                onAdd();
+            });
+            head.appendChild(button);
+        }
+
+        zone.appendChild(head);
+        return zone;
+    }
+
+    function createBuilderField(labelText, control, wide) {
+        const field = document.createElement("div");
+        field.className = "bi-data-field" + (wide ? " is-wide" : "");
+
+        const label = document.createElement("label");
+        label.textContent = labelText;
+        field.appendChild(label);
+        field.appendChild(control);
+
+        return field;
+    }
+
+    function setBuilderSelectOptions(select, options, value, placeholderLabel) {
+        if (!select) return;
+
+        const normalizedOptions = Array.isArray(options) ? options : [];
+        const choices = placeholderLabel ? [{ value: "", label: placeholderLabel }].concat(normalizedOptions) : normalizedOptions;
+        select.innerHTML = choices.map(function (option) {
+            const optionValue = String(option.value ?? option.key ?? "");
+            const optionLabel = String(option.label ?? optionValue);
+            const selected = String(value || "") === optionValue ? " selected" : "";
+            return '<option value="' + escapeHtml(optionValue) + '"' + selected + '>' + escapeHtml(optionLabel) + '</option>';
+        }).join("");
+    }
+
+    function createBuilderSelect(options, value, onChange, placeholderLabel) {
+        const select = document.createElement("select");
+        select.className = "stats-select";
+        setBuilderSelectOptions(select, options, value, placeholderLabel);
+        select.addEventListener("change", function () {
+            onChange(String(select.value || ""));
+        });
+        return select;
+    }
+
+    function createBuilderInput(value, onChange, placeholder, suggestions, onInput) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "bi-data-input-wrap";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "stats-select bi-text-input";
+        input.value = String(value || "");
+        input.placeholder = placeholder || "";
+
+        if (Array.isArray(suggestions) && suggestions.length) {
+            const listId = createId("datalist");
+            input.setAttribute("list", listId);
+            const datalist = document.createElement("datalist");
+            datalist.id = listId;
+            datalist.innerHTML = suggestions.map(function (suggestion) {
+                return '<option value="' + escapeAttribute(suggestion) + '"></option>';
+            }).join("");
+            wrapper.appendChild(datalist);
+        }
+
+        input.addEventListener("change", function () {
+            onChange(String(input.value || ""));
+        });
+
+        if (typeof onInput === "function") {
+            input.addEventListener("input", function () {
+                onInput(String(input.value || ""));
+            });
+        }
+
+        wrapper.appendChild(input);
+        return wrapper;
+    }
+
+    function createRemoveButton(onClick, title) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "stats-edit-button bi-icon-button bi-data-remove-button";
+        button.title = title || "Supprimer";
+        button.setAttribute("aria-label", title || "Supprimer");
+        button.innerHTML = '<i class="bi bi-x-lg"></i>';
+        button.addEventListener("click", function (event) {
+            event.preventDefault();
+            onClick();
+        });
+        return button;
+    }
+
+    function createSuggestionInputControl(value, placeholder, suggestions, onChange) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "bi-data-input-wrap";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "stats-select bi-text-input";
+
+        const datalistId = createId("datalist");
+        const datalist = document.createElement("datalist");
+        datalist.id = datalistId;
+
+        const sync = function (nextValue, nextPlaceholder, nextSuggestions) {
+            input.value = String(nextValue || "");
+            input.placeholder = nextPlaceholder || "";
+
+            const normalizedSuggestions = Array.isArray(nextSuggestions) ? nextSuggestions.filter(function (item) {
+                return String(item || "").trim() !== "";
+            }) : [];
+
+            if (normalizedSuggestions.length) {
+                input.setAttribute("list", datalistId);
+                datalist.innerHTML = normalizedSuggestions.map(function (suggestion) {
+                    return '<option value="' + escapeAttribute(suggestion) + '"></option>';
+                }).join("");
+            } else {
+                input.removeAttribute("list");
+                datalist.innerHTML = "";
+            }
+        };
+
+        input.addEventListener("change", function () {
+            onChange(String(input.value || ""));
+        });
+
+        sync(value, placeholder, suggestions);
+        wrapper.appendChild(datalist);
+        wrapper.appendChild(input);
+
+        return {
+            wrapper: wrapper,
+            input: input,
+            sync: sync,
+        };
+    }
+
+    function isChartAggregationWidgetType(widget) {
+        return ["bar", "bar-horizontal", "pie", "doughnut", "line"].indexOf(String(widget?.type || "")) !== -1;
+    }
+
+    function getBuilderAggregationOptions(widget) {
+        const options = [
+            { value: "count", label: "Nombre de lignes" },
+            { value: "sum", label: "Somme" },
+            { value: "avg", label: "Moyenne" },
+        ];
+
+        if (isChartAggregationWidgetType(widget)) {
+            options.push({ value: "percentage", label: "Pourcentage" });
+        }
+
+        return options;
+    }
+
+    function syncWidgetFormatWithMeasure(widget, measure) {
+        const aggregation = String(measure?.aggregation || defaultMeasureAggregationForWidget(widget));
+        if (aggregation === "percentage" || widget?.type === "percentage") {
+            widget.format = "percent";
+            return;
+        }
+
+        if (String(widget?.format || "") === "percent") {
+            widget.format = "";
+        }
+    }
+
+    function triggerWidgetDataRefresh(widget, rebuildInspector) {
+        synchronizeLegacyWidgetFields(widget);
+        refreshWidgetAfterModalEdit(rebuildInspector ? { rebuildInspector: true } : undefined);
+    }
+
+    function getWidgetPrimaryMeasure(widget) {
+        ensureWidgetDataModel(widget);
+
+        if (!Array.isArray(widget.measures) || !widget.measures.length) {
+            widget.measures = [createMeasureEntry({ aggregation: defaultMeasureAggregationForWidget(widget) })];
+        } else {
+            if (widget.measures[0] && typeof widget.measures[0] === "object") {
+                Object.assign(widget.measures[0], createMeasureEntry(widget.measures[0]));
+            } else {
+                widget.measures[0] = createMeasureEntry(widget.measures[0]);
+            }
+            widget.measures = widget.measures.slice(0, 1);
+        }
+
+        return widget.measures[0];
+    }
+
+    function getWidgetBuilderFilters(widget) {
+        ensureWidgetDataModel(widget);
+        widget.widgetFilters = (Array.isArray(widget.widgetFilters) ? widget.widgetFilters : []).map(function (filter) {
+            if (filter && typeof filter === "object") {
+                Object.assign(filter, createFilterEntry(filter));
+                return filter;
+            }
+
+            return createFilterEntry(filter);
+        }).slice(0, 5);
+        return widget.widgetFilters;
+    }
+
+    function getWidgetScopedRows(widget, excludedFilterId) {
+        const rows = getFilteredRows();
+        if (!widget) {
+            return rows;
+        }
+
+        const filters = getWidgetBuilderFilters(widget).filter(function (filter) {
+            if (!excludedFilterId) {
+                return true;
+            }
+
+            return String(filter.id || "") !== String(excludedFilterId || "");
+        });
+
+        return applyFilterCollection(rows, filters);
+    }
+
+    function syncMeasureColumnSelect(select, measure, columns) {
+        const options = getMeasureColumnOptions(columns, measure?.aggregation);
+        const allowedValues = options.map(function (option) {
+            return String(option.value ?? option.key ?? "");
+        });
+
+        if (measure && String(measure.column || "") !== "" && allowedValues.indexOf(String(measure.column || "")) === -1) {
+            measure.column = "";
+        }
+
+        setBuilderSelectOptions(select, options, measure?.column || "");
+    }
+
+    function getFirstSelectableMeasureColumn(columns, aggregation) {
+        const options = getMeasureColumnOptions(columns, aggregation);
+        const firstOption = options.find(function (option) {
+            return String(option.value ?? option.key ?? "").trim() !== "";
+        });
+
+        return String(firstOption?.value ?? firstOption?.key ?? "");
+    }
+
+    function createMeasureBuilderRow(widget, columns, columnLabel) {
+        const measure = getWidgetPrimaryMeasure(widget);
+        const row = document.createElement("div");
+        row.className = "bi-data-row";
+
+        let columnSelect = null;
+        let matchValueSelect = null;
+        let matchValueField = null;
+
+        const syncMeasureMatchValueSelect = function () {
+            const showMatchValue = String(measure?.aggregation || "count") === "count";
+            const selectedColumn = String(measure?.column || "").trim();
+            if (!matchValueField || !matchValueSelect) {
+                return;
+            }
+
+            if (!showMatchValue) {
+                measure.matchValue = "";
+                matchValueField.hidden = true;
+                matchValueSelect.disabled = true;
+                setBuilderSelectOptions(matchValueSelect, [], "", "Valeur non utilisee pour ce calcul");
+                return;
+            }
+
+            if (selectedColumn === "") {
+                measure.matchValue = "";
+                matchValueField.hidden = true;
+                matchValueSelect.disabled = true;
+                setBuilderSelectOptions(matchValueSelect, [], "", "Choisissez d abord une colonne");
+                return;
+            }
+
+            matchValueField.hidden = false;
+            matchValueSelect.disabled = false;
+            const options = buildDistinctValueOptions(selectedColumn, measure.matchValue, getWidgetScopedRows(widget));
+            const allowedValues = options.map(function (option) {
+                return String(option.value ?? option.key ?? "");
+            });
+            if (allowedValues.indexOf(String(measure.matchValue || "")) === -1) {
+                measure.matchValue = "";
+            }
+            setBuilderSelectOptions(matchValueSelect, options, measure.matchValue || "");
+        };
+
+        const aggregationSelect = createBuilderSelect(getBuilderAggregationOptions(widget), measure.aggregation, function (nextValue) {
+            measure.aggregation = nextValue || defaultMeasureAggregationForWidget(widget);
+            if (measureNeedsColumn(measure)) {
+                const availableValues = getMeasureColumnOptions(columns, measure.aggregation).map(function (option) {
+                    return String(option.value ?? option.key ?? "");
+                });
+                const currentColumn = String(measure.column || "").trim();
+                if (currentColumn === "" || availableValues.indexOf(currentColumn) === -1) {
+                    measure.column = getFirstSelectableMeasureColumn(columns, measure.aggregation);
+                }
+            } else if (String(measure.aggregation || "") === "percentage") {
+                const allowedValues = getMeasureColumnOptions(columns, measure.aggregation).map(function (option) {
+                    return String(option.value ?? option.key ?? "");
+                });
+                if (allowedValues.indexOf(String(measure.column || "")) === -1) {
+                    measure.column = "";
+                }
+            }
+            if (String(measure.aggregation || "count") !== "count") {
+                measure.matchValue = "";
+            }
+            syncWidgetFormatWithMeasure(widget, measure);
+            syncMeasureColumnSelect(columnSelect, measure, columns);
+            syncMeasureMatchValueSelect();
+            triggerWidgetDataRefresh(widget, false);
+        });
+
+        columnSelect = createBuilderSelect([], "", function (nextValue) {
+            if (String(measure.column || "") !== String(nextValue || "")) {
+                measure.matchValue = "";
+            }
+            measure.column = nextValue;
+            syncWidgetFormatWithMeasure(widget, measure);
+            syncMeasureMatchValueSelect();
+            triggerWidgetDataRefresh(widget, false);
+        });
+        syncMeasureColumnSelect(columnSelect, measure, columns);
+
+        matchValueSelect = createBuilderSelect([], "", function (nextValue) {
+            measure.matchValue = nextValue;
+            triggerWidgetDataRefresh(widget, false);
+        });
+
+        row.appendChild(createBuilderField("Calcul", aggregationSelect));
+        row.appendChild(createBuilderField(columnLabel || "Valeur", columnSelect));
+        matchValueField = createBuilderField("Valeur a compter", matchValueSelect);
+        row.appendChild(matchValueField);
+        syncMeasureMatchValueSelect();
+
+        return row;
+    }
+
+    function renderSimpleFilterZone(widget, columns, title, description) {
+        const filters = getWidgetBuilderFilters(widget);
+        const section = createBuilderZone(title, description, filters.length < 5 ? "+ Ajouter" : "", function () {
+            if (widget.widgetFilters.length < 5) {
+                widget.widgetFilters.push(createFilterEntry({}));
+                triggerWidgetDataRefresh(widget, true);
+            }
+        }, filters.length < 5);
+        const list = document.createElement("div");
+        list.className = "bi-data-list";
+
+        if (!filters.length) {
+            const empty = document.createElement("div");
+            empty.className = "bi-data-empty";
+            empty.textContent = "Aucun filtre configure.";
+            list.appendChild(empty);
+        }
+
+        filters.forEach(function (filter, index) {
+            const row = document.createElement("div");
+            row.className = "bi-data-row";
+
+            const valueSelect = createBuilderSelect([], "", function (nextValue) {
+                filter.value = nextValue;
+                triggerWidgetDataRefresh(widget, false);
+            });
+
+            const syncValueSelect = function (nextColumn) {
+                const selectedColumn = String(nextColumn || "");
+                const options = selectedColumn
+                    ? buildDistinctValueOptions(selectedColumn, filter.value, getWidgetScopedRows(widget, filter.id))
+                    : [];
+                const allowedValues = options.map(function (option) {
+                    return String(option.value ?? option.key ?? "");
+                });
+
+                if (selectedColumn === "") {
+                    filter.value = "";
+                    valueSelect.disabled = true;
+                    setBuilderSelectOptions(valueSelect, [], "", "Selectionnez d abord une colonne");
+                    return;
+                }
+
+                if (allowedValues.indexOf(String(filter.value || "")) === -1) {
+                    filter.value = "";
+                }
+
+                valueSelect.disabled = false;
+                setBuilderSelectOptions(valueSelect, options, filter.value, "Toutes les valeurs");
+            };
+
+            const columnSelect = createBuilderSelect(columns.map(function (column) {
+                return { value: column.key, label: column.label };
+            }), filter.column, function (nextValue) {
+                filter.column = nextValue;
+                filter.value = "";
+                syncValueSelect(nextValue);
+                triggerWidgetDataRefresh(widget, false);
+            }, "Selectionner une colonne");
+
+            row.appendChild(createBuilderField("Colonne", columnSelect));
+            row.appendChild(createBuilderField("Valeur a filtrer", valueSelect));
+            row.appendChild(createRemoveButton(function () {
+                widget.widgetFilters.splice(index, 1);
+                triggerWidgetDataRefresh(widget, true);
+            }, "Supprimer ce filtre"));
+            syncValueSelect(filter.column);
+            list.appendChild(row);
+        });
+
+        section.appendChild(list);
+        return section;
+    }
+
+    function renderDimensionCollection(zone, title, description, items, columns, labelPrefix, onAdd, onChange, onRemove, maxItems, single) {
+        const canAdd = single ? false : items.length < maxItems;
+        const section = createBuilderZone(title, description, single ? "" : "+ Ajouter", onAdd, canAdd);
+        const list = document.createElement("div");
+        list.className = "bi-data-list";
+        const entries = items.length ? items : [""];
+        const dimensionChoices = getDimensionColumns(columns).map(function (column) {
+            return { value: column.key, label: column.label };
+        });
+
+        entries.forEach(function (value, index) {
+            const row = document.createElement("div");
+            row.className = "bi-data-row";
+            const select = createBuilderSelect(dimensionChoices, value, function (nextValue) {
+                items[index] = nextValue;
+                if (!single && nextValue === "" && items.length > 1) {
+                    items.splice(index, 1);
+                }
+                triggerWidgetDataRefresh(getSelectedWidget(), false);
+            }, "Selectionner une colonne");
+            row.appendChild(createBuilderField(entries.length === 1 && single ? labelPrefix : (labelPrefix + " " + (index + 1)), select, true));
+            if (!single && items.length > 1) {
+                row.appendChild(createRemoveButton(function () {
+                    items.splice(index, 1);
+                    triggerWidgetDataRefresh(getSelectedWidget(), true);
+                }, "Supprimer cet element"));
+            }
+            list.appendChild(row);
+        });
+
+        section.appendChild(list);
+        return section;
+    }
+
+    function renderMeasureCollection(zoneTitle, description, measures, columns, onAdd, maxItems, singleLabel) {
+        const canAdd = maxItems > 1 && measures.length < maxItems;
+        const section = createBuilderZone(zoneTitle, description, canAdd ? "+ Ajouter" : "", onAdd, canAdd);
+        const list = document.createElement("div");
+        list.className = "bi-data-list";
+        const entries = measures.length ? measures : [createMeasureEntry({})];
+
+        entries.forEach(function (measure, index) {
+            if (!measures[index]) {
+                measures[index] = createMeasureEntry(measure);
+            }
+
+            const row = document.createElement("div");
+            row.className = "bi-data-row";
+            row.appendChild(createBuilderField("Calcul", createBuilderSelect(getBuilderAggregationOptions(), measures[index].aggregation, function (nextValue) {
+                measures[index].aggregation = nextValue;
+                triggerWidgetDataRefresh(getSelectedWidget(), true);
+            })));
+            row.appendChild(createBuilderField(singleLabel || ("Mesure " + (index + 1)), createBuilderSelect(
+                getMeasureColumnOptions(columns, measures[index].aggregation),
+                measures[index].column,
+                function (nextValue) {
+                    measures[index].column = nextValue;
+                    triggerWidgetDataRefresh(getSelectedWidget(), false);
+                },
+            ), true));
+            if (measures.length > 1) {
+                row.appendChild(createRemoveButton(function () {
+                    measures.splice(index, 1);
+                    triggerWidgetDataRefresh(getSelectedWidget(), true);
+                }, "Supprimer cette mesure"));
+            }
+            list.appendChild(row);
+        });
+
+        section.appendChild(list);
+        return section;
+    }
+
+    function renderFilterCollection(zoneTitle, description, filters, columns, onAdd, maxItems) {
+        const section = createBuilderZone(zoneTitle, description, filters.length < maxItems ? "+ Ajouter" : "", onAdd, filters.length < maxItems);
+        const list = document.createElement("div");
+        list.className = "bi-data-list";
+
+        if (!filters.length) {
+            const empty = document.createElement("div");
+            empty.className = "bi-data-empty";
+            empty.textContent = "Aucun filtre configure.";
+            list.appendChild(empty);
+        }
+
+        filters.forEach(function (filter, index) {
+            const row = document.createElement("div");
+            row.className = "bi-data-row";
+            row.appendChild(createBuilderField("Colonne", createBuilderSelect(columns.map(function (column) {
+                return { value: column.key, label: column.label };
+            }), filter.column, function (nextValue) {
+                filter.column = nextValue;
+                filter.value = "";
+                triggerWidgetDataRefresh(getSelectedWidget(), true);
+            }, "Selectionner une colonne")));
+            row.appendChild(createBuilderField("Valeur", createBuilderInput(filter.value, function (nextValue) {
+                filter.value = nextValue;
+                triggerWidgetDataRefresh(getSelectedWidget(), false);
+            }, filter.column ? "Choisissez ou saisissez une valeur" : "Selectionnez d abord une colonne", getDistinctColumnValues(filter.column), function (nextValue) {
+                filter.value = nextValue;
+                triggerWidgetDataRefresh(getSelectedWidget(), false);
+            }), true));
+            row.appendChild(createRemoveButton(function () {
+                filters.splice(index, 1);
+                triggerWidgetDataRefresh(getSelectedWidget(), true);
+            }, "Supprimer ce filtre"));
+            list.appendChild(row);
+        });
+
+        section.appendChild(list);
+        return section;
+    }
+
+    function renderChoiceZone(title, description, label, options, value, onChange) {
+        const section = createBuilderZone(title, description, "", null, false);
+        const row = document.createElement("div");
+        row.className = "bi-data-row";
+        row.appendChild(createBuilderField(label, createBuilderSelect(options, value, onChange), true));
+        section.appendChild(row);
+        return section;
+    }
+
+    function renderColumnChoiceZone(title, description, label, columns, value, onChange, numericOnly, emptyLabel) {
+        const choices = (numericOnly ? getNumericColumns(columns) : getDimensionColumns(columns)).map(function (column) {
+            return { value: column.key, label: column.label };
+        });
+
+        return renderChoiceZone(title, description, label, [{ value: "", label: emptyLabel || "Selectionner une colonne" }].concat(choices), value, onChange);
+    }
+
+    function renderNumberInputZone(title, description, label, value, placeholder, onChange) {
+        const section = createBuilderZone(title, description, "", null, false);
+        const row = document.createElement("div");
+        row.className = "bi-data-row";
+        row.appendChild(createBuilderField(label, createBuilderInput(value, onChange, placeholder, [], function (nextValue) {
+            onChange(nextValue);
+        }), true));
+        section.appendChild(row);
+        return section;
+    }
+
+    function renderFormatZone(widget, allowPercent) {
+        const options = [
+            { value: "", label: "Standard" },
+            { value: "number", label: "Nombre" },
+            { value: "currency", label: "Monetaire" },
+        ];
+
+        if (allowPercent) {
+            options.push({ value: "percent", label: "Pourcentage" });
+        }
+
+        return renderChoiceZone(
+            "Affichage de la valeur",
+            "Choisissez comment afficher le resultat principal.",
+            "Format",
+            options,
+            widget.format || "",
+            function (nextValue) {
+                widget.format = nextValue;
+                triggerWidgetDataRefresh(widget, false);
+            },
+        );
+    }
+
+    function renderMaxItemsZone(widget, label) {
+        return renderChoiceZone(
+            "Affichage",
+            "Limitez le volume affiche pour garder un composant lisible.",
+            label,
+            [
+                { value: "5", label: "5" },
+                { value: "8", label: "8" },
+                { value: "10", label: "10" },
+                { value: "12", label: "12" },
+                { value: "15", label: "15" },
+                { value: "20", label: "20" },
+            ],
+            String(widget.maxItems || 8),
+            function (nextValue) {
+                widget.maxItems = clamp(parseInt(nextValue, 10) || 8, 3, 20);
+                triggerWidgetDataRefresh(widget, false);
+            },
+        );
+    }
+
+    function renderWidgetDataBuilder(widget, columns) {
+        if (!dom.widgetDataBuilder) {
+            return;
+        }
+
+        ensureWidgetDataModel(widget);
+        synchronizeLegacyWidgetFields(widget);
+
+        dom.widgetDataBuilder.innerHTML = "";
+        dom.widgetDataBuilder.hidden = false;
+        if (dom.widgetDataDescription) {
+            dom.widgetDataDescription.textContent = getWidgetDataDescription(widget);
+        }
+
+        const type = String(widget.type || "bar");
+        const builder = dom.widgetDataBuilder;
+        const dimensionChoices = getDimensionColumns(columns).map(function (column) {
+            return { value: column.key, label: column.label };
+        });
+        const numericChoices = getNumericColumns(columns).map(function (column) {
+            return { value: column.key, label: column.label };
+        });
+        const limitLabel = type === "line" ? "Nombre de points" : "Nombre de categories";
+        const appendFilterZone = function () {
+            builder.appendChild(renderSimpleFilterZone(
+                widget,
+                columns,
+                "Filtres",
+                "Ajoutez jusqu a 5 filtres simples du type colonne = valeur pour limiter les lignes prises en compte."
+            ));
+        };
+
+        if (type === "table") {
+            const section = createBuilderZone("Tableau", "Choisissez une ligne et une valeur simple a resumer.", "", null, false);
+
+            const firstRow = document.createElement("div");
+            firstRow.className = "bi-data-row";
+            firstRow.appendChild(createBuilderField("Ligne", createBuilderSelect(dimensionChoices, widget.rowDimensions[0] || "", function (nextValue) {
+                widget.rowDimensions = nextValue ? [nextValue] : [];
+                triggerWidgetDataRefresh(widget, false);
+            }, "Selectionner une colonne")));
+            section.appendChild(firstRow);
+
+            section.appendChild(createMeasureBuilderRow(widget, columns, "Valeur"));
+
+            const displayRow = document.createElement("div");
+            displayRow.className = "bi-data-row";
+            displayRow.appendChild(createBuilderField("Nombre de lignes", createBuilderSelect([
+                { value: "5", label: "5" },
+                { value: "8", label: "8" },
+                { value: "10", label: "10" },
+                { value: "12", label: "12" },
+                { value: "15", label: "15" },
+                { value: "20", label: "20" },
+            ], String(widget.maxItems || 10), function (nextValue) {
+                widget.maxItems = clamp(parseInt(nextValue, 10) || 10, 3, 20);
+                triggerWidgetDataRefresh(widget, false);
+            })));
+            section.appendChild(displayRow);
+
+            builder.appendChild(section);
+            appendFilterZone();
+            return;
+        }
+
+        if (type === "distribution-table") {
+            const section = createBuilderZone("Repartition", "Choisissez une colonne et le tableau affichera automatiquement le nombre, le pourcentage et une jauge coloree.", "", null, false);
+
+            const row = document.createElement("div");
+            row.className = "bi-data-row";
+            row.appendChild(createBuilderField("Colonne", createBuilderSelect(dimensionChoices, widget.chartDimensions[0] || "", function (nextValue) {
+                widget.chartDimensions = nextValue ? [nextValue] : [];
+                triggerWidgetDataRefresh(widget, false);
+            }, "Selectionner une colonne")));
+            row.appendChild(createBuilderField("Nombre de lignes", createBuilderSelect([
+                { value: "5", label: "5" },
+                { value: "8", label: "8" },
+                { value: "10", label: "10" },
+                { value: "12", label: "12" },
+                { value: "15", label: "15" },
+                { value: "20", label: "20" },
+            ], String(widget.maxItems || 10), function (nextValue) {
+                widget.maxItems = clamp(parseInt(nextValue, 10) || 10, 3, 20);
+                triggerWidgetDataRefresh(widget, false);
+            })));
+            section.appendChild(row);
+
+            builder.appendChild(section);
+            appendFilterZone();
+            return;
+        }
+
+        if (type === "counter") {
+            const section = createBuilderZone("Compteur", "Choisissez simplement ce que le compteur doit afficher.", "", null, false);
+            section.appendChild(createMeasureBuilderRow(widget, columns, "Colonne"));
+            builder.appendChild(section);
+            appendFilterZone();
+            return;
+        }
+
+        if (type === "kpi") {
+            const section = createBuilderZone("KPI", "Selectionnez la valeur principale du KPI.", "", null, false);
+            section.appendChild(createMeasureBuilderRow(widget, columns, "Colonne"));
+            builder.appendChild(section);
+            appendFilterZone();
+            return;
+        }
+
+        if (type === "percentage") {
+            const section = createBuilderZone("Pourcentage", "Choisissez la categorie a comparer. La part principale sera calculee automatiquement.", "", null, false);
+
+            const firstRow = document.createElement("div");
+            firstRow.className = "bi-data-row";
+            firstRow.appendChild(createBuilderField("Categorie", createBuilderSelect(dimensionChoices, widget.chartDimensions[0] || "", function (nextValue) {
+                widget.chartDimensions = nextValue ? [nextValue] : [];
+                triggerWidgetDataRefresh(widget, false);
+            }, "Selectionner une colonne")));
+            section.appendChild(firstRow);
+
+            section.appendChild(createMeasureBuilderRow(widget, columns, "Colonne"));
+            builder.appendChild(section);
+            appendFilterZone();
+            return;
+        }
+
+        if (type === "histogram") {
+            const section = createBuilderZone("Histogramme", "Choisissez une colonne numerique et le nombre de classes a afficher.", "", null, false);
+            const measure = getWidgetPrimaryMeasure(widget);
+            measure.aggregation = "count";
+
+            const row = document.createElement("div");
+            row.className = "bi-data-row";
+            row.appendChild(createBuilderField("Colonne numerique", createBuilderSelect(numericChoices, measure.column || "", function (nextValue) {
+                measure.column = nextValue;
+                triggerWidgetDataRefresh(widget, false);
+            }, "Selectionner une colonne numerique")));
+            row.appendChild(createBuilderField("Nombre de classes", createBuilderSelect([
+                { value: "5", label: "5" },
+                { value: "8", label: "8" },
+                { value: "10", label: "10" },
+                { value: "12", label: "12" },
+                { value: "15", label: "15" },
+                { value: "20", label: "20" },
+            ], String(widget.maxItems || 8), function (nextValue) {
+                widget.maxItems = clamp(parseInt(nextValue, 10) || 8, 3, 20);
+                triggerWidgetDataRefresh(widget, false);
+            })));
+            section.appendChild(row);
+
+            builder.appendChild(section);
+            appendFilterZone();
+            return;
+        }
+
+        const section = createBuilderZone("Graphique", "Choisissez un axe X et une seule valeur a calculer.", "", null, false);
+
+        const firstRow = document.createElement("div");
+        firstRow.className = "bi-data-row";
+        firstRow.appendChild(createBuilderField("Axe X", createBuilderSelect(dimensionChoices, widget.chartDimensions[0] || "", function (nextValue) {
+            widget.chartDimensions = nextValue ? [nextValue] : [];
+            triggerWidgetDataRefresh(widget, false);
+        }, "Selectionner une colonne")));
+        firstRow.appendChild(createBuilderField(limitLabel, createBuilderSelect([
+            { value: "5", label: "5" },
+            { value: "8", label: "8" },
+            { value: "10", label: "10" },
+            { value: "12", label: "12" },
+            { value: "15", label: "15" },
+            { value: "20", label: "20" },
+        ], String(widget.maxItems || 8), function (nextValue) {
+            widget.maxItems = clamp(parseInt(nextValue, 10) || 8, 3, 20);
+            triggerWidgetDataRefresh(widget, false);
+        })));
+        section.appendChild(firstRow);
+
+        section.appendChild(createMeasureBuilderRow(widget, columns, "Valeur"));
+
+        builder.appendChild(section);
+        appendFilterZone();
+    }
+
     function renderSettingsModal() {
         if (!dom.settingsSourcesList) return;
         const items = [];
         (state.moduleSettings.uploadedSources || []).forEach(function (source) {
             items.push({
                 id: source.id,
+                sourceType: "uploaded",
                 label: source.label || source.fileName || "Source importee",
                 meta: [source.fileName || "", source.uploadedAt ? "Importe le " + formatIsoDate(source.uploadedAt) : "Source locale"].filter(Boolean).join(" • "),
                 subtitle: source.path || "",
@@ -586,6 +1621,7 @@ document.addEventListener("DOMContentLoaded", function () {
         (state.moduleSettings.remoteSources || []).forEach(function (source) {
             items.push({
                 id: source.id,
+                sourceType: "remote",
                 label: source.label || "URL SharePoint",
                 meta: [source.url || "", source.createdAt ? "Ajoutee le " + formatIsoDate(source.createdAt) : "Source distante"].filter(Boolean).join(" • "),
                 subtitle: "URL SharePoint",
@@ -593,7 +1629,25 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         });
 
+        (state.moduleSettings.apiSources || []).forEach(function (source) {
+            items.push({
+                id: source.id,
+                sourceType: "api",
+                label: source.label || "Webservice JSON",
+                meta: [
+                    source.url || "",
+                    source.tokenConfigured ? ("Token configure" + (source.tokenPreview ? " (" + source.tokenPreview + ")" : "")) : "Sans token",
+                    source.createdAt ? "Ajoute le " + formatIsoDate(source.createdAt) : "Source API",
+                ].filter(Boolean).join(" â€¢ "),
+                subtitle: "API JSON",
+                kind: "Webservice",
+            });
+        });
+
         if (!items.length) {
+            if (state.editingModuleSourceId) {
+                resetEditSourceForm();
+            }
             dom.settingsSourcesList.innerHTML = '<div class="bi-settings-empty">Aucune source personnalisee configuree pour le moment.</div>';
             return;
         }
@@ -601,15 +1655,139 @@ document.addEventListener("DOMContentLoaded", function () {
         dom.settingsSourcesList.innerHTML = items.map(function (item) {
             return '<div class="bi-settings-source-item">' +
                 '<div class="bi-settings-source-meta"><strong>' + escapeHtml(item.label) + '</strong><small>' + escapeHtml(item.kind) + '</small><small>' + escapeHtml(item.meta) + '</small></div>' +
+                '<div class="bi-settings-source-actions">' +
+                '<button type="button" class="stats-edit-button bi-icon-button bi-settings-source-edit" data-edit-source="' + escapeHtml(item.id) + '" title="Modifier cette source" aria-label="Modifier cette source"><i class="bi bi-pencil"></i></button>' +
                 '<button type="button" class="stats-edit-button bi-icon-button bi-settings-source-remove" data-remove-source="' + escapeHtml(item.id) + '" title="Supprimer cette source" aria-label="Supprimer cette source"><i class="bi bi-trash3"></i></button>' +
+                "</div>" +
                 '</div>';
         }).join("");
+
+        dom.settingsSourcesList.querySelectorAll("[data-edit-source]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                startEditingModuleSource(String(button.getAttribute("data-edit-source") || ""));
+            });
+        });
 
         dom.settingsSourcesList.querySelectorAll("[data-remove-source]").forEach(function (button) {
             button.addEventListener("click", function () {
                 deleteModuleSource(String(button.getAttribute("data-remove-source") || ""));
             });
         });
+    }
+
+    function findModuleSourceById(sourceId) {
+        const normalizedSourceId = String(sourceId || "");
+        if (normalizedSourceId === "") {
+            return null;
+        }
+
+        const uploadedSource = (state.moduleSettings.uploadedSources || []).find(function (source) {
+            return String(source.id || "") === normalizedSourceId;
+        });
+        if (uploadedSource) {
+            return { kind: "uploaded", source: uploadedSource };
+        }
+
+        const remoteSource = (state.moduleSettings.remoteSources || []).find(function (source) {
+            return String(source.id || "") === normalizedSourceId;
+        });
+        if (remoteSource) {
+            return { kind: "remote", source: remoteSource };
+        }
+
+        const apiSource = (state.moduleSettings.apiSources || []).find(function (source) {
+            return String(source.id || "") === normalizedSourceId;
+        });
+        if (apiSource) {
+            return { kind: "api", source: apiSource };
+        }
+
+        return null;
+    }
+
+    function resetEditSourceForm() {
+        state.editingModuleSourceId = "";
+
+        if (dom.editSourceForm) {
+            dom.editSourceForm.reset();
+        }
+
+        if (dom.editSourceId) dom.editSourceId.value = "";
+        if (dom.editSourceTitle) dom.editSourceTitle.textContent = "Modifier la source";
+        if (dom.editSourceDescription) dom.editSourceDescription.textContent = "Mettez a jour les informations de la source selectionnee.";
+        if (dom.editSourceUrlField) dom.editSourceUrlField.hidden = false;
+        if (dom.editSourceTokenField) dom.editSourceTokenField.hidden = true;
+        if (dom.editSourceInfoField) dom.editSourceInfoField.hidden = true;
+        if (dom.editSourceInfo) dom.editSourceInfo.textContent = "";
+        if (dom.editSourceUrlHelp) dom.editSourceUrlHelp.textContent = "";
+        if (dom.editSourceTokenHelp) dom.editSourceTokenHelp.textContent = "Laissez vide pour conserver le token actuel.";
+        if (dom.editSourceSubmit) dom.editSourceSubmit.textContent = "Enregistrer les modifications";
+        if (dom.editSourceCard) dom.editSourceCard.hidden = true;
+    }
+
+    function startEditingModuleSource(sourceId) {
+        const entry = findModuleSourceById(sourceId);
+        if (!entry || !dom.editSourceCard) {
+            showSettingsFeedback("Source BI introuvable.", "is-error");
+            return;
+        }
+
+        state.editingModuleSourceId = String(entry.source.id || "");
+        if (dom.editSourceId) dom.editSourceId.value = state.editingModuleSourceId;
+        if (dom.editSourceLabel) dom.editSourceLabel.value = String(entry.source.label || "");
+        if (dom.editSourceUrl) dom.editSourceUrl.value = String(entry.source.url || "");
+        if (dom.editSourceToken) dom.editSourceToken.value = "";
+        if (dom.editSourceInfo) dom.editSourceInfo.textContent = "";
+        if (dom.editSourceInfoField) dom.editSourceInfoField.hidden = true;
+        if (dom.editSourceUrlField) dom.editSourceUrlField.hidden = false;
+        if (dom.editSourceTokenField) dom.editSourceTokenField.hidden = true;
+        if (dom.editSourceUrlHelp) dom.editSourceUrlHelp.textContent = "";
+        if (dom.editSourceTokenHelp) dom.editSourceTokenHelp.textContent = "Laissez vide pour conserver le token actuel.";
+
+        if (entry.kind === "uploaded") {
+            if (dom.editSourceTitle) dom.editSourceTitle.textContent = "Renommer la source importee";
+            if (dom.editSourceDescription) dom.editSourceDescription.textContent = "Vous pouvez modifier le libelle. Pour changer le fichier, importez une nouvelle source.";
+            if (dom.editSourceUrlField) dom.editSourceUrlField.hidden = true;
+            if (dom.editSourceTokenField) dom.editSourceTokenField.hidden = true;
+            if (dom.editSourceInfoField) dom.editSourceInfoField.hidden = false;
+            if (dom.editSourceInfo) dom.editSourceInfo.textContent = String(entry.source.fileName || entry.source.path || "Fichier local");
+            if (dom.editSourceSubmit) dom.editSourceSubmit.textContent = "Enregistrer le libelle";
+        } else if (entry.kind === "remote") {
+            if (dom.editSourceTitle) dom.editSourceTitle.textContent = "Modifier l URL SharePoint";
+            if (dom.editSourceDescription) dom.editSourceDescription.textContent = "Mettez a jour le libelle ou l URL directe du fichier distant.";
+            if (dom.editSourceUrlHelp) dom.editSourceUrlHelp.textContent = "Le lien doit pointer directement vers un fichier CSV, Excel ou JSON.";
+            if (dom.editSourceSubmit) dom.editSourceSubmit.textContent = "Enregistrer les modifications";
+        } else if (entry.kind === "api") {
+            if (dom.editSourceTitle) dom.editSourceTitle.textContent = "Modifier le webservice JSON";
+            if (dom.editSourceDescription) dom.editSourceDescription.textContent = "Mettez a jour le libelle, l URL API et, si besoin, le token Bearer.";
+            if (dom.editSourceUrlHelp) dom.editSourceUrlHelp.textContent = "Le dashboard appellera cette URL en GET avec un token Bearer.";
+            if (dom.editSourceTokenField) dom.editSourceTokenField.hidden = false;
+            if (dom.editSourceTokenHelp) dom.editSourceTokenHelp.textContent = entry.source.tokenPreview
+                ? "Laissez vide pour conserver le token actuel (" + String(entry.source.tokenPreview || "") + ")."
+                : "Laissez vide pour conserver le token actuel.";
+            if (dom.editSourceSubmit) dom.editSourceSubmit.textContent = "Enregistrer les modifications";
+        }
+
+        dom.editSourceCard.hidden = false;
+        dom.editSourceCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        dom.editSourceLabel?.focus();
+    }
+
+    function showSettingsFeedback(message, cssClass) {
+        if (!dom.settingsFeedback) return;
+        dom.settingsFeedback.hidden = false;
+        dom.settingsFeedback.textContent = String(message || "");
+        dom.settingsFeedback.classList.remove("is-error", "is-success");
+        if (cssClass) {
+            dom.settingsFeedback.classList.add(cssClass);
+        }
+    }
+
+    function clearSettingsFeedback() {
+        if (!dom.settingsFeedback) return;
+        dom.settingsFeedback.hidden = true;
+        dom.settingsFeedback.textContent = "";
+        dom.settingsFeedback.classList.remove("is-error", "is-success");
     }
 
     function bindInlineColorField(trigger, nativeInput, hexInput, key, fallback) {
@@ -875,7 +2053,11 @@ document.addEventListener("DOMContentLoaded", function () {
             applyWidgetCardAppearance(card, widget);
         });
 
-        updateInspectorPreview(getSelectedWidget());
+        if (isWidgetModalOpen()) {
+            updateInspectorPreview(getSelectedWidget());
+        } else {
+            destroyPreviewChart();
+        }
     }
 
     function renderWidgetBody(card, widget, result) {
@@ -909,6 +2091,159 @@ document.addEventListener("DOMContentLoaded", function () {
         state.charts[widget.id] = createBiChart(canvas, widget, result, chartTextColor, chartTextSize);
     }
 
+    function getBiChartValueLabelsPlugin() {
+        return {
+            id: "biValueLabels",
+            afterDatasetsDraw: function (chart, args, pluginOptions) {
+                const options = pluginOptions && typeof pluginOptions === "object" ? pluginOptions : {};
+                if (!options.display) {
+                    chart.$biValueLabelsRendered = false;
+                    return;
+                }
+
+                const dataset = chart.data?.datasets?.[0];
+                const meta = chart.getDatasetMeta(0);
+                const elements = Array.isArray(meta?.data) ? meta.data : [];
+                if (!dataset || !elements.length) {
+                    chart.$biValueLabelsRendered = false;
+                    return;
+                }
+
+                const ctx = chart.ctx;
+                const chartArea = chart.chartArea || { left: 0, right: chart.width, top: 0, bottom: chart.height };
+                const baseColor = String(options.color || "#e5e7eb");
+                const fontSize = clamp(parseInt(options.fontSize, 10) || 12, 10, 18);
+                const chartType = String(options.chartType || chart.config.type || "");
+                const isPieLike = chartType === "pie" || chartType === "doughnut";
+                const isHorizontal = Boolean(options.horizontal);
+                let drawnCount = 0;
+
+                ctx.save();
+                ctx.font = "600 " + fontSize + "px Arial";
+                ctx.textBaseline = "middle";
+
+                elements.forEach(function (element, index) {
+                    const rawValue = Number(dataset.data?.[index] ?? 0);
+                    if (!Number.isFinite(rawValue)) {
+                        return;
+                    }
+
+                    const label = String(options.formatter ? options.formatter(rawValue, index) : rawValue);
+                    if (label.trim() === "") {
+                        return;
+                    }
+
+                    const position = getChartValueLabelPosition(element, chartType, isHorizontal);
+                    if (!position) {
+                        return;
+                    }
+
+                    let x = position.x;
+                    let y = position.y;
+                    ctx.textAlign = position.align || "center";
+
+                    if (isPieLike) {
+                        const segmentColor = Array.isArray(dataset.backgroundColor) ? dataset.backgroundColor[index] : dataset.backgroundColor;
+                        ctx.fillStyle = getContrastTextColor(segmentColor, baseColor);
+                    } else {
+                        ctx.fillStyle = baseColor;
+                        x = clamp(x, chartArea.left + 8, chartArea.right - 8);
+                        y = clamp(y, chartArea.top + 10, chartArea.bottom - 10);
+                    }
+
+                    ctx.fillText(label, x, y);
+                    drawnCount += 1;
+                });
+
+                ctx.restore();
+                chart.$biValueLabelsRendered = drawnCount > 0;
+            },
+        };
+    }
+
+    function getChartValueLabelPosition(element, chartType, isHorizontal) {
+        if (!element || typeof element.tooltipPosition !== "function") {
+            return null;
+        }
+
+        const point = element.tooltipPosition();
+        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+            return null;
+        }
+
+        if (chartType === "pie" || chartType === "doughnut") {
+            return {
+                x: point.x,
+                y: point.y,
+                align: "center",
+            };
+        }
+
+        if (chartType === "line") {
+            return {
+                x: point.x,
+                y: point.y - 14,
+                align: "center",
+            };
+        }
+
+        if (isHorizontal) {
+            return {
+                x: point.x + 10,
+                y: point.y,
+                align: "left",
+            };
+        }
+
+        return {
+            x: point.x,
+            y: point.y - 14,
+            align: "center",
+        };
+    }
+
+    function getContrastTextColor(backgroundColor, fallbackColor) {
+        const color = String(backgroundColor || "").trim();
+        const rgb = parseCssColor(color);
+        if (!rgb) {
+            return fallbackColor || "#ffffff";
+        }
+
+        const luminance = ((0.299 * rgb.r) + (0.587 * rgb.g) + (0.114 * rgb.b)) / 255;
+        return luminance > 0.62 ? "#111827" : "#ffffff";
+    }
+
+    function parseCssColor(value) {
+        const color = String(value || "").trim();
+        if (/^#([0-9a-f]{6})$/i.test(color)) {
+            return {
+                r: parseInt(color.slice(1, 3), 16),
+                g: parseInt(color.slice(3, 5), 16),
+                b: parseInt(color.slice(5, 7), 16),
+            };
+        }
+
+        const rgbaMatch = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+        if (rgbaMatch) {
+            return {
+                r: Number(rgbaMatch[1] || 0),
+                g: Number(rgbaMatch[2] || 0),
+                b: Number(rgbaMatch[3] || 0),
+            };
+        }
+
+        return null;
+    }
+
+    function formatChartValueLabel(value, widget) {
+        const absoluteValue = Math.abs(Number(value || 0));
+        if (widget?.format === "currency" || widget?.format === "percent") {
+            return formatValue(value, widget.format, widget);
+        }
+
+        return absoluteValue >= 10000 ? formatCompactNumber(value) : formatValue(value, "", widget);
+    }
+
     function createBiChart(canvas, widget, result, chartTextColor, chartTextSize) {
         return new Chart(canvas, {
             type: result.chartType,
@@ -928,10 +2263,21 @@ document.addEventListener("DOMContentLoaded", function () {
                     tension: result.chartType === "line" ? 0.28 : 0,
                 }],
             },
+            plugins: [getBiChartValueLabelsPlugin()],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 indexAxis: result.horizontal ? "y" : "x",
+                layout: {
+                    padding: result.chartType === "pie" || result.chartType === "doughnut"
+                        ? { top: 10, right: 10, bottom: 10, left: 10 }
+                        : {
+                            top: 20,
+                            right: result.horizontal ? 48 : 16,
+                            bottom: 12,
+                            left: 16,
+                        },
+                },
                 plugins: {
                     legend: {
                         display: !widget.hideText && (result.chartType !== "bar" || result.labels.length <= 12),
@@ -939,6 +2285,16 @@ document.addEventListener("DOMContentLoaded", function () {
                         labels: {
                             color: chartTextColor,
                             font: { size: chartTextSize },
+                        },
+                    },
+                    biValueLabels: {
+                        display: !widget.hideText,
+                        color: chartTextColor,
+                        fontSize: Math.max(11, chartTextSize - 1),
+                        horizontal: Boolean(result.horizontal),
+                        chartType: result.chartType,
+                        formatter: function (value) {
+                            return formatChartValueLabel(value, widget);
                         },
                     },
                 },
@@ -970,6 +2326,45 @@ document.addEventListener("DOMContentLoaded", function () {
         applyWidgetCardAppearance(card, widget);
     }
 
+    function refreshRenderedWidgetCard(widget) {
+        if (!dom.widgetsGrid || !widget) {
+            return false;
+        }
+
+        const page = getCurrentPage();
+        const widgets = Array.isArray(page?.widgets) ? page.widgets.filter(function (candidate) {
+            return state.editMode || !candidate.hidden;
+        }) : [];
+        const index = widgets.findIndex(function (candidate) {
+            return candidate.id === widget.id;
+        });
+
+        if (index < 0) {
+            return false;
+        }
+
+        const card = Array.from(dom.widgetsGrid.children).find(function (candidate) {
+            return candidate.getAttribute("data-widget-id") === widget.id;
+        });
+
+        if (!card) {
+            return false;
+        }
+
+        const result = computeWidgetResult(widget);
+        card.className = "card card-resizable" + (widget.id === state.selectedWidgetId ? " bi-widget-selected" : "");
+        card.setAttribute("data-layout", widget.layout || "4/8");
+        card.setAttribute("data-widget-id", widget.id);
+        card.setAttribute("data-card-id", widget.id);
+        card.setAttribute("data-card-fraction", widget.layout || "4/8");
+        card.innerHTML = buildWidgetCardHtml(widget, result, index);
+        bindWidgetCardEvents(card, widget, index);
+        ensureWidgetControls(card, widget);
+        renderWidgetBody(card, widget, result);
+        applyWidgetCardAppearance(card, widget);
+        return true;
+    }
+
     function renderInspector() {
         const widget = getSelectedWidget();
         if (!dom.inspectorEmpty || !dom.inspectorForm) return;
@@ -985,26 +2380,29 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         const builder = state.builderOptions || buildBuilderOptionsFromDataset(null);
+        const columns = Array.isArray(builder.columns) ? builder.columns : [];
+        const dataHintMessage = getWidgetConfigurationHint(widget, columns);
         dom.widgetTitle.value = widget.title || "";
         dom.widgetType.innerHTML = buildSelectOptions(state.widgetCatalog.map(function (item) {
             return { value: item.type, label: item.label };
         }), widget.type);
         dom.widgetLayout.innerHTML = buildSelectOptions(builder.layouts || [], widget.layout, "key");
+        dom.widgetLayout.disabled = false;
         if (dom.widgetAlignment) dom.widgetAlignment.value = String(widget.alignment || "left");
         if (dom.widgetCardHeight) dom.widgetCardHeight.value = String(widget.cardHeight || 75);
         if (dom.widgetCardHeightValue) dom.widgetCardHeightValue.textContent = String(widget.cardHeight || 75) + " px";
-        dom.widgetDimension.innerHTML = buildSelectOptions([{ key: "", label: "Aucune colonne" }].concat(builder.columns || []), widget.dimensionColumn, "key");
-        dom.widgetValue.innerHTML = buildSelectOptions([{ key: "", label: "Aucune colonne" }].concat(builder.columns || []), widget.valueColumn, "key");
-        dom.widgetAggregation.innerHTML = buildSelectOptions(builder.aggregations || [], widget.aggregation, "key");
-        dom.widgetFormat.value = widget.format || "";
-        dom.widgetMaxItems.value = String(widget.maxItems || 8);
-        dom.widgetMaxItemsValue.textContent = String(widget.maxItems || 8);
+        renderWidgetDataBuilder(widget, columns);
         if (dom.widgetTextSize) dom.widgetTextSize.value = String(widget.textSize || 15);
         if (dom.widgetTextSizeValue) dom.widgetTextSizeValue.textContent = String(widget.textSize || 15) + " px";
         if (dom.widgetValueSize) dom.widgetValueSize.value = String(widget.valueSize || 48);
         if (dom.widgetValueSizeValue) dom.widgetValueSizeValue.textContent = String(widget.valueSize || 48) + " px";
         if (dom.widgetHideTitle) dom.widgetHideTitle.checked = Boolean(widget.hideTitle);
         if (dom.widgetHideText) dom.widgetHideText.checked = Boolean(widget.hideText);
+        if (dom.widgetDataHint) {
+            dom.widgetDataHint.hidden = dataHintMessage === "";
+            dom.widgetDataHint.textContent = dataHintMessage;
+            dom.widgetDataHint.classList.toggle("is-error", dataHintMessage !== "");
+        }
         syncInspectorColorControls(widget);
         updateInspectorPreview(widget);
     }
@@ -1091,6 +2489,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function buildPreviewTableHtml(result, widget) {
+        if (result.tableVariant === "distribution") {
+            return buildPreviewDistributionTableHtml(result, widget);
+        }
+
         const headers = result.columns.slice(0, 4).map(function (column) {
             return "<th>" + escapeHtml(column.label) + "</th>";
         }).join("");
@@ -1101,6 +2503,14 @@ document.addEventListener("DOMContentLoaded", function () {
         }).join("");
 
         return '<div class="bi-preview-table-wrap"><table class="bi-preview-table-real">' + (!widget.hideText ? '<thead><tr>' + headers + '</tr></thead>' : '') + '<tbody>' + rows + '</tbody></table></div>';
+    }
+
+    function buildPreviewDistributionTableHtml(result, widget) {
+        return buildDistributionTableMarkup(result, widget, {
+            wrapClass: "bi-preview-table-wrap bi-preview-distribution-surface",
+            tableClass: "bi-preview-table-real bi-preview-distribution-table",
+            maxRows: 4,
+        });
     }
 
     function buildWidgetCardHtml(widget, result, index) {
@@ -1273,9 +2683,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (action === "edit") {
             state.selectedWidgetId = widget.id;
-            renderWidgets();
-            renderInspector();
+            syncSelectedWidgetCardState();
             openModal("widget");
+            renderInspector();
             return;
         }
 
@@ -1358,7 +2768,11 @@ document.addEventListener("DOMContentLoaded", function () {
             layout: defaultLayoutForType(type),
             dimensionColumn: "",
             valueColumn: "",
-            aggregation: type === "table" ? "count" : "sum",
+            filterColumn: "",
+            filterValue: "",
+            percentageBase: type === "percentage" ? "group_share" : "",
+            targetGoal: "",
+            aggregation: type === "table" || type === "distribution-table" ? "count" : "sum",
             displayMode: "chart",
             format: "",
             color: "",
@@ -1369,11 +2783,11 @@ document.addEventListener("DOMContentLoaded", function () {
             alignment: "left",
             textSize: 15,
             valueSize: type === "kpi" || type === "counter" || type === "percentage" ? 48 : 42,
-            cardHeight: type === "table" ? 320 : (type === "kpi" || type === "counter" || type === "percentage" ? 240 : 300),
+            cardHeight: type === "table" || type === "distribution-table" ? 320 : (type === "kpi" || type === "counter" || type === "percentage" ? 240 : 300),
             hideTitle: false,
             hideText: false,
             hidden: false,
-            maxItems: type === "table" ? 10 : 8,
+            maxItems: type === "table" || type === "distribution-table" ? 10 : 8,
         };
         applyWidgetDefaults(widget, false);
         page.widgets.push(widget);
@@ -1387,101 +2801,249 @@ document.addEventListener("DOMContentLoaded", function () {
         const numeric = columns.find(function (column) { return column.type === "number"; });
         const dateColumn = columns.find(function (column) { return column.type === "date"; });
         const dimension = columns.find(function (column) { return column.type === "string" || column.type === "boolean"; });
+        const primaryDimension = dimension?.key || dateColumn?.key || "";
 
         if (!preserveTitle && (!widget.title || widget.title.trim() === "")) {
             widget.title = getWidgetDefinition(widget.type).defaultTitle || "Bloc BI";
         }
 
         if (widget.type === "line") {
-            widget.dimensionColumn = widget.dimensionColumn || dateColumn?.key || dimension?.key || "";
-            widget.valueColumn = widget.valueColumn || numeric?.key || "";
-            widget.aggregation = numeric ? "sum" : "count";
+            widget.dimensionColumn = widget.dimensionColumn || dateColumn?.key || primaryDimension;
+            widget.valueColumn = widget.valueColumn || "";
+            widget.aggregation = widget.valueColumn ? "sum" : "count";
         } else if (widget.type === "bar" || widget.type === "bar-horizontal" || widget.type === "pie" || widget.type === "doughnut") {
-            widget.dimensionColumn = widget.dimensionColumn || dimension?.key || dateColumn?.key || "";
-            widget.valueColumn = widget.valueColumn || numeric?.key || "";
-            widget.aggregation = numeric ? "sum" : "count";
+            widget.dimensionColumn = widget.dimensionColumn || primaryDimension;
+            widget.valueColumn = widget.valueColumn || "";
+            widget.aggregation = widget.valueColumn ? "sum" : "count";
         } else if (widget.type === "histogram") {
             widget.valueColumn = widget.valueColumn || numeric?.key || "";
             widget.aggregation = "count";
+            widget.format = "";
+        } else if (widget.type === "counter") {
+            widget.valueColumn = widget.valueColumn || "";
+            widget.aggregation = widget.valueColumn
+                ? getCompatibleMeasureAggregation(widget.aggregation, "sum")
+                : "count";
+        } else if (widget.type === "kpi") {
+            widget.valueColumn = widget.valueColumn || "";
+            widget.aggregation = widget.valueColumn ? "sum" : "count";
         } else if (widget.type === "table") {
-            widget.dimensionColumn = widget.dimensionColumn || dimension?.key || "";
-            widget.valueColumn = widget.valueColumn || numeric?.key || "";
+            widget.dimensionColumn = widget.dimensionColumn || primaryDimension;
+            widget.valueColumn = widget.valueColumn || "";
+            widget.aggregation = widget.valueColumn
+                ? getCompatibleMeasureAggregation(widget.aggregation, "sum")
+                : "count";
+        } else if (widget.type === "distribution-table") {
+            widget.dimensionColumn = widget.dimensionColumn || primaryDimension;
+            widget.valueColumn = "";
             widget.aggregation = "count";
+            widget.format = "";
         } else if (widget.type === "percentage") {
-            widget.dimensionColumn = widget.dimensionColumn || dimension?.key || "";
-            widget.valueColumn = widget.valueColumn || numeric?.key || "";
+            widget.dimensionColumn = widget.dimensionColumn || primaryDimension;
+            widget.valueColumn = widget.valueColumn || "";
             widget.aggregation = "percentage";
+            widget.percentageBase = "group_share";
             widget.format = "percent";
         } else {
-            widget.valueColumn = widget.valueColumn || numeric?.key || "";
-            widget.dimensionColumn = widget.dimensionColumn || dimension?.key || "";
-            widget.aggregation = numeric ? "sum" : "count";
+            widget.valueColumn = widget.valueColumn || "";
+            widget.dimensionColumn = widget.dimensionColumn || primaryDimension;
+            widget.aggregation = widget.valueColumn ? "sum" : "count";
         }
+
+        ensureWidgetDataModel(widget);
+
+        if (widget.type === "table") {
+            widget.rowDimensions = [widget.rowDimensions[0] || widget.dimensionColumn || dimension?.key || ""];
+            widget.columnDimensions = [];
+        } else {
+            widget.chartDimensions = [widget.chartDimensions[0] || widget.dimensionColumn || dateColumn?.key || dimension?.key || ""];
+            widget.rowDimensions = [];
+            widget.columnDimensions = [];
+        }
+
+        widget.measures = [createMeasureEntry(Object.assign({}, widget.measures[0] || {}, {
+            column: widget.valueColumn || widget.measures[0]?.column || "",
+            aggregation: widget.type === "percentage"
+                ? String(widget.measures[0]?.aggregation || (widget.valueColumn ? "sum" : "count"))
+                : String(widget.aggregation && widget.aggregation !== "percentage"
+                    ? widget.aggregation
+                    : (widget.measures[0]?.aggregation || defaultMeasureAggregationForWidget(widget))),
+        }))];
+        widget.counterItems = [];
+        widget.filterColumn = "";
+        widget.filterValue = "";
+        widget.targetGoal = "";
+        widget.percentageBase = widget.type === "percentage" ? "group_share" : "";
+        syncWidgetFormatWithMeasure(widget, widget.measures[0]);
 
         if (!widget.color) {
             widget.color = guessColorForWidget(widget);
         }
+
+        synchronizeLegacyWidgetFields(widget);
+    }
+
+    function widgetNeedsAutoDefaults(widget) {
+        ensureWidgetDataModel(widget);
+        synchronizeLegacyWidgetFields(widget);
+
+        const type = String(widget?.type || "bar");
+        const dimensionSelected = String(widget.chartDimensions?.[0] || widget.dimensionColumn || "").trim() !== "";
+        const rowSelected = (Array.isArray(widget.rowDimensions) ? widget.rowDimensions : []).some(function (value) {
+            return String(value || "").trim() !== "";
+        });
+        const measure = getPrimaryMeasure(widget);
+        const measureColumnSelected = String(measure?.column || widget.valueColumn || "").trim() !== "";
+
+        if (type === "histogram") {
+            return !measureColumnSelected;
+        }
+
+        if (type === "table") {
+            return !rowSelected;
+        }
+
+        if (type === "distribution-table") {
+            return !dimensionSelected;
+        }
+
+        if (type === "percentage") {
+            return !dimensionSelected;
+        }
+
+        if (["bar", "bar-horizontal", "pie", "doughnut", "line"].indexOf(type) !== -1) {
+            return !dimensionSelected;
+        }
+
+        return false;
+    }
+
+    function hydrateCurrentPageWidgetsForDataset() {
+        const page = getCurrentPage();
+        const columns = getColumnOptions();
+        if (!page || !Array.isArray(page.widgets) || columns.length === 0) {
+            return false;
+        }
+
+        let hydrated = false;
+        page.widgets.forEach(function (widget) {
+            if (!widgetNeedsAutoDefaults(widget)) {
+                return;
+            }
+
+            applyWidgetDefaults(widget, true);
+            hydrated = true;
+        });
+
+        return hydrated;
     }
 
     function computeWidgetResult(widget) {
+        ensureWidgetDataModel(widget);
+        synchronizeLegacyWidgetFields(widget);
+
         const rows = getFilteredRows();
         if (!rows.length) {
             return { kind: "empty", message: "Aucune donnee disponible pour ce composant." };
         }
 
+        const widgetFilters = getWidgetBuilderFilters(widget);
+        const filterDescription = describeFilterCollection(widgetFilters);
+        const sourceRows = applyFilterCollection(rows, widgetFilters);
+        if (!sourceRows.length) {
+            return {
+                kind: "empty",
+                message: filterDescription
+                    ? "Aucune donnee ne correspond aux filtres selectionnes."
+                    : "Aucune donnee disponible pour ce composant.",
+            };
+        }
+
         const layout = widget.layout || "4/8";
         const title = widget.title || getWidgetDefinition(widget.type).defaultTitle || "Bloc BI";
-        const valueColumn = widget.valueColumn || "";
-        const dimensionColumn = widget.dimensionColumn || "";
-        const aggregation = widget.aggregation || "count";
         const maxItems = clamp(parseInt(widget.maxItems, 10) || 8, 3, 20);
         const color = widget.color || guessColorForWidget(widget);
 
-        if (widget.type === "kpi" || widget.type === "counter" || widget.type === "percentage") {
-            const aggregate = aggregateRows(rows, aggregation, valueColumn);
-            if (widget.type === "percentage") {
-                const percent = computePercentage(rows, dimensionColumn, valueColumn);
-                return {
-                    kind: "kpi",
-                    title: title,
-                    value: formatValue(percent.value, "percent", widget),
-                    meta: percent.meta,
-                    color: color,
-                    subtitle: layout === "2/8" ? "" : "Vue synthese",
-                };
+        if (widget.type === "counter") {
+            return computeCounterWidgetResult(widget, sourceRows, title, color, layout, filterDescription);
+        }
+
+        if (widget.type === "kpi") {
+            const measure = getPrimaryMeasure(widget);
+            const measureError = getMeasureConfigurationError(measure, "Selectionnez une valeur principale.");
+            if (measureError) {
+                return { kind: "empty", message: measureError };
             }
+            const aggregate = aggregateRowsForMeasure(sourceRows, measure);
 
             return {
                 kind: "kpi",
                 title: title,
-                value: formatValue(aggregate.value, widget.format, widget),
-                meta: aggregate.meta,
+                value: formatValue(aggregate.value, widget.format, Object.assign({}, widget, { aggregation: measure.aggregation })),
+                meta: buildWidgetAggregateMeta(Object.assign({}, widget, { aggregation: measure.aggregation, valueColumn: measure.column }), aggregate, sourceRows.length, filterDescription),
                 color: color,
                 subtitle: layout === "2/8" ? "" : "Vue synthetique",
             };
         }
 
-        if (widget.type === "table") {
-            const tableColumns = pickTableColumns(widget, rows);
+        if (widget.type === "percentage") {
+            const percentageDimension = String(widget.chartDimensions[0] || "");
+            const percentageMeasure = getPrimaryMeasure(widget);
+            const percentageMeasureError = getMeasureConfigurationError(percentageMeasure, "Selectionnez une mesure.");
+            if (percentageDimension === "") {
+                return { kind: "empty", message: "Selectionnez une colonne de categorie pour calculer le pourcentage." };
+            }
+            if (percentageMeasureError) {
+                return { kind: "empty", message: percentageMeasureError };
+            }
+            const percent = computePercentage(sourceRows, widget);
+            if (percent.error) {
+                return { kind: "empty", message: percent.error };
+            }
             return {
-                kind: "table",
-                columns: tableColumns,
-                rows: rows.slice(0, maxItems),
-                subtitle: rows.length + " lignes source",
+                kind: "kpi",
+                title: title,
+                value: formatValue(percent.value, "percent", widget),
+                meta: appendFilterDescription(percent.meta, filterDescription),
+                color: color,
+                subtitle: layout === "2/8" ? "" : "Vue synthese",
             };
         }
 
+        if (widget.type === "distribution-table") {
+            return buildDistributionTableResult(sourceRows, widget, filterDescription, maxItems, color);
+        }
+
+        if (widget.type === "table") {
+            return buildPivotTableResult(sourceRows, widget, filterDescription, maxItems);
+        }
+
         if (widget.type === "histogram") {
-            const histogram = buildHistogram(rows, valueColumn, maxItems, color);
+            const histogramMeasure = getPrimaryMeasure(widget);
+            const histogramError = getMeasureConfigurationError(histogramMeasure, "Choisissez une colonne numerique pour l histogramme.");
+            if (histogramError) {
+                return { kind: "empty", message: histogramError };
+            }
+            const histogram = buildHistogram(sourceRows, histogramMeasure.column, maxItems, color);
             if (!histogram.labels.length) {
                 return { kind: "empty", message: "Choisissez une colonne numerique pour l histogramme." };
             }
+            histogram.subtitle = appendFilterDescription(histogram.subtitle, filterDescription);
             return histogram;
         }
 
-        const grouped = groupRows(rows, dimensionColumn, valueColumn, aggregation, maxItems);
+        const dimensionColumn = String(widget.chartDimensions[0] || "");
+        const measure = getPrimaryMeasure(widget);
+        const measureError = getMeasureConfigurationError(measure, "Configurez la valeur du graphique.");
+        if (measureError) {
+            return { kind: "empty", message: measureError };
+        }
+        if (dimensionColumn === "") {
+            return { kind: "empty", message: "Choisissez une colonne pour l axe X." };
+        }
+        const grouped = groupRows(sourceRows, dimensionColumn, measure.column, measure.aggregation, maxItems, measure.matchValue);
         if (!grouped.labels.length) {
-            return { kind: "empty", message: "Configurez les colonnes de regroupement et de valeur." };
+            return { kind: "empty", message: "Configurez l axe X et la mesure du graphique." };
         }
 
         return {
@@ -1496,7 +3058,92 @@ document.addEventListener("DOMContentLoaded", function () {
             borderColors: grouped.labels.map(function (_, index) {
                 return index === 0 ? color : palette[index % palette.length];
             }),
-            subtitle: grouped.subtitle,
+            subtitle: appendFilterDescription(grouped.subtitle, filterDescription),
+        };
+    }
+
+    function getPrimaryMeasure(widget) {
+        ensureWidgetDataModel(widget);
+
+        if (Array.isArray(widget.measures) && widget.measures.length) {
+            return widget.measures[0];
+        }
+
+        return createMeasureEntry({ aggregation: defaultMeasureAggregationForWidget(widget) });
+    }
+
+    function getActiveFilters(filters) {
+        return (Array.isArray(filters) ? filters : []).filter(function (filter) {
+            return String(filter?.column || "").trim() !== "" && String(filter?.value || "").trim() !== "";
+        });
+    }
+
+    function applyFilterCollection(rows, filters) {
+        const activeFilters = getActiveFilters(filters);
+        if (!activeFilters.length) {
+            return rows;
+        }
+
+        return rows.filter(function (row) {
+            return activeFilters.every(function (filter) {
+                return normalizeFilterComparableValue(row[filter.column]) === normalizeFilterComparableValue(filter.value);
+            });
+        });
+    }
+
+    function describeFilterCollection(filters) {
+        const activeFilters = getActiveFilters(filters);
+        if (!activeFilters.length) {
+            return "";
+        }
+
+        return activeFilters.map(function (filter) {
+            return humanizeKey(filter.column) + " = " + String(filter.value || "");
+        }).join(" | ");
+    }
+
+    function aggregateRowsForMeasure(rows, measure) {
+        return aggregateRows(
+            rows,
+            String(measure?.aggregation || "count"),
+            String(measure?.column || ""),
+            String(measure?.matchValue || ""),
+        );
+    }
+
+    function measureNeedsColumn(measure) {
+        const aggregation = String(measure?.aggregation || "count");
+        return aggregation === "sum" || aggregation === "avg";
+    }
+
+    function getMeasureConfigurationError(measure, emptyMessage) {
+        if (!measure) {
+            return emptyMessage || "Configurez une mesure.";
+        }
+
+        if (measureNeedsColumn(measure) && String(measure.column || "").trim() === "") {
+            return "Selectionnez une colonne pour ce calcul.";
+        }
+
+        return "";
+    }
+
+    function computeCounterWidgetResult(widget, sourceRows, title, color, layout, filterDescription) {
+        const measure = getPrimaryMeasure(widget);
+        const configError = getMeasureConfigurationError(measure, "Choisissez ce qu il faut compter.");
+        if (configError) {
+            return { kind: "empty", message: configError };
+        }
+
+        const aggregate = aggregateRowsForMeasure(sourceRows, measure);
+
+        return {
+            kind: "kpi",
+            title: title,
+            value: formatValue(aggregate.value, widget.format, Object.assign({}, widget, { aggregation: measure.aggregation })),
+            meta: buildWidgetAggregateMeta(Object.assign({}, widget, { aggregation: measure.aggregation, valueColumn: measure.column }), aggregate, sourceRows.length, filterDescription),
+            color: color,
+            subtitle: layout === "2/8" ? "" : "Compteur",
         };
     }
 
@@ -1539,7 +3186,7 @@ document.addEventListener("DOMContentLoaded", function () {
         };
     }
 
-    function groupRows(rows, dimensionColumn, valueColumn, aggregation, maxItems) {
+    function groupRows(rows, dimensionColumn, valueColumn, aggregation, maxItems, matchValue) {
         const groups = new Map();
         rows.forEach(function (row) {
             const label = String(dimensionColumn ? (row[dimensionColumn] || "Non renseigne") : "Ensemble").trim() || "Non renseigne";
@@ -1549,10 +3196,14 @@ document.addEventListener("DOMContentLoaded", function () {
             groups.get(label).push(row);
         });
 
+        const effectiveAggregation = aggregation === "percentage"
+            ? (String(valueColumn || "").trim() === "" ? "count" : "sum")
+            : aggregation;
+
         const items = Array.from(groups.entries()).map(function (entry) {
             return {
                 label: entry[0],
-                value: aggregateRows(entry[1], aggregation, valueColumn).raw,
+                value: aggregateRows(entry[1], effectiveAggregation, valueColumn, matchValue).raw,
             };
         }).sort(function (left, right) {
             return Number(right.value || 0) - Number(left.value || 0);
@@ -1568,13 +3219,50 @@ document.addEventListener("DOMContentLoaded", function () {
         return {
             labels: items.map(function (item) { return item.label; }),
             values: items.map(function (item) { return Number(item.value || 0); }),
-            subtitle: aggregationLabel(aggregation) + (dimensionColumn ? " par " + humanizeKey(dimensionColumn) : ""),
+            subtitle: buildMeasureLabel({
+                aggregation: aggregation,
+                column: valueColumn,
+                matchValue: matchValue,
+            }) + (dimensionColumn ? " par " + humanizeKey(dimensionColumn) : ""),
         };
     }
 
-    function aggregateRows(rows, aggregation, valueColumn) {
-        if (aggregation === "count" || !valueColumn) {
-            return { raw: rows.length, value: rows.length, meta: rows.length + " lignes source" };
+    function aggregateRows(rows, aggregation, valueColumn, matchValue) {
+        if (aggregation === "count") {
+            const columnKey = String(valueColumn || "").trim();
+            if (columnKey === "") {
+                return { raw: rows.length, value: rows.length, meta: rows.length + " lignes source" };
+            }
+
+            const targetValue = String(matchValue || "").trim();
+            const countedRows = rows.filter(function (row) {
+                const value = row[columnKey];
+                if (targetValue !== "") {
+                    return normalizeFilterComparableValue(value) === normalizeFilterComparableValue(targetValue);
+                }
+
+                if (value === null || value === undefined) {
+                    return false;
+                }
+
+                if (typeof value === "number") {
+                    return Number.isFinite(value);
+                }
+
+                return String(value).trim() !== "";
+            }).length;
+
+            return {
+                raw: countedRows,
+                value: countedRows,
+                meta: targetValue !== ""
+                    ? countedRows + ' lignes ou "' + targetValue + '" est present dans ' + humanizeKey(columnKey)
+                    : countedRows + " valeurs renseignees dans " + humanizeKey(columnKey),
+            };
+        }
+
+        if (!valueColumn) {
+            return { raw: 0, value: 0, meta: "Selectionnez une colonne numerique" };
         }
 
         const values = rows.map(function (row) { return toNumber(row[valueColumn]); }).filter(function (value) { return value !== null; });
@@ -1591,42 +3279,200 @@ document.addEventListener("DOMContentLoaded", function () {
         return { raw: sum, value: sum, meta: "Total sur " + values.length + " lignes" };
     }
 
-    function computePercentage(rows, dimensionColumn, valueColumn) {
-        if (dimensionColumn) {
-            const topGroup = groupRows(rows, dimensionColumn, valueColumn, valueColumn ? "sum" : "count", 1);
-            const allGroups = groupRows(rows, dimensionColumn, valueColumn, valueColumn ? "sum" : "count", 100);
-            const total = allGroups.values.reduce(function (carry, value) { return carry + value; }, 0);
-            const topValue = topGroup.values[0] || 0;
-            const topLabel = topGroup.labels[0] || "Categorie";
-            return {
-                value: total > 0 ? (topValue / total) * 100 : 0,
-                meta: topLabel + " represente " + formatCompactNumber(topValue),
-            };
+    function computePercentage(rows, widget) {
+        const dimensionColumn = String(widget.chartDimensions[0] || "");
+        const measure = getPrimaryMeasure(widget);
+        const valueColumn = String(measure.column || "");
+        const aggregateMode = String(measure.aggregation || (valueColumn ? "sum" : "count"));
+
+        const allGroups = groupRows(rows, dimensionColumn, valueColumn, aggregateMode, Math.max(rows.length, 50), measure.matchValue);
+        const total = allGroups.values.reduce(function (carry, value) {
+            return carry + Number(value || 0);
+        }, 0);
+        const topValue = Number(allGroups.values[0] || 0);
+        const topLabel = allGroups.labels[0] || "Categorie";
+
+        if (!allGroups.labels.length || total <= 0) {
+            return { error: "Impossible de calculer un pourcentage avec les champs selectionnes.", value: 0, meta: "" };
         }
 
-        if (valueColumn) {
-            const aggregate = aggregateRows(rows, "avg", valueColumn);
-            return { value: aggregate.value, meta: aggregate.meta };
-        }
-
-        return { value: 100, meta: "Jeu de donnees charge" };
+        return {
+            value: (topValue / total) * 100,
+            meta: topLabel + " represente " + formatCompactNumber(topValue) + " sur " + formatCompactNumber(total),
+        };
     }
 
-    function pickTableColumns(widget, rows) {
-        const keys = [];
-        if (widget.dimensionColumn) keys.push(widget.dimensionColumn);
-        if (widget.valueColumn && keys.indexOf(widget.valueColumn) === -1) keys.push(widget.valueColumn);
-        Object.keys(rows[0] || {}).forEach(function (key) {
-            if (keys.indexOf(key) === -1 && keys.length < 5) {
-                keys.push(key);
+    function buildDistributionTableResult(rows, widget, filterDescription, maxItems, accentColor) {
+        const dimensionColumn = String(widget.chartDimensions[0] || "");
+        if (dimensionColumn === "") {
+            return { kind: "empty", message: "Choisissez une colonne pour afficher la repartition detaillee." };
+        }
+
+        const groups = new Map();
+        rows.forEach(function (row) {
+            const label = String(row[dimensionColumn] ?? "").trim() || "Non renseigne";
+            groups.set(label, Number(groups.get(label) || 0) + 1);
+        });
+
+        const total = rows.length;
+        const groupedRows = Array.from(groups.entries()).map(function (entry) {
+            return {
+                label: entry[0],
+                count: Number(entry[1] || 0),
+            };
+        }).sort(function (left, right) {
+            return right.count - left.count;
+        });
+
+        if (!groupedRows.length) {
+            return { kind: "empty", message: "Aucune valeur exploitable n est disponible pour cette colonne." };
+        }
+
+        const visibleRows = groupedRows.slice(0, maxItems);
+        const maxCount = Math.max.apply(null, visibleRows.map(function (item) {
+            return Number(item.count || 0);
+        }));
+
+        return {
+            kind: "table",
+            tableVariant: "distribution",
+            dimensionLabel: getColumnLabel(dimensionColumn),
+            rows: visibleRows.map(function (item, index) {
+                const count = Number(item.count || 0);
+                const percentage = total > 0 ? (count / total) * 100 : 0;
+                const color = index === 0 ? accentColor : palette[index % palette.length];
+
+                return {
+                    label: item.label,
+                    count: count,
+                    percentage: percentage,
+                    width: maxCount > 0 ? (count / maxCount) * 100 : 0,
+                    color: color,
+                };
+            }),
+            totalCount: total,
+            totalRows: total,
+            truncated: groupedRows.length > visibleRows.length,
+            subtitle: appendFilterDescription(total + " lignes analysees", filterDescription),
+        };
+    }
+
+    function buildPivotTableResult(rows, widget, filterDescription, maxItems) {
+        const rowDimensions = (Array.isArray(widget.rowDimensions) ? widget.rowDimensions : []).filter(Boolean);
+        const rawMeasures = Array.isArray(widget.measures) && widget.measures.length ? widget.measures : [createMeasureEntry({ aggregation: "count" })];
+        const measureError = getMeasureConfigurationError(rawMeasures[0], "");
+        if (measureError) {
+            return { kind: "empty", message: measureError };
+        }
+
+        const measures = rawMeasures
+            .filter(function (measure) { return String(measure.column || "").trim() !== "" || String(measure.aggregation || "") === "count"; });
+
+        if (!rowDimensions.length) {
+            return { kind: "empty", message: "Choisissez une colonne pour les lignes du tableau." };
+        }
+
+        const effectiveMeasures = measures.length ? measures : [createMeasureEntry({ aggregation: "count" })];
+        const rowGroups = new Map();
+
+        rows.forEach(function (row) {
+            const rowKey = buildDimensionKey(row, rowDimensions) || "__all__";
+            const rowValues = buildDimensionValueList(row, rowDimensions);
+
+            if (!rowGroups.has(rowKey)) {
+                rowGroups.set(rowKey, { rowValues: rowValues, cells: new Map() });
             }
+
+            effectiveMeasures.forEach(function (measure) {
+                const cellKey = "__all__::" + measure.id;
+                const targetRows = rowGroups.get(rowKey).cells.get(cellKey) || [];
+                targetRows.push(row);
+                rowGroups.get(rowKey).cells.set(cellKey, targetRows);
+            });
         });
-        return keys.map(function (key) {
-            return { key: key, label: humanizeKey(key) };
+
+        const rowHeaders = rowDimensions.map(function (dimension) {
+            return { key: "row:" + dimension, label: humanizeKey(dimension) };
         });
+
+        const dynamicColumns = [];
+        effectiveMeasures.forEach(function (measure) {
+            dynamicColumns.push({
+                key: "cell:__all__::" + measure.id,
+                cellKey: "__all__::" + measure.id,
+                label: buildMeasureLabel(measure),
+                measure: measure,
+            });
+        });
+
+        const resultRows = Array.from(rowGroups.values()).map(function (group) {
+            const rowData = {};
+            rowDimensions.forEach(function (dimension, index) {
+                rowData["row:" + dimension] = String(group.rowValues[index]?.value || "Ensemble");
+            });
+            dynamicColumns.forEach(function (column) {
+                const cellRows = group.cells.get(column.cellKey) || [];
+                const aggregate = aggregateRowsForMeasure(cellRows, column.measure);
+                rowData[column.key] = formatValue(aggregate.value, widget.format, Object.assign({}, widget, { aggregation: column.measure.aggregation }));
+            });
+            return rowData;
+        }).slice(0, maxItems);
+
+        const columns = rowHeaders.concat(dynamicColumns.map(function (column) {
+            return { key: column.key, label: column.label };
+        }));
+
+        return {
+            kind: "table",
+            columns: columns,
+            rows: resultRows,
+            subtitle: appendFilterDescription(rows.length + " lignes analysees", filterDescription),
+        };
+    }
+
+    function buildDimensionKey(row, dimensions) {
+        return (dimensions || []).map(function (dimension) {
+            return String(row[dimension] ?? "Non renseigne").trim() || "Non renseigne";
+        }).join("||");
+    }
+
+    function buildDimensionValueList(row, dimensions) {
+        return (dimensions || []).map(function (dimension) {
+            const value = String(row[dimension] ?? "Non renseigne").trim() || "Non renseigne";
+            return { dimension: dimension, value: value };
+        });
+    }
+
+    function buildMeasureLabel(measure) {
+        const aggregation = String(measure?.aggregation || "count");
+        const column = String(measure?.column || "");
+        const matchValue = String(measure?.matchValue || "").trim();
+
+        if (aggregation === "percentage") {
+            return column ? "Pourcentage " + humanizeKey(column) : "Pourcentage";
+        }
+
+        if (aggregation === "count" || column === "") {
+            if (column === "") {
+                return "Nombre de lignes";
+            }
+
+            return matchValue !== ""
+                ? 'Nombre ' + humanizeKey(column) + ' = "' + matchValue + '"'
+                : "Nombre " + humanizeKey(column);
+        }
+
+        return aggregationLabel(aggregation) + " " + humanizeKey(column);
     }
 
     function buildTableHtml(result, widget) {
+        if (result.tableVariant === "distribution") {
+            return buildDistributionTableMarkup(result, widget, {
+                wrapClass: "bi-widget-table-wrap bi-widget-distribution-surface",
+                tableClass: "bi-widget-table bi-widget-distribution-table",
+            });
+        }
+
         const headers = result.columns.map(function (column) {
             return "<th>" + escapeHtml(column.label) + "</th>";
         }).join("");
@@ -1636,6 +3482,64 @@ document.addEventListener("DOMContentLoaded", function () {
             }).join("") + "</tr>";
         }).join("");
         return '<div class="bi-widget-table-wrap"><table class="bi-widget-table">' + (!widget.hideText ? '<thead><tr>' + headers + '</tr></thead>' : '') + "<tbody>" + rows + "</tbody></table></div>";
+    }
+
+    function buildDistributionTableMarkup(result, widget, options) {
+        const safeOptions = options && typeof options === "object" ? options : {};
+        const wrapClass = String(safeOptions.wrapClass || "bi-widget-table-wrap");
+        const tableClass = String(safeOptions.tableClass || "bi-widget-table bi-widget-distribution-table");
+        const maxRows = Number(safeOptions.maxRows || 0);
+        const visibleRows = maxRows > 0 ? result.rows.slice(0, maxRows) : result.rows;
+        const headers = [
+            escapeHtml(String(result.dimensionLabel || "Categorie")),
+            "Nombre",
+            "%",
+            "Repartition",
+        ];
+        const rows = visibleRows.map(function (row) {
+            const count = formatCompactNumber(row.count);
+            const percentage = formatDistributionPercentage(row.percentage);
+            const width = Math.max(0, Math.min(100, Number(row.width || 0)));
+            const color = String(row.color || "#3b82f6");
+            const inlineLabel = width > 12 ? count : "";
+
+            return '<div class="bi-distribution-row">' +
+                '<div class="bi-distribution-row-main">' +
+                '<div class="bi-distribution-cell bi-distribution-label">' + escapeHtml(String(row.label || "Non renseigne")) + '</div>' +
+                '<div class="bi-distribution-cell bi-widget-distribution-number" style="color:' + escapeHtml(color) + ';">' + escapeHtml(count) + '</div>' +
+                '<div class="bi-distribution-cell bi-distribution-percent">' + escapeHtml(percentage) + '</div>' +
+                '</div>' +
+                '<div class="bi-widget-distribution-gauge-cell">' +
+                '<div class="bi-distribution-progress">' +
+                '<div class="bi-distribution-progress-bar" style="--bi-distribution-bar-color:' + escapeHtml(color) + ';width:' + escapeHtml(String(width)) + '%;background:' + escapeHtml(color) + ';">' + escapeHtml(inlineLabel) + '</div>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+        }).join("");
+        const totalLabel = result.truncated ? "TOTAL ANALYSE" : "TOTAL";
+        const totalRow = '<div class="bi-widget-distribution-total">' +
+            '<div class="bi-distribution-row-main">' +
+            '<div class="bi-distribution-cell bi-distribution-label"><strong>' + escapeHtml(totalLabel) + '</strong></div>' +
+            '<div class="bi-distribution-cell bi-widget-distribution-number"><strong>' + escapeHtml(formatCompactNumber(result.totalCount)) + '</strong></div>' +
+            '<div class="bi-distribution-cell bi-distribution-percent"><strong>100,0 %</strong></div>' +
+            '</div>' +
+            '</div>';
+
+        return '<div class="' + escapeHtml(wrapClass) + '">' +
+            '<div class="' + escapeAttribute(tableClass) + '">' +
+            (!widget.hideText
+                ? '<div class="bi-distribution-head">' +
+                    '<div class="bi-distribution-row-main">' +
+                    headers.slice(0, 3).map(function (label) {
+                        return '<div class="bi-distribution-head-cell">' + label + '</div>';
+                    }).join("") +
+                    '</div>' +
+                    '<div class="bi-distribution-head-gauge">' + headers[3] + '</div>' +
+                '</div>'
+                : '') +
+            '<div class="bi-distribution-list">' + rows + totalRow + '</div>' +
+            '</div>' +
+            '</div>';
     }
 
     function buildEmptyStateHtml() {
@@ -1661,48 +3565,74 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!connectionId) {
             state.files = [];
             state.dataset = null;
+            state.builderOptions = buildBuilderOptionsFromDataset(null);
+            clearDataFeedback();
             renderAll();
             return;
         }
 
         if (usePreloaded && String(cfg.preloadedConnectionId || "") === connectionId && Array.isArray(cfg.preloadedFiles)) {
             state.files = cfg.preloadedFiles;
-            const fileId = selectedFileId || state.files[0]?.id || "";
+            const fileId = resolveSelectedFileId(state.files, selectedFileId);
             const page = getCurrentPage();
-            if (page) page.fileId = fileId;
+            if (page) {
+                page.connectionId = connectionId;
+                page.fileId = fileId;
+            }
+            state.preferences.defaultConnection = connectionId;
+            state.preferences.defaultFile = fileId;
             renderFiles();
             if (fileId) {
                 loadDataset(connectionId, fileId, Boolean(cfg.preloadedDataset && !cfg.preloadedDataset._error && String(cfg.preloadedFileId || "") === fileId));
             } else {
+                state.dataset = null;
+                state.builderOptions = buildBuilderOptionsFromDataset(null);
+                clearDataFeedback();
                 setLoading(false);
                 renderAll();
             }
             return;
         }
 
+        clearDataFeedback();
         setLoading(true, "Chargement des fichiers SharePoint...");
         fetchJson(cfg.filesUrl + "?connection=" + encodeURIComponent(connectionId) + (forceRefresh ? "&refresh=1" : ""))
             .then(function (payload) {
                 state.files = Array.isArray(payload.files) ? payload.files : [];
-                const fileId = selectedFileId || state.files[0]?.id || "";
+                const fileId = resolveSelectedFileId(state.files, selectedFileId);
                 const page = getCurrentPage();
-                if (page) page.fileId = fileId;
+                if (page) {
+                    page.connectionId = connectionId;
+                    page.fileId = fileId;
+                }
+                state.preferences.defaultConnection = connectionId;
+                state.preferences.defaultFile = fileId;
                 renderFiles();
                 if (fileId) {
                     loadDataset(connectionId, fileId, false);
                     return;
                 }
                 state.dataset = null;
+                state.builderOptions = buildBuilderOptionsFromDataset(null);
+                clearDataFeedback();
                 setLoading(false);
                 renderAll();
             })
-            .catch(handleError);
+            .catch(function (error) {
+                state.files = [];
+                state.dataset = null;
+                state.builderOptions = buildBuilderOptionsFromDataset(null);
+                showDataFeedback(error.message || "Impossible de charger la liste des fichiers de la source.");
+                renderAll();
+                handleError(error);
+            });
     }
 
     function loadDataset(connectionId, fileId, usePreloaded) {
         if (!connectionId || !fileId) {
             state.dataset = null;
             state.builderOptions = buildBuilderOptionsFromDataset(null);
+            clearDataFeedback();
             setLoading(false);
             renderAll();
             return;
@@ -1715,14 +3645,24 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        state.dataset = null;
+        state.builderOptions = buildBuilderOptionsFromDataset(null);
+        clearDataFeedback();
         setLoading(true, "Chargement du fichier de donnees...");
         fetchJson(cfg.datasetUrl + "?connection=" + encodeURIComponent(connectionId) + "&file=" + encodeURIComponent(fileId))
             .then(function (payload) {
                 state.dataset = payload;
                 state.builderOptions = buildBuilderOptionsFromDataset(payload);
+                clearDataFeedback();
                 renderAll();
             })
-            .catch(handleError);
+            .catch(function (error) {
+                state.dataset = null;
+                state.builderOptions = buildBuilderOptionsFromDataset(null);
+                showDataFeedback(error.message || "Impossible de charger les donnees de la source.");
+                renderAll();
+                handleError(error);
+            });
     }
 
     function handleUploadSourceSubmit(event) {
@@ -1732,6 +3672,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         const formData = new FormData(dom.uploadSourceForm);
+        showSettingsFeedback("Import de la source...", "");
         showSaveStatus("Import de la source...", "");
 
         fetch(cfg.uploadSourceUrl, {
@@ -1742,23 +3683,26 @@ document.addEventListener("DOMContentLoaded", function () {
             body: formData,
         })
             .then(function (response) {
-                return response.json().then(function (payload) {
-                    if (!response.ok || payload._error) {
-                        throw new Error(payload._error || "Impossible d importer la source.");
-                    }
-                    return payload;
-                });
+                return parseJsonResponse(response, "Impossible d importer la source.");
             })
             .then(function (payload) {
                 state.moduleSettings = normalizeModuleSettings(payload.settings || state.moduleSettings);
+                const newConnectionId = getLatestModuleSourceId(state.moduleSettings.uploadedSources);
                 dom.uploadSourceForm?.reset();
                 renderSettingsModal();
-                return refreshConnectionsAfterSettingsChange();
+                return refreshConnectionsAfterSettingsChange({
+                    preferredConnectionId: newConnectionId,
+                    forceRefresh: true,
+                });
             })
             .then(function () {
+                showSettingsFeedback("Source importee avec succes.", "is-success");
                 showSaveStatus("Source importee", "is-success");
             })
-            .catch(handleError);
+            .catch(function (error) {
+                showSettingsFeedback(error.message || "Impossible d importer la source.", "is-error");
+                handleError(error);
+            });
     }
 
     function handleRemoteSourceSubmit(event) {
@@ -1766,8 +3710,18 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!state.canEdit) return;
         const label = String(dom.remoteSourceLabel?.value || "").trim();
         const url = String(dom.remoteSourceUrl?.value || "").trim();
-        if (url === "") return;
+        if (url === "") {
+            showSettingsFeedback("Renseignez une URL SharePoint.", "is-error");
+            return;
+        }
 
+        const remoteSourceError = getRemoteSourceUrlError(url);
+        if (remoteSourceError) {
+            showSettingsFeedback(remoteSourceError, "is-error");
+            return;
+        }
+
+        showSettingsFeedback("Ajout de la source distante...", "");
         showSaveStatus("Ajout de la source distante...", "");
         fetchJson(cfg.settingsUrl, {
             method: "POST",
@@ -1780,23 +3734,170 @@ document.addEventListener("DOMContentLoaded", function () {
                 label: label,
                 url: url,
             }),
+            })
+            .then(function (payload) {
+                state.moduleSettings = normalizeModuleSettings(payload.settings || state.moduleSettings);
+                const newConnectionId = getLatestModuleSourceId(state.moduleSettings.remoteSources);
+                dom.remoteSourceForm?.reset();
+                renderSettingsModal();
+                return refreshConnectionsAfterSettingsChange({
+                    preferredConnectionId: newConnectionId,
+                    forceRefresh: true,
+                });
+            })
+            .then(function () {
+                showSettingsFeedback("URL SharePoint ajoutee avec succes.", "is-success");
+                showSaveStatus("URL SharePoint ajoutee", "is-success");
+            })
+            .catch(function (error) {
+                showSettingsFeedback(error.message || "Impossible d ajouter l URL SharePoint.", "is-error");
+                handleError(error);
+            });
+    }
+
+    function handleApiSourceSubmit(event) {
+        event.preventDefault();
+        if (!state.canEdit) return;
+
+        const label = String(dom.apiSourceLabel?.value || "").trim();
+        const url = String(dom.apiSourceUrl?.value || "").trim();
+        const token = String(dom.apiSourceToken?.value || "").trim();
+
+        if (url === "") {
+            showSettingsFeedback("Renseignez une URL API.", "is-error");
+            return;
+        }
+
+        const apiSourceError = getApiSourceUrlError(url);
+        if (apiSourceError) {
+            showSettingsFeedback(apiSourceError, "is-error");
+            return;
+        }
+
+        if (token === "") {
+            showSettingsFeedback("Renseignez le token API.", "is-error");
+            return;
+        }
+
+        showSettingsFeedback("Ajout du webservice...", "");
+        showSaveStatus("Ajout du webservice...", "");
+        fetchJson(cfg.settingsUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": String(cfg.settingsCsrfToken || ""),
+            },
+            body: JSON.stringify({
+                action: "add_api_source",
+                label: label,
+                url: url,
+                token: token,
+            }),
         })
             .then(function (payload) {
                 state.moduleSettings = normalizeModuleSettings(payload.settings || state.moduleSettings);
-                dom.remoteSourceForm?.reset();
+                const newConnectionId = getLatestModuleSourceId(state.moduleSettings.apiSources);
+                dom.apiSourceForm?.reset();
                 renderSettingsModal();
-                return refreshConnectionsAfterSettingsChange();
+                return refreshConnectionsAfterSettingsChange({
+                    preferredConnectionId: newConnectionId,
+                    forceRefresh: true,
+                });
             })
             .then(function () {
-                showSaveStatus("URL SharePoint ajoutee", "is-success");
+                showSettingsFeedback("Webservice ajoute avec succes.", "is-success");
+                showSaveStatus("Webservice ajoute", "is-success");
             })
-            .catch(handleError);
+            .catch(function (error) {
+                showSettingsFeedback(error.message || "Impossible d ajouter le webservice.", "is-error");
+                handleError(error);
+            });
+    }
+
+    function handleEditSourceSubmit(event) {
+        event.preventDefault();
+        if (!state.canEdit) return;
+
+        const sourceId = String(dom.editSourceId?.value || state.editingModuleSourceId || "").trim();
+        const label = String(dom.editSourceLabel?.value || "").trim();
+        const url = String(dom.editSourceUrl?.value || "").trim();
+        const token = String(dom.editSourceToken?.value || "").trim();
+        const entry = findModuleSourceById(sourceId);
+
+        if (!entry) {
+            showSettingsFeedback("Source BI introuvable.", "is-error");
+            return;
+        }
+
+        if (entry.kind === "remote") {
+            if (url === "") {
+                showSettingsFeedback("Renseignez une URL SharePoint.", "is-error");
+                return;
+            }
+
+            const remoteSourceError = getRemoteSourceUrlError(url);
+            if (remoteSourceError) {
+                showSettingsFeedback(remoteSourceError, "is-error");
+                return;
+            }
+        }
+
+        if (entry.kind === "api") {
+            if (url === "") {
+                showSettingsFeedback("Renseignez une URL API.", "is-error");
+                return;
+            }
+
+            const apiSourceError = getApiSourceUrlError(url);
+            if (apiSourceError) {
+                showSettingsFeedback(apiSourceError, "is-error");
+                return;
+            }
+        }
+
+        showSettingsFeedback("Mise a jour de la source...", "");
+        showSaveStatus("Mise a jour de la source...", "");
+        fetchJson(cfg.settingsUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": String(cfg.settingsCsrfToken || ""),
+            },
+            body: JSON.stringify({
+                action: "update_source",
+                sourceId: sourceId,
+                label: label,
+                url: entry.kind === "uploaded" ? undefined : url,
+                token: entry.kind === "api" ? token : undefined,
+            }),
+        })
+            .then(function (payload) {
+                state.moduleSettings = normalizeModuleSettings(payload.settings || state.moduleSettings);
+                resetEditSourceForm();
+                renderSettingsModal();
+                return refreshConnectionsAfterSettingsChange({
+                    preferredConnectionId: sourceId,
+                    forceRefresh: true,
+                });
+            })
+            .then(function () {
+                const successMessage = entry.kind === "uploaded"
+                    ? "Libelle de la source mis a jour."
+                    : "Source mise a jour avec succes.";
+                showSettingsFeedback(successMessage, "is-success");
+                showSaveStatus("Source mise a jour", "is-success");
+            })
+            .catch(function (error) {
+                showSettingsFeedback(error.message || "Impossible de modifier la source.", "is-error");
+                handleError(error);
+            });
     }
 
     function deleteModuleSource(sourceId) {
         if (!state.canEdit || sourceId === "") return;
         if (!window.confirm("Supprimer cette source BI ?")) return;
 
+        showSettingsFeedback("Suppression de la source...", "");
         showSaveStatus("Suppression de la source...", "");
         fetchJson(cfg.settingsUrl, {
             method: "POST",
@@ -1811,16 +3912,66 @@ document.addEventListener("DOMContentLoaded", function () {
         })
             .then(function (payload) {
                 state.moduleSettings = normalizeModuleSettings(payload.settings || state.moduleSettings);
+                if (String(state.editingModuleSourceId || "") === sourceId) {
+                    resetEditSourceForm();
+                }
                 renderSettingsModal();
                 return refreshConnectionsAfterSettingsChange();
             })
             .then(function () {
+                showSettingsFeedback("Source supprimee avec succes.", "is-success");
                 showSaveStatus("Source supprimee", "is-success");
             })
-            .catch(handleError);
+            .catch(function (error) {
+                showSettingsFeedback(error.message || "Impossible de supprimer la source.", "is-error");
+                handleError(error);
+            });
     }
 
-    function refreshConnectionsAfterSettingsChange() {
+    function getRemoteSourceUrlError(url) {
+        let parsedUrl = null;
+        try {
+            parsedUrl = new URL(String(url || "").trim());
+        } catch (error) {
+            return "URL SharePoint invalide.";
+        }
+
+        const decodedPath = decodeURIComponent(String(parsedUrl.pathname || ""));
+        const normalizedPath = decodedPath.toLowerCase();
+        if (normalizedPath.indexOf("/:f:/") !== -1) {
+            return "Ce lien SharePoint pointe vers un dossier. Utilisez un lien direct vers un fichier CSV, Excel ou JSON.";
+        }
+
+        const pathSegments = decodedPath.split("/").filter(Boolean);
+        const fileName = pathSegments.length ? pathSegments[pathSegments.length - 1] : "";
+        const dotIndex = fileName.lastIndexOf(".");
+        const extension = dotIndex >= 0 ? fileName.slice(dotIndex + 1).toLowerCase() : "";
+
+        if (!fileName || !extension) {
+            return "Le lien SharePoint doit pointer directement vers un fichier CSV, Excel ou JSON.";
+        }
+
+        if (["csv", "json", "xls", "xlsx"].indexOf(extension) === -1) {
+            return "Seuls les fichiers CSV, Excel et JSON sont supportes pour les sources SharePoint.";
+        }
+
+        return "";
+    }
+
+    function getApiSourceUrlError(url) {
+        try {
+            new URL(String(url || "").trim());
+        } catch (error) {
+            return "URL API invalide.";
+        }
+
+        return "";
+    }
+
+    function refreshConnectionsAfterSettingsChange(options) {
+        const preferredConnectionId = String(options?.preferredConnectionId || "");
+        const forceRefresh = Boolean(options?.forceRefresh);
+
         return fetchJson(cfg.settingsUrl)
             .then(function (payload) {
                 state.moduleSettings = normalizeModuleSettings(payload.settings || state.moduleSettings);
@@ -1829,19 +3980,115 @@ document.addEventListener("DOMContentLoaded", function () {
             .then(function (payload) {
                 state.connections = Array.isArray(payload.connections) ? payload.connections : [];
                 const page = getCurrentPage();
-                if (!page) return;
+                if (!page) {
+                    renderAll();
+                    return;
+                }
 
+                if (preferredConnectionId && state.connections.some(function (connection) { return connection.id === preferredConnectionId; })) {
+                    page.connectionId = preferredConnectionId;
+                    page.fileId = "";
+                    state.preferences.defaultConnection = preferredConnectionId;
+                    state.preferences.defaultFile = "";
+                    state.dataset = null;
+                    state.builderOptions = buildBuilderOptionsFromDataset(null);
+                    renderAll();
+                    loadFiles(preferredConnectionId, "", false, forceRefresh);
+                    scheduleSavePreferences();
+                    return;
+                }
+
+                let shouldSavePreferences = false;
                 if (page.connectionId && !state.connections.some(function (connection) { return connection.id === page.connectionId; })) {
                     page.connectionId = "";
                     page.fileId = "";
+                    state.preferences.defaultConnection = "";
+                    state.preferences.defaultFile = "";
+                    state.files = [];
+                    state.dataset = null;
+                    state.builderOptions = buildBuilderOptionsFromDataset(null);
+                    shouldSavePreferences = true;
                 }
                 renderAll();
+                if (page.connectionId) {
+                    loadFiles(page.connectionId, page.fileId || "", false, forceRefresh);
+                    return;
+                }
+                if (shouldSavePreferences) {
+                    scheduleSavePreferences();
+                }
             });
     }
 
     function scheduleSavePreferences() {
         clearTimeout(state.saveTimer);
+        state.preferencesRevision += 1;
         state.saveTimer = window.setTimeout(savePreferences, 350);
+    }
+
+    function resolveSelectedFileId(files, selectedFileId) {
+        const normalizedFileId = String(selectedFileId || "");
+        if (normalizedFileId && files.some(function (file) { return String(file.id || "") === normalizedFileId; })) {
+            return normalizedFileId;
+        }
+
+        return String(files[0]?.id || "");
+    }
+
+    function getLatestModuleSourceId(sources) {
+        if (!Array.isArray(sources) || !sources.length) {
+            return "";
+        }
+
+        return String(sources[sources.length - 1]?.id || "");
+    }
+
+    function renderDataFeedback() {
+        if (!dom.dataFeedback) return;
+        const message = String(state.dataFeedbackMessage || "");
+        dom.dataFeedback.hidden = message === "";
+        dom.dataFeedback.textContent = message;
+        dom.dataFeedback.classList.toggle("is-error", message !== "");
+    }
+
+    function showDataFeedback(message) {
+        state.dataFeedbackMessage = String(message || "");
+        renderDataFeedback();
+    }
+
+    function clearDataFeedback() {
+        state.dataFeedbackMessage = "";
+        renderDataFeedback();
+    }
+
+    function getInspectorDataHint(columns) {
+        if (state.dataFeedbackMessage) {
+            return String(state.dataFeedbackMessage);
+        }
+
+        if (!Array.isArray(columns) || columns.length === 0) {
+            return "Aucune colonne disponible pour la source selectionnee.";
+        }
+
+        return "";
+    }
+
+    function getWidgetConfigurationHint(widget, columns) {
+        const dataHint = getInspectorDataHint(columns);
+        if (dataHint !== "") {
+            return dataHint;
+        }
+
+        if (!widget) {
+            return "";
+        }
+
+        const result = computeWidgetResult(widget);
+        if (result.kind !== "empty") {
+            return "";
+        }
+
+        return String(result.message || "");
     }
 
     function savePreferences() {
@@ -1854,6 +4101,8 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        const requestRevision = Number(state.preferencesRevision || 0);
+        const requestPreferences = deepClone(state.preferences);
         state.saveInFlight = true;
         showSaveStatus("Enregistrement...", "");
 
@@ -1863,18 +4112,18 @@ document.addEventListener("DOMContentLoaded", function () {
                 "Content-Type": "application/json",
                 "X-CSRF-Token": String(cfg.preferencesCsrfToken || ""),
             },
-            body: JSON.stringify({ preferences: state.preferences }),
+            body: JSON.stringify({ preferences: requestPreferences }),
         })
             .then(function (response) {
-                return response.json().then(function (payload) {
-                    if (!response.ok || payload._error) {
-                        throw new Error(payload._error || "Impossible d enregistrer la configuration BI.");
-                    }
-                    return payload;
-                });
+                return parseJsonResponse(response, "Impossible d enregistrer la configuration BI.");
             })
             .then(function (payload) {
-                state.preferences = normalizePreferences(payload.preferences || state.preferences);
+                if (requestRevision === Number(state.preferencesRevision || 0)) {
+                    const nextPreferences = normalizePreferences(payload.preferences || requestPreferences);
+                    if (!isWidgetModalOpen()) {
+                        state.preferences = nextPreferences;
+                    }
+                }
                 showSaveStatus("Configuration enregistree", "is-success");
             })
             .catch(function (error) {
@@ -1929,18 +4178,80 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    function getDistinctColumnValues(columnKey) {
+    function appendFilterDescription(message, filterDescription) {
+        if (!filterDescription) {
+            return message;
+        }
+
+        return message ? message + " • Filtre: " + filterDescription : "Filtre: " + filterDescription;
+    }
+
+    function appendFilterDescription(message, filterDescription) {
+        if (!filterDescription) {
+            return message;
+        }
+
+        return message ? message + " | Filtre: " + filterDescription : "Filtre: " + filterDescription;
+    }
+
+    function buildWidgetAggregateMeta(widget, aggregate, rowCount, filterDescription) {
+        let meta = aggregate.meta;
+        const isRowCount = String(widget.aggregation || "count") === "count" && !String(widget.valueColumn || "").trim();
+
+        if (filterDescription) {
+            if (isRowCount) {
+                meta = rowCount + " lignes pour " + filterDescription;
+            } else {
+                meta = aggregate.meta + " pour " + filterDescription;
+            }
+        }
+
+        return meta;
+    }
+
+    function formatDistributionPercentage(value) {
+        return new Intl.NumberFormat("fr-FR", {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+        }).format(Number(value || 0)) + " %";
+    }
+
+    function getDistinctColumnValues(columnKey, rows) {
         const values = [];
         if (!columnKey) return values;
-        (Array.isArray(state.dataset?.rows) ? state.dataset.rows : []).forEach(function (row) {
+        const sourceRows = Array.isArray(rows) ? rows : (Array.isArray(state.dataset?.rows) ? state.dataset.rows : []);
+        sourceRows.forEach(function (row) {
             const value = String(row[columnKey] ?? "").trim();
             if (value !== "" && values.indexOf(value) === -1) values.push(value);
         });
         return values.sort(localeSort);
     }
 
+    function buildDistinctValueOptions(columnKey, selectedValue, rows) {
+        const values = getDistinctColumnValues(columnKey, rows);
+        const options = [{ value: "", label: "Toutes les valeurs" }];
+
+        values.forEach(function (value) {
+            options.push({ value: value, label: value });
+        });
+
+        if (selectedValue && values.indexOf(String(selectedValue)) === -1) {
+            options.push({ value: String(selectedValue), label: String(selectedValue) });
+        }
+
+        return options;
+    }
+
     function getColumnOptions() {
         return Array.isArray(state.builderOptions?.columns) ? state.builderOptions.columns : [];
+    }
+
+    function getColumnLabel(columnKey) {
+        const match = getColumnOptions().find(function (column) {
+            return String(column.key || "") === String(columnKey || "");
+        });
+
+        return String(match?.label || humanizeKey(columnKey));
     }
 
     function getWidgetDefinition(type) {
@@ -2048,6 +4359,17 @@ document.addEventListener("DOMContentLoaded", function () {
                     createdAt: String(source.createdAt || ""),
                 };
             }).filter(function (source) { return source.id !== ""; }) : [],
+            apiSources: Array.isArray(safe.apiSources) ? safe.apiSources.map(function (source) {
+                return {
+                    id: String(source.id || ""),
+                    label: String(source.label || ""),
+                    url: String(source.url || ""),
+                    extension: String(source.extension || "json"),
+                    createdAt: String(source.createdAt || ""),
+                    tokenConfigured: Boolean(source.tokenConfigured),
+                    tokenPreview: String(source.tokenPreview || ""),
+                };
+            }).filter(function (source) { return source.id !== ""; }) : [],
         };
     }
 
@@ -2055,14 +4377,31 @@ document.addEventListener("DOMContentLoaded", function () {
         const layout = fractions.indexOf(String(widget.layout || "")) !== -1
             ? String(widget.layout)
             : defaultLayoutForType(String(widget.type || "bar"));
+        const rawDimensionColumn = String(widget.dimensionColumn || "").trim();
+        const rawChartDimensions = Array.isArray(widget.chartDimensions) ? widget.chartDimensions.map(function (value) {
+            return String(value || "");
+        }).slice(0, 1) : [];
+        const rawRowDimensions = Array.isArray(widget.rowDimensions) ? widget.rowDimensions.map(function (value) {
+            return String(value || "");
+        }).slice(0, 1) : [];
+        const hasRawChartDimension = rawChartDimensions.some(function (value) {
+            return String(value || "").trim() !== "";
+        });
+        const hasRawRowDimension = rawRowDimensions.some(function (value) {
+            return String(value || "").trim() !== "";
+        });
 
-        return {
+        const normalizedWidget = {
             id: String(widget.id || "widget-" + (widgetIndex + 1)),
             type: String(widget.type || "bar"),
             title: String(widget.title || ""),
             layout: layout,
             dimensionColumn: String(widget.dimensionColumn || ""),
             valueColumn: String(widget.valueColumn || ""),
+            filterColumn: "",
+            filterValue: "",
+            percentageBase: String(String(widget.type || "bar") === "percentage" ? "group_share" : ""),
+            targetGoal: "",
             aggregation: String(widget.aggregation || "count"),
             displayMode: String(widget.displayMode || "chart"),
             format: String(widget.format || ""),
@@ -2079,7 +4418,29 @@ document.addEventListener("DOMContentLoaded", function () {
             hideText: Boolean(widget.hideText),
             hidden: Boolean(widget.hidden),
             maxItems: clamp(parseInt(widget.maxItems, 10) || 8, 3, 20),
+            chartDimensions: hasRawChartDimension ? rawChartDimensions : (String(widget.type || "bar") === "table" ? [] : (rawDimensionColumn ? [rawDimensionColumn] : [])),
+            rowDimensions: hasRawRowDimension ? rawRowDimensions : (String(widget.type || "bar") === "table" && rawDimensionColumn ? [rawDimensionColumn] : []),
+            columnDimensions: [],
+            measures: Array.isArray(widget.measures) ? widget.measures.map(function (measure) {
+                return createMeasureEntry(measure);
+            }).slice(0, 1) : [],
+            widgetFilters: Array.isArray(widget.widgetFilters) ? widget.widgetFilters.map(function (filter) {
+                return createFilterEntry(filter);
+            }).slice(0, 5) : (
+                String(widget.filterColumn || "").trim() !== "" && String(widget.filterValue || "").trim() !== ""
+                    ? [createFilterEntry({
+                        column: String(widget.filterColumn || ""),
+                        value: String(widget.filterValue || ""),
+                    })]
+                    : []
+            ),
+            counterItems: [],
         };
+
+        ensureWidgetDataModel(normalizedWidget);
+        synchronizeLegacyWidgetFields(normalizedWidget);
+
+        return normalizedWidget;
     }
 
     function buildSelectOptions(options, selectedValue, keyProperty) {
@@ -2108,8 +4469,14 @@ document.addEventListener("DOMContentLoaded", function () {
         const current = String(widget.layout || "4/8");
         const smallerBtn = card.querySelector('[data-direction="smaller"]');
         const largerBtn = card.querySelector('[data-direction="larger"]');
-        if (smallerBtn) smallerBtn.disabled = current === fractions[0];
-        if (largerBtn) largerBtn.disabled = current === fractions[fractions.length - 1];
+        if (smallerBtn) {
+            smallerBtn.disabled = current === fractions[0];
+            smallerBtn.hidden = false;
+        }
+        if (largerBtn) {
+            largerBtn.disabled = current === fractions[fractions.length - 1];
+            largerBtn.hidden = false;
+        }
     }
 
     function updateVisibilityIcon(toggle, widget) {
@@ -2182,7 +4549,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function formatValue(value, format, widget) {
         const numericValue = Number(value || 0);
-        if (format === "currency" || (!format && widget?.aggregation === "sum")) {
+        if (format === "currency") {
             return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(numericValue);
         }
         if (format === "percent") {
@@ -2201,7 +4568,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function defaultLayoutForType(type) {
         if (type === "kpi" || type === "counter" || type === "percentage") return "2/8";
-        if (type === "table" || type === "line") return "8/8";
+        if (type === "table" || type === "distribution-table" || type === "line") return "8/8";
         return "4/8";
     }
 
@@ -2221,6 +4588,10 @@ document.addEventListener("DOMContentLoaded", function () {
         const normalized = String(value ?? "").trim().replace(/\s/g, "").replace(",", ".");
         if (normalized === "" || !isFinite(Number(normalized))) return null;
         return Number(normalized);
+    }
+
+    function normalizeFilterComparableValue(value) {
+        return String(value ?? "").trim().toLocaleLowerCase("fr-FR");
     }
 
     function showSaveStatus(message, cssClass) {
@@ -2254,13 +4625,35 @@ document.addEventListener("DOMContentLoaded", function () {
 
         return fetch(url, requestOptions)
             .then(function (response) {
-                return response.json().then(function (payload) {
-                    if (!response.ok || payload._error) {
-                        throw new Error(payload._error || "Erreur de chargement.");
-                    }
-                    return payload;
-                });
+                return parseJsonResponse(response, "Erreur de chargement.");
             });
+    }
+
+    function parseJsonResponse(response, fallbackMessage) {
+        return response.text().then(function (rawBody) {
+            const body = String(rawBody || "");
+            const trimmedBody = body.trim();
+            let payload = {};
+
+            if (trimmedBody !== "") {
+                try {
+                    payload = JSON.parse(trimmedBody);
+                } catch (error) {
+                    const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+                    if (contentType.indexOf("text/html") !== -1 || trimmedBody.startsWith("<")) {
+                        throw new Error("Le serveur BI a renvoye une page HTML au lieu du JSON attendu.");
+                    }
+
+                    throw new Error(fallbackMessage || "Reponse JSON invalide du module BI.");
+                }
+            }
+
+            if (!response.ok || payload._error) {
+                throw new Error(payload._error || fallbackMessage || "Erreur de chargement.");
+            }
+
+            return payload;
+        });
     }
 
     function destroyCharts() {

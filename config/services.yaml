@@ -17,6 +17,7 @@ parameters:
     youtrack_default_project_leader_login: 'Merouan'
     youtrack_default_project_leader_email: 'm.hamzaoui@adep.com'
     youtrack_project_template_short_name: 'MLDP'
+    microsoft_tenant_id: '%env(string:MICROSOFT_TENANT_ID)%'
 
 services:
     # default configuration for services in *this* file
@@ -71,6 +72,12 @@ services:
     App\Service\SharePointDataService:
         arguments:
             $dataDirectory: '%bi_sharepoint_data_dir%'
+
+    App\Service\MicrosoftGraphAuthService:
+        arguments:
+            $tenantId: '%microsoft_tenant_id%'
+            $clientId: '%env(string:MICROSOFT_CLIENT_ID)%'
+            $clientSecret: '%env(string:MICROSOFT_CLIENT_SECRET)%'
 
     App\Service\GanttLegacyRuntime:
         arguments:

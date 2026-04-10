@@ -27,14 +27,17 @@
             settingsUrl: biSettingsUrl,
             uploadSourceUrl: biUploadSourceUrl,
             settingsCsrfToken: csrf_token('bi_settings'),
-            moduleSettings: biModuleSettings
+            moduleSettings: biModuleSettings,
+            microsoftAuth: biMicrosoftAuth,
+            openSettingsOnLoad: biOpenSettingsOnLoad,
+            preloadedSettingsFeedback: biPreloadedSettingsFeedback
         }|json_encode|raw }};
     </script>
 
     <div class="bi-container">
         <div class="stats-toolbar bi-toolbar">
             <div class="stats-toolbar-field">
-                <label for="biConnectionSelect">Connexion SharePoint</label>
+                <label for="biConnectionSelect">Source de donnees</label>
                 <select id="biConnectionSelect" class="stats-select"></select>
             </div>
 
@@ -53,7 +56,7 @@
                 </div>
             </div>
 
-            <button id="biSettingsBtn" type="button" class="stats-edit-button bi-icon-button" title="Parametres du module BI" aria-label="Parametres du module BI"{{ biCanEdit ? '' : ' hidden' }}>
+            <button id="biSettingsBtn" type="button" class="stats-edit-button bi-icon-button" title="Parametres du module BI" aria-label="Parametres du module BI"{{ (biCanEdit or biMicrosoftAuth.configured) ? '' : ' hidden' }}>
                 <i class="bi bi-gear"></i>
             </button>
 
@@ -81,6 +84,7 @@
         </div>
 
         <div id="biShell" class="bi-shell" hidden>
+            <div id="biDataFeedback" class="bi-data-feedback" hidden></div>
             <div class="bi-main">
                 <div id="biFiltersBar" class="bi-filters-bar" hidden></div>
                 <div id="biWidgetsGrid" class="cards-grid-flex bi-grid"></div>
@@ -153,42 +157,10 @@
                 <section class="bi-inspector-section bi-inspector-section--data">
                     <div class="bi-inspector-section-head">
                         <h4>Donnees</h4>
-                        <p>Choisissez les colonnes utilisees et le mode de calcul du composant.</p>
+                        <p id="biWidgetDataDescription">Choisissez les colonnes utilisees et le mode de calcul du composant.</p>
+                        <p id="biWidgetDataHint" class="bi-widget-data-hint" hidden></p>
                     </div>
-                    <div class="bi-inspector-section-grid">
-                        <div class="bi-inspector-field">
-                            <label for="biWidgetDimension">Colonne de regroupement</label>
-                            <select id="biWidgetDimension" class="stats-select"></select>
-                        </div>
-
-                        <div class="bi-inspector-field">
-                            <label for="biWidgetValue">Colonne de valeur</label>
-                            <select id="biWidgetValue" class="stats-select"></select>
-                        </div>
-
-                        <div class="bi-inspector-field">
-                            <label for="biWidgetAggregation">Mode de calcul</label>
-                            <select id="biWidgetAggregation" class="stats-select"></select>
-                        </div>
-
-                        <div class="bi-inspector-field">
-                            <label for="biWidgetFormat">Format</label>
-                            <select id="biWidgetFormat" class="stats-select">
-                                <option value="">Standard</option>
-                                <option value="currency">Monetaire</option>
-                                <option value="percent">Pourcentage</option>
-                                <option value="number">Nombre</option>
-                            </select>
-                        </div>
-
-                        <div class="bi-inspector-field">
-                            <label for="biWidgetMaxItems">Nombre maximum d elements</label>
-                            <div class="bi-range-field">
-                                <input id="biWidgetMaxItems" type="range" min="3" max="20" step="1">
-                                <span id="biWidgetMaxItemsValue" class="bi-range-value">8</span>
-                            </div>
-                        </div>
-                    </div>
+                    <div id="biWidgetDataBuilder" class="bi-widget-data-builder"></div>
                 </section>
 
                 <section class="bi-inspector-section bi-inspector-section--display">
@@ -295,18 +267,60 @@
             <div class="bi-modal-header">
                 <div>
                     <h3 id="biSettingsModalTitle">Parametres du module BI</h3>
-                    <span class="bi-modal-subtitle">Ajoutez des sources locales ou des URLs SharePoint directes.</span>
+                    <span class="bi-modal-subtitle">Ajoutez des sources locales, SharePoint ou webservices JSON.</span>
                 </div>
                 <button id="biSettingsModalClose" type="button" class="bi-modal-close" aria-label="Fermer les parametres du module BI">
                     <i class="bi bi-x-lg"></i>
                 </button>
             </div>
 
+            <p id="biSettingsFeedback" class="bi-settings-feedback" hidden></p>
+
             <div class="bi-settings-sections">
                 <section class="bi-settings-card">
                     <div class="bi-settings-card-header">
+                        <h4>Connexion Microsoft</h4>
+                        <p>Connectez votre compte Microsoft pour permettre au dashboard de lire les fichiers SharePoint prives depuis cette session.</p>
+                    </div>
+                    <div class="bi-settings-auth-card">
+                        {% if not biMicrosoftAuth.configured %}
+                            <div class="bi-settings-auth-status is-warning">
+                                L integration Microsoft n est pas encore configuree sur le serveur. Renseignez <code>MICROSOFT_TENANT_ID</code>, <code>MICROSOFT_CLIENT_ID</code> et <code>MICROSOFT_CLIENT_SECRET</code>.
+                            </div>
+                        {% elseif biMicrosoftAuth.connected %}
+                            <div class="bi-settings-auth-status is-success">
+                                <strong>Compte connecte</strong>
+                                <span>{{ biMicrosoftAuth.displayName ?: 'Compte Microsoft' }}</span>
+                                {% if biMicrosoftAuth.email %}
+                                    <small>{{ biMicrosoftAuth.email }}</small>
+                                {% endif %}
+                                {% if biMicrosoftAuth.expiresAt %}
+                                    <small>Jeton actif jusqu au {{ biMicrosoftAuth.expiresAt|date('d/m/Y H:i') }}</small>
+                                {% endif %}
+                            </div>
+                            <div class="bi-settings-auth-actions">
+                                <a href="{{ biMicrosoftConnectUrl }}" class="stats-edit-button">Changer de compte Microsoft</a>
+                                <form method="post" action="{{ biMicrosoftDisconnectUrl }}">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('bi_microsoft_disconnect') }}">
+                                    <button type="submit" class="stats-edit-button bi-settings-secondary-button">Deconnecter</button>
+                                </form>
+                            </div>
+                        {% else %}
+                            <div class="bi-settings-auth-status">
+                                Aucun compte Microsoft n est connecte pour cette session.
+                            </div>
+                            <div class="bi-settings-auth-actions">
+                                <a href="{{ biMicrosoftConnectUrl }}" class="stats-edit-button">Se connecter avec Microsoft</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </section>
+
+                {% if biCanEdit %}
+                <section class="bi-settings-card">
+                    <div class="bi-settings-card-header">
                         <h4>Importer un fichier sur le site</h4>
-                        <p>CSV et JSON sont supportes. Le fichier sera disponible comme source BI.</p>
+                        <p>CSV, Excel et JSON sont supportes. Le fichier sera disponible comme source BI.</p>
                     </div>
                     <form id="biUploadSourceForm" class="bi-settings-form" enctype="multipart/form-data">
                         <div class="bi-settings-form-grid">
@@ -316,7 +330,7 @@
                             </div>
                             <div class="bi-inspector-field">
                                 <label for="biUploadSourceFile">Fichier</label>
-                                <input id="biUploadSourceFile" name="sourceFile" type="file" class="stats-select bi-file-input" accept=".csv,.json">
+                                <input id="biUploadSourceFile" name="sourceFile" type="file" class="stats-select bi-file-input" accept=".csv,.xls,.xlsx,.json">
                             </div>
                         </div>
                         <button type="submit" class="stats-edit-button">Importer la source</button>
@@ -326,7 +340,7 @@
                 <section class="bi-settings-card">
                     <div class="bi-settings-card-header">
                         <h4>Ajouter une URL SharePoint</h4>
-                        <p>Collez une URL directe vers un fichier CSV ou JSON publie.</p>
+                        <p>Collez une URL directe vers un fichier CSV, Excel ou JSON publie. Les liens SharePoint de dossier ne sont pas supportes.</p>
                     </div>
                     <form id="biRemoteSourceForm" class="bi-settings-form">
                         <div class="bi-settings-form-grid">
@@ -336,7 +350,8 @@
                             </div>
                             <div class="bi-inspector-field bi-inspector-field-wide">
                                 <label for="biRemoteSourceUrl">URL SharePoint</label>
-                                <input id="biRemoteSourceUrl" name="url" type="url" class="stats-select bi-text-input" placeholder="https://.../fichier.csv">
+                                <input id="biRemoteSourceUrl" name="url" type="url" class="stats-select bi-text-input" placeholder="https://.../fichier.xlsx">
+                                <small class="bi-settings-form-help">Exemple attendu : un lien direct vers un fichier <code>.csv</code>, <code>.xls</code>, <code>.xlsx</code> ou <code>.json</code>, pas un lien de dossier <code>/:f:/...</code>.</small>
                             </div>
                         </div>
                         <button type="submit" class="stats-edit-button">Ajouter l'URL</button>
@@ -345,11 +360,72 @@
 
                 <section class="bi-settings-card">
                     <div class="bi-settings-card-header">
+                        <h4>Ajouter un webservice JSON</h4>
+                        <p>Saisissez une URL API et un token Bearer, sur le modele du module statistiques avec YouTrack. Le webservice doit renvoyer du JSON.</p>
+                    </div>
+                    <form id="biApiSourceForm" class="bi-settings-form">
+                        <div class="bi-settings-form-grid">
+                            <div class="bi-inspector-field">
+                                <label for="biApiSourceLabel">Libelle</label>
+                                <input id="biApiSourceLabel" name="label" type="text" class="stats-select bi-text-input" placeholder="Ex. YouTrack tickets">
+                            </div>
+                            <div class="bi-inspector-field bi-inspector-field-wide">
+                                <label for="biApiSourceUrl">URL API</label>
+                                <input id="biApiSourceUrl" name="url" type="url" class="stats-select bi-text-input" placeholder="https://.../api/issues">
+                                <small class="bi-settings-form-help">Le dashboard appellera cette URL en <code>GET</code> avec l en-tete <code>Authorization: Bearer &lt;token&gt;</code>.</small>
+                            </div>
+                            <div class="bi-inspector-field bi-inspector-field-wide">
+                                <label for="biApiSourceToken">Token API</label>
+                                <input id="biApiSourceToken" name="token" type="password" class="stats-select bi-text-input" placeholder="perm-...">
+                                <small class="bi-settings-form-help">Le token reste stocke cote serveur et n est pas renvoye en clair dans l interface.</small>
+                            </div>
+                        </div>
+                        <button type="submit" class="stats-edit-button">Ajouter le webservice</button>
+                    </form>
+                </section>
+
+                <section id="biEditSourceCard" class="bi-settings-card" hidden>
+                    <div class="bi-settings-card-header">
+                        <h4 id="biEditSourceTitle">Modifier la source</h4>
+                        <p id="biEditSourceDescription">Mettez a jour les informations de la source selectionnee.</p>
+                    </div>
+                    <form id="biEditSourceForm" class="bi-settings-form">
+                        <input id="biEditSourceId" name="sourceId" type="hidden">
+                        <div class="bi-settings-form-grid">
+                            <div class="bi-inspector-field">
+                                <label for="biEditSourceLabel">Libelle</label>
+                                <input id="biEditSourceLabel" name="label" type="text" class="stats-select bi-text-input" placeholder="Libelle de la source">
+                            </div>
+                            <div id="biEditSourceUrlField" class="bi-inspector-field bi-inspector-field-wide">
+                                <label for="biEditSourceUrl">URL</label>
+                                <input id="biEditSourceUrl" name="url" type="url" class="stats-select bi-text-input" placeholder="https://...">
+                                <small id="biEditSourceUrlHelp" class="bi-settings-form-help"></small>
+                            </div>
+                            <div id="biEditSourceTokenField" class="bi-inspector-field bi-inspector-field-wide">
+                                <label for="biEditSourceToken">Token API</label>
+                                <input id="biEditSourceToken" name="token" type="password" class="stats-select bi-text-input" placeholder="Laisser vide pour conserver le token actuel">
+                                <small id="biEditSourceTokenHelp" class="bi-settings-form-help">Laissez vide pour conserver le token actuel.</small>
+                            </div>
+                            <div id="biEditSourceInfoField" class="bi-inspector-field bi-inspector-field-wide" hidden>
+                                <label>Source actuelle</label>
+                                <div id="biEditSourceInfo" class="bi-settings-edit-info"></div>
+                            </div>
+                        </div>
+                        <div class="bi-settings-form-actions">
+                            <button id="biEditSourceSubmit" type="submit" class="stats-edit-button">Enregistrer les modifications</button>
+                            <button id="biEditSourceCancel" type="button" class="stats-edit-button bi-settings-secondary-button">Annuler</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="bi-settings-card">
+                    <div class="bi-settings-card-header">
                         <h4>Sources configurees</h4>
-                        <p>Retrouvez ici toutes les sources BI disponibles dans le selecteur de connexion.</p>
+                        <p>Retrouvez ici toutes les sources BI disponibles dans le selecteur de donnees.</p>
                     </div>
                     <div id="biSettingsSourcesList" class="bi-settings-sources-list"></div>
                 </section>
+                {% endif %}
             </div>
         </div>
     </div>

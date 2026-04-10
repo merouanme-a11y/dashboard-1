@@ -15,6 +15,7 @@ class BIChartBuilderService
             ['type' => 'pie', 'label' => 'Graphique en secteurs', 'icon' => 'bi-pie-chart', 'defaultTitle' => 'Part par categorie'],
             ['type' => 'doughnut', 'label' => 'Camembert annulaire', 'icon' => 'bi-circle', 'defaultTitle' => 'Distribution annulaire'],
             ['type' => 'histogram', 'label' => 'Histogramme', 'icon' => 'bi-distribute-vertical', 'defaultTitle' => 'Distribution numerique'],
+            ['type' => 'distribution-table', 'label' => 'Tableau de repartition', 'icon' => 'bi-list-columns-reverse', 'defaultTitle' => 'Repartition detaillee'],
             ['type' => 'table', 'label' => 'Tableau de donnees', 'icon' => 'bi-table', 'defaultTitle' => 'Tableau detaille'],
         ];
     }

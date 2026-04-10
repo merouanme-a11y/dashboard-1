@@ -17,6 +17,9 @@ class BIConfigurationService
     private const MAX_PAGES = 12;
     private const MAX_WIDGETS = 32;
     private const MAX_FILTERS = 8;
+    private const MAX_WIDGET_FILTERS = 5;
+    private const MAX_WIDGET_DIMENSIONS = 1;
+    private const MAX_WIDGET_MEASURES = 1;
     private const ALLOWED_FRACTIONS = [
         '1/8',
         '2/8',
@@ -35,6 +38,7 @@ class BIConfigurationService
         'doughnut',
         'kpi',
         'percentage',
+        'distribution-table',
         'table',
         'histogram',
         'counter',
@@ -252,6 +256,14 @@ class BIConfigurationService
             'hideText' => (bool) ($widget['hideText'] ?? false),
             'hidden' => (bool) ($widget['hidden'] ?? false),
             'maxItems' => $this->normalizeInteger($widget['maxItems'] ?? 8, 3, 20, 8),
+            'chartDimensions' => $this->normalizeDimensionCollection($widget['chartDimensions'] ?? [], $widget['dimensionColumn'] ?? ''),
+            'rowDimensions' => $this->normalizeDimensionCollection($widget['rowDimensions'] ?? [], $type === 'table' ? ($widget['dimensionColumn'] ?? '') : ''),
+            'measures' => $this->normalizeMeasureCollection($widget['measures'] ?? [], $widget),
+            'widgetFilters' => $this->normalizeWidgetFilterCollection(
+                $widget['widgetFilters'] ?? [],
+                $widget['filterColumn'] ?? '',
+                $widget['filterValue'] ?? '',
+            ),
         ];
     }
 
@@ -310,6 +322,139 @@ class BIConfigurationService
         }
 
         return $alignment;
+    }
+
+    private function normalizeDimensionCollection(mixed $dimensions, mixed $legacyValue = ''): array
+    {
+        $items = is_array($dimensions) ? $dimensions : [];
+        $normalized = [];
+
+        foreach ($items as $dimension) {
+            $value = $this->normalizeScalar($dimension ?? '', 120);
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized[] = $value;
+            if (count($normalized) >= self::MAX_WIDGET_DIMENSIONS) {
+                break;
+            }
+        }
+
+        if ($normalized === []) {
+            $legacyDimension = $this->normalizeScalar($legacyValue ?? '', 120);
+            if ($legacyDimension !== '') {
+                $normalized[] = $legacyDimension;
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeMeasureCollection(mixed $measures, array $widget): array
+    {
+        $items = is_array($measures) ? $measures : [];
+        $normalized = [];
+
+        foreach ($items as $measure) {
+            if (!is_array($measure)) {
+                continue;
+            }
+
+            $entry = $this->normalizeMeasure($measure);
+            if ($entry === null) {
+                continue;
+            }
+
+            $normalized[] = $entry;
+            if (count($normalized) >= self::MAX_WIDGET_MEASURES) {
+                break;
+            }
+        }
+
+        if ($normalized !== []) {
+            return $normalized;
+        }
+
+        $aggregation = $this->normalizeScalar($widget['aggregation'] ?? 'count', 40);
+        if (!in_array($aggregation, self::ALLOWED_AGGREGATIONS, true)) {
+            $aggregation = 'count';
+        }
+
+        if (($widget['type'] ?? '') === 'percentage' && $aggregation === 'percentage') {
+            $aggregation = $this->normalizeScalar($widget['valueColumn'] ?? '', 120) !== '' ? 'sum' : 'count';
+        }
+
+        return [[
+            'id' => 'measure-1',
+            'column' => $this->normalizeScalar($widget['valueColumn'] ?? '', 120),
+            'aggregation' => $aggregation,
+            'matchValue' => '',
+        ]];
+    }
+
+    private function normalizeMeasure(array $measure): ?array
+    {
+        $aggregation = $this->normalizeScalar($measure['aggregation'] ?? 'count', 40);
+        if (!in_array($aggregation, self::ALLOWED_AGGREGATIONS, true)) {
+            $aggregation = 'count';
+        }
+
+        return [
+            'id' => $this->normalizeScalar($measure['id'] ?? '', 80) ?: 'measure-1',
+            'column' => $this->normalizeScalar($measure['column'] ?? '', 120),
+            'aggregation' => $aggregation,
+            'matchValue' => $this->normalizeScalar($measure['matchValue'] ?? '', 160),
+        ];
+    }
+
+    private function normalizeWidgetFilterCollection(mixed $filters, mixed $legacyColumn = '', mixed $legacyValue = ''): array
+    {
+        $items = is_array($filters) ? $filters : [];
+        $normalized = [];
+
+        foreach ($items as $filter) {
+            if (!is_array($filter)) {
+                continue;
+            }
+
+            $entry = $this->normalizeWidgetFilter($filter);
+            if ($entry === null) {
+                continue;
+            }
+
+            $normalized[] = $entry;
+            if (count($normalized) >= self::MAX_WIDGET_FILTERS) {
+                break;
+            }
+        }
+
+        if ($normalized !== []) {
+            return $normalized;
+        }
+
+        $legacyFilter = $this->normalizeWidgetFilter([
+            'id' => 'filter-1',
+            'column' => $legacyColumn,
+            'value' => $legacyValue,
+        ]);
+
+        return $legacyFilter === null ? [] : [$legacyFilter];
+    }
+
+    private function normalizeWidgetFilter(array $filter): ?array
+    {
+        $column = $this->normalizeScalar($filter['column'] ?? '', 120);
+        $value = $this->normalizeScalar($filter['value'] ?? '', 160);
+        if ($column === '' || $value === '') {
+            return null;
+        }
+
+        return [
+            'id' => $this->normalizeScalar($filter['id'] ?? '', 80) ?: 'filter-1',
+            'column' => $column,
+            'value' => $value,
+        ];
     }
 
     private function hasAnyPreferences(array $preferences): bool

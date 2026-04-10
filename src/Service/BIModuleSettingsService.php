@@ -12,7 +12,7 @@ class BIModuleSettingsService
 {
     public const SETTING_KEY = 'bi_module_settings';
 
-    private const ALLOWED_EXTENSIONS = ['csv', 'json'];
+    private const ALLOWED_EXTENSIONS = ['csv', 'json', 'xls', 'xlsx'];
 
     public function __construct(
         private ThemeSettingRepository $themeSettingRepository,
@@ -20,51 +20,125 @@ class BIModuleSettingsService
         private KernelInterface $kernel,
     ) {}
 
-    public function getSettings(): array
+    public function getSettings(bool $includeSecrets = false): array
     {
         $setting = $this->themeSettingRepository->findByKey(self::SETTING_KEY);
         if (!$setting instanceof ThemeSetting || trim((string) $setting->getSettingValue()) === '') {
-            return $this->normalizeSettings([]);
+            return $this->normalizeSettings([], $includeSecrets);
         }
 
         try {
             $payload = json_decode((string) $setting->getSettingValue(), true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
-            return $this->normalizeSettings([]);
+            return $this->normalizeSettings([], $includeSecrets);
         }
 
-        return $this->normalizeSettings(is_array($payload) ? $payload : []);
+        return $this->normalizeSettings(is_array($payload) ? $payload : [], $includeSecrets);
     }
 
     public function addRemoteSource(string $label, string $url): array
     {
-        $normalizedUrl = trim($url);
-        if ($normalizedUrl === '' || filter_var($normalizedUrl, FILTER_VALIDATE_URL) === false) {
-            throw new \InvalidArgumentException('URL SharePoint invalide.');
-        }
+        ['url' => $normalizedUrl, 'fileName' => $fileName, 'extension' => $extension] = $this->normalizeRemoteSourceUrl($url);
 
-        $extension = strtolower((string) pathinfo((string) parse_url($normalizedUrl, PHP_URL_PATH), PATHINFO_EXTENSION));
-        if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
-            throw new \InvalidArgumentException('Seuls les fichiers CSV et JSON sont supportes.');
-        }
-
-        $settings = $this->getSettings();
+        $settings = $this->getSettings(true);
         $settings['remoteSources'][] = [
             'id' => $this->generateSourceId('remote'),
-            'label' => trim($label) !== '' ? trim($label) : $this->humanize((string) pathinfo((string) parse_url($normalizedUrl, PHP_URL_PATH), PATHINFO_FILENAME)),
+            'label' => trim($label) !== '' ? trim($label) : $this->humanize((string) pathinfo($fileName, PATHINFO_FILENAME)),
             'url' => $normalizedUrl,
             'extension' => $extension,
             'createdAt' => (new \DateTimeImmutable())->format(DATE_ATOM),
         ];
 
-        return $this->saveSettings($settings);
+        return $this->sanitizeSettings($this->saveSettings($settings));
+    }
+
+    public function addApiSource(string $label, string $url, string $token): array
+    {
+        $normalizedUrl = $this->normalizeApiSourceUrl($url);
+        $normalizedToken = $this->normalizeApiSourceToken($token);
+
+        $settings = $this->getSettings(true);
+        $settings['apiSources'][] = [
+            'id' => $this->generateSourceId('api'),
+            'label' => trim($label) !== '' ? trim($label) : $this->humanize((string) parse_url($normalizedUrl, PHP_URL_HOST)),
+            'url' => $normalizedUrl,
+            'token' => $normalizedToken,
+            'extension' => 'json',
+            'createdAt' => (new \DateTimeImmutable())->format(DATE_ATOM),
+        ];
+
+        return $this->sanitizeSettings($this->saveSettings($settings));
+    }
+
+    public function updateSource(string $sourceId, string $label = '', ?string $url = null, ?string $token = null): array
+    {
+        $sourceId = trim($sourceId);
+        if ($sourceId === '') {
+            throw new \InvalidArgumentException('Source BI introuvable.');
+        }
+
+        $settings = $this->getSettings(true);
+
+        foreach ($settings['uploadedSources'] as $index => $source) {
+            if ((string) ($source['id'] ?? '') !== $sourceId) {
+                continue;
+            }
+
+            $fileName = basename((string) ($source['fileName'] ?? ''));
+            $baseName = (string) pathinfo($fileName, PATHINFO_FILENAME);
+            $settings['uploadedSources'][$index]['label'] = trim($label) !== ''
+                ? trim($label)
+                : $this->humanize($baseName);
+
+            return $this->sanitizeSettings($this->saveSettings($settings));
+        }
+
+        foreach ($settings['remoteSources'] as $index => $source) {
+            if ((string) ($source['id'] ?? '') !== $sourceId) {
+                continue;
+            }
+
+            ['url' => $normalizedUrl, 'fileName' => $fileName, 'extension' => $extension] = $this->normalizeRemoteSourceUrl((string) ($url ?? ''));
+            $settings['remoteSources'][$index]['label'] = trim($label) !== ''
+                ? trim($label)
+                : $this->humanize((string) pathinfo($fileName, PATHINFO_FILENAME));
+            $settings['remoteSources'][$index]['url'] = $normalizedUrl;
+            $settings['remoteSources'][$index]['extension'] = $extension;
+
+            return $this->sanitizeSettings($this->saveSettings($settings));
+        }
+
+        foreach ($settings['apiSources'] as $index => $source) {
+            if ((string) ($source['id'] ?? '') !== $sourceId) {
+                continue;
+            }
+
+            $normalizedUrl = $this->normalizeApiSourceUrl((string) ($url ?? ''));
+            $normalizedToken = trim((string) ($token ?? '')) !== ''
+                ? $this->normalizeApiSourceToken((string) $token)
+                : trim((string) ($source['token'] ?? ''));
+
+            if ($normalizedToken === '') {
+                throw new \InvalidArgumentException('Le token API est obligatoire.');
+            }
+
+            $settings['apiSources'][$index]['label'] = trim($label) !== ''
+                ? trim($label)
+                : $this->humanize((string) parse_url($normalizedUrl, PHP_URL_HOST));
+            $settings['apiSources'][$index]['url'] = $normalizedUrl;
+            $settings['apiSources'][$index]['token'] = $normalizedToken;
+
+            return $this->sanitizeSettings($this->saveSettings($settings));
+        }
+
+        throw new \InvalidArgumentException('Source BI introuvable.');
     }
 
     public function addUploadedSource(UploadedFile $file, string $label = ''): array
     {
         $extension = strtolower((string) $file->getClientOriginalExtension());
         if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
-            throw new \InvalidArgumentException('Seuls les fichiers CSV et JSON sont supportes.');
+            throw new \InvalidArgumentException('Seuls les fichiers CSV, Excel et JSON sont supportes.');
         }
 
         $directory = $this->getUploadedSourcesDirectory();
@@ -77,7 +151,7 @@ class BIModuleSettingsService
         $file->move($directory, $targetName);
 
         $relativePath = 'site-imports/' . $targetName;
-        $settings = $this->getSettings();
+        $settings = $this->getSettings(true);
         $settings['uploadedSources'][] = [
             'id' => $this->generateSourceId('upload'),
             'label' => trim($label) !== '' ? trim($label) : $this->humanize($baseName),
@@ -87,13 +161,13 @@ class BIModuleSettingsService
             'uploadedAt' => (new \DateTimeImmutable())->format(DATE_ATOM),
         ];
 
-        return $this->saveSettings($settings);
+        return $this->sanitizeSettings($this->saveSettings($settings));
     }
 
     public function removeSource(string $sourceId): array
     {
         $sourceId = trim($sourceId);
-        $settings = $this->getSettings();
+        $settings = $this->getSettings(true);
 
         foreach ($settings['uploadedSources'] as $index => $source) {
             if ((string) ($source['id'] ?? '') !== $sourceId) {
@@ -107,7 +181,7 @@ class BIModuleSettingsService
 
             unset($settings['uploadedSources'][$index]);
 
-            return $this->saveSettings($settings);
+            return $this->sanitizeSettings($this->saveSettings($settings));
         }
 
         foreach ($settings['remoteSources'] as $index => $source) {
@@ -117,10 +191,20 @@ class BIModuleSettingsService
 
             unset($settings['remoteSources'][$index]);
 
-            return $this->saveSettings($settings);
+            return $this->sanitizeSettings($this->saveSettings($settings));
         }
 
-        return $settings;
+        foreach ($settings['apiSources'] as $index => $source) {
+            if ((string) ($source['id'] ?? '') !== $sourceId) {
+                continue;
+            }
+
+            unset($settings['apiSources'][$index]);
+
+            return $this->sanitizeSettings($this->saveSettings($settings));
+        }
+
+        return $this->sanitizeSettings($settings);
     }
 
     public function resolveStoragePath(string $relativePath): string
@@ -135,7 +219,7 @@ class BIModuleSettingsService
 
     private function saveSettings(array $settings): array
     {
-        $normalized = $this->normalizeSettings($settings);
+        $normalized = $this->normalizeSettings($settings, true);
         $setting = $this->themeSettingRepository->findByKey(self::SETTING_KEY);
         if (!$setting instanceof ThemeSetting) {
             $setting = (new ThemeSetting())->setSettingKey(self::SETTING_KEY);
@@ -148,11 +232,78 @@ class BIModuleSettingsService
         return $normalized;
     }
 
-    private function normalizeSettings(array $settings): array
+    private function sanitizeSettings(array $settings): array
+    {
+        return $this->normalizeSettings($settings, false);
+    }
+
+    /**
+     * @return array{url: string, fileName: string, extension: string}
+     */
+    private function normalizeRemoteSourceUrl(string $url): array
+    {
+        $normalizedUrl = trim($url);
+        if ($normalizedUrl === '' || filter_var($normalizedUrl, FILTER_VALIDATE_URL) === false) {
+            throw new \InvalidArgumentException('URL SharePoint invalide.');
+        }
+
+        $path = rawurldecode((string) parse_url($normalizedUrl, PHP_URL_PATH));
+        $normalizedPath = mb_strtolower(trim($path));
+        if ($normalizedPath === '') {
+            throw new \InvalidArgumentException('Le lien SharePoint doit pointer vers un fichier CSV, Excel ou JSON.');
+        }
+
+        if (str_contains($normalizedPath, '/:f:/')) {
+            throw new \InvalidArgumentException('Ce lien SharePoint pointe vers un dossier. Utilisez un lien direct vers un fichier CSV, Excel ou JSON.');
+        }
+
+        $fileName = basename($path);
+        $extension = strtolower((string) pathinfo($fileName, PATHINFO_EXTENSION));
+
+        if ($fileName === '' || $extension === '') {
+            throw new \InvalidArgumentException('Le lien SharePoint doit pointer directement vers un fichier CSV, Excel ou JSON.');
+        }
+
+        if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Seuls les fichiers CSV, Excel et JSON sont supportes. Extension detectee : %s.',
+                $extension
+            ));
+        }
+
+        return [
+            'url' => $normalizedUrl,
+            'fileName' => $fileName,
+            'extension' => $extension,
+        ];
+    }
+
+    private function normalizeApiSourceUrl(string $url): string
+    {
+        $normalizedUrl = trim($url);
+        if ($normalizedUrl === '' || filter_var($normalizedUrl, FILTER_VALIDATE_URL) === false) {
+            throw new \InvalidArgumentException('URL API invalide.');
+        }
+
+        return $normalizedUrl;
+    }
+
+    private function normalizeApiSourceToken(string $token): string
+    {
+        $normalizedToken = trim($token);
+        if ($normalizedToken === '') {
+            throw new \InvalidArgumentException('Le token API est obligatoire.');
+        }
+
+        return mb_substr($normalizedToken, 0, 1000);
+    }
+
+    private function normalizeSettings(array $settings, bool $includeSecrets = false): array
     {
         $normalized = [
             'uploadedSources' => [],
             'remoteSources' => [],
+            'apiSources' => [],
         ];
 
         foreach ((array) ($settings['uploadedSources'] ?? []) as $source) {
@@ -203,7 +354,57 @@ class BIModuleSettingsService
             ];
         }
 
+        foreach ((array) ($settings['apiSources'] ?? []) as $source) {
+            if (!is_array($source)) {
+                continue;
+            }
+
+            $id = $this->normalizeScalar($source['id'] ?? '', 80);
+            $url = trim((string) ($source['url'] ?? ''));
+            $token = trim((string) ($source['token'] ?? ''));
+            $extension = strtolower($this->normalizeScalar($source['extension'] ?? 'json', 10));
+            if (
+                $id === ''
+                || $url === ''
+                || filter_var($url, FILTER_VALIDATE_URL) === false
+                || $token === ''
+                || $extension !== 'json'
+            ) {
+                continue;
+            }
+
+            $apiSource = [
+                'id' => $id,
+                'label' => $this->normalizeScalar($source['label'] ?? '', 120),
+                'url' => $url,
+                'extension' => 'json',
+                'createdAt' => $this->normalizeScalar($source['createdAt'] ?? '', 80),
+                'tokenConfigured' => true,
+                'tokenPreview' => $this->maskSecret($token),
+            ];
+
+            if ($includeSecrets) {
+                $apiSource['token'] = $token;
+            }
+
+            $normalized['apiSources'][] = $apiSource;
+        }
+
         return $normalized;
+    }
+
+    private function maskSecret(string $value): string
+    {
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (mb_strlen($trimmed) <= 8) {
+            return str_repeat('*', mb_strlen($trimmed));
+        }
+
+        return mb_substr($trimmed, 0, 4) . str_repeat('*', max(4, mb_strlen($trimmed) - 8)) . mb_substr($trimmed, -4);
     }
 
     private function getUploadedSourcesDirectory(): string

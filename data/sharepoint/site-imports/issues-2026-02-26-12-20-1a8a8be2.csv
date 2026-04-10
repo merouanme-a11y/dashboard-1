@@ -1,0 +1,71 @@
+#;Sujet;Statut;Tracker;Auteur;Assigné à;Début;Mis-à-jour;Lien externe;Niveau Priorité;Priorité
+7271;Ouverture des accès WS pour le RISQUE IARD depuis l'espace perso;En attente;Evolution;Merouan HAMZAOUI;Merouan HAMZAOUI;28/05/2024;26/02/2026 11:01;"";Normal;Anomalie non bloquante
+8664;{Contrôle Interne} | Problème quittances et CRM - CONTRAT_L_MOM2_M2027262;Analyse;Assistance;Merouan HAMZAOUI;SNL Développeurs;19/02/2026;26/02/2026 10:26;https://maintenance.adep.com/tickets/MTN-794;;Anomalie non bloquante
+8670;{Compta} - Quittancement du 20/02 qui s'est arrêté au premier risque ;En cours;Anomalie;Merouan HAMZAOUI;Merouan HAMZAOUI;23/02/2026;26/02/2026 10:08;https://maintenance.adep.com/tickets/MTN-809;;Anomalie non bloquante
+8682;[ALMERYS] - Erreur filtre B2 - détails non traités;Analyse;Anomalie;Sébastien At;Christian Robichon;26/02/2026;26/02/2026 09:56;"";Extrêmement urgent;Anomalie non bloquante
+8681;[PATCH][VALIDATION] Ajout champs WS apporteurs;Nouveau;Amélioration;Arnaud BORIES;SNL Développeurs;26/02/2026;26/02/2026 08:17;"";"";Anomalie non bloquante
+8574;[ALMERYS] Prise en charge web services;A Recetter;Anomalie;Sébastien Duquesne;Xavier Doustaly;19/01/2026;25/02/2026 16:17;"";;Anomalie non bloquante
+8678;{Service Entreprise} - Champ Compagnie n'affiche plus automatiquement la compagnie ADEP;En cours;Anomalie;Merouan HAMZAOUI;Merouan HAMZAOUI;25/02/2026;25/02/2026 12:11;"";;Anomalie non bloquante
+8676;"{Compta} | ""Anomalie"" sur états virements de remboursements OA";En cours;Anomalie;Merouan HAMZAOUI;Merouan HAMZAOUI;25/02/2026;25/02/2026 10:26;https://maintenance.adep.com/tickets/MTN-815;;Anomalie non bloquante
+8413;[COMPTA][Justification des comptes-Clients];En cours;Anomalie;Marjorie MASSOL;Marjorie MASSOL;21/10/2025;24/02/2026 14:16;"";Extrêmement urgent;Anomalie non bloquante
+8672;Formule CR200 - Garantie Auditif - RICAUD Jean-Yves CONTRAT213569;Nouveau;Anomalie;Giovanni Raquil;SNL Développeurs;23/02/2026;24/02/2026 13:50;"";;Anomalie non bloquante
+8671;[COMPTA][Prestations PMT VS CIES SANTE INDIV 01 2026 dans VIA SANTE or INIZYS][EXTREMEMENT URGENT];En cours;Anomalie;Marjorie MASSOL;Marjorie MASSOL;23/02/2026;24/02/2026 11:10;"";Extrêmement urgent;Anomalie non bloquante
+8411;[COMPTA][Justification des comptes- Compagnie];En cours;Anomalie;Marjorie MASSOL;Marjorie MASSOL;21/10/2025;23/02/2026 15:04;"";Extrêmement urgent;Anomalie non bloquante
+8239;[COMPTA][Action Rec/Résil Nettoyage Acompte-la commission ADEP se reprend alors que la quittance est payée];A Recetter;Anomalie;Marjorie MASSOL;Marjorie MASSOL;29/07/2025;23/02/2026 14:30;"";Extrêmement urgent;Anomalie non bloquante
+8504;[Evolutiuon] [COM][PROD] - Demande d'évolutions sur le module echeancier;Attente mise en production;Evolution;Merouan HAMZAOUI;Christian Robichon;18/12/2025;23/02/2026 09:13;https://maintenance.adep.com/tickets/MTN-609;;Anomalie non bloquante
+8647;{Compta}{Reporting} - Quittances qui ne remontent pas dans le reporting des Emissions. ;Analyse;Evolution;Merouan HAMZAOUI;Marjorie MASSOL;11/02/2026;23/02/2026 08:06;https://maintenance.adep.com/tickets/MTN-748;;Anomalie non bloquante
+8554;[ALMERYS] - Affection des prestations au mauvais contrat;En cours;Anomalie;Sébastien At;Sébastien Duquesne;09/01/2026;20/02/2026 15:59;"";Très urgent;Anomalie non bloquante
+7990;Problème de calcul de quittance suite à un changement de formule en MRH.;Analyse;Anomalie;Jonathan MONDINO;Sébastien Duquesne;03/04/2025;20/02/2026 14:20;"";;Anomalie non bloquante
+8650;"{Service Entreprise} {Evolution}- Amélioration visuel pour recherche ""informations Professionnelles""";Attente mise en production;Amélioration;Merouan HAMZAOUI;Merouan HAMZAOUI;12/02/2026;20/02/2026 14:10;"";"";Anomalie non bloquante
+6962;[COMPTA][Action Rec/Résil Nettoyage Acompte-la commission ADEP se calcule pour le mauvais montant][CONTRAT223891];Analyse;Anomalie;Marjorie MASSOL;Marjorie MASSOL;27/02/2024;20/02/2026 12:12;"";Extrêmement urgent;Anomalie non bloquante
+8251;Sécurisation des appels API;En attente;Amélioration;Xavier Doustaly;Merouan HAMZAOUI;06/08/2025;20/02/2026 11:42;"";"";Anomalie non bloquante
+7733;Purge des Quittproj Produit ligne et Quittproj;En cours;Amélioration;Stéphane LAPIERRE;Stéphane LAPIERRE;05/12/2024;20/02/2026 11:41;"";"";Anomalie non bloquante
+7614;[AUTO] - CRM non actualisé pour les contrats remis en cours;A Recetter;Amélioration;Merouan HAMZAOUI;Merouan HAMZAOUI;11/10/2024;20/02/2026 11:41;"";"";Anomalie non bloquante
+8185;Axes d'amélioration de performances;En cours;Amélioration;Arnaud BORIES;Sébastien At;03/07/2025;20/02/2026 11:40;"";"";Anomalie non bloquante
+8407;[COMPTA][Erreur jour ancienneté de la dette-changement statut CONTRAT287071];Analyse;Amélioration;Marjorie MASSOL;Marjorie MASSOL;20/10/2025;20/02/2026 11:40;"";"";Anomalie non bloquante
+8551;Optimisation des prélèvements et configuration serveur;En cours;Amélioration;Stéphane LAPIERRE;Stéphane LAPIERRE;09/01/2026;20/02/2026 11:40;"";"";Anomalie non bloquante
+8448;{DSN} - Evolution - Traitement des avenants DSN;Analyse;Amélioration;Merouan HAMZAOUI;Jonathan MONDINO;10/11/2025;20/02/2026 11:39;https://maintenance.adep.com/tickets/MTN-721;"";Anomalie non bloquante
+6386;Développement DSN (Fiches de paramétrage);A Recetter;Amélioration;Xavier Doustaly;Jonathan MONDINO;05/10/2023;20/02/2026 11:38;"";"";Anomalie non bloquante
+8573;Nom du fichier carte Almerys pdf;Analyse;Amélioration;Sébastien At;Sébastien At;19/01/2026;20/02/2026 11:38;"";"";Anomalie non bloquante
+8272;[Compta] - Anomalies commissions apporteurs;A Recetter;Anomalie;Merouan HAMZAOUI;Marjorie MASSOL;14/08/2025;20/02/2026 11:16;"";;Anomalie non bloquante
+7167;[COMPTA][Ecart détail prime entre le HT et le TTC MRH-AUTO][EXTREMEMENT URGENT];Attente mise en production;Anomalie;Marjorie MASSOL;Stéphane LAPIERRE;23/04/2024;20/02/2026 11:01;"";Extrêmement urgent;Anomalie non bloquante
+7899;CRON de cohérence des données est en erreur;A Recetter;Anomalie;Merouan HAMZAOUI;Merouan HAMZAOUI;18/02/2025;19/02/2026 10:03;"";;Anomalie non bloquante
+8658;[COMPTA]Justification des comptes-Apporteurs];A Recetter;Anomalie;Marjorie MASSOL;Marjorie MASSOL;17/02/2026;19/02/2026 09:56;"";Extrêmement urgent;Anomalie non bloquante
+8657;[ALMERYS] - Fichier V3 vide;A Recetter;Amélioration;Sébastien At;Sébastien At;16/02/2026;19/02/2026 09:23;"";"";Anomalie non bloquante
+8661;[PATCH][VALIDATION] Correction fichier temporaire e-carte Almerys non néttoyé;Attente mise en production;Amélioration;Arnaud BORIES;Arnaud BORIES;18/02/2026;19/02/2026 08:06;"";"";Anomalie non bloquante
+8412;[COMPTA][Justification des comptes- avenants de changement de formule];En cours;Anomalie;Marjorie MASSOL;Stéphane LAPIERRE;21/10/2025;18/02/2026 13:15;"";Extrêmement urgent;Anomalie non bloquante
+8655;[COMPTA][Justification comptes clients CFDP/ PROJ SANTE];En cours;Anomalie;Marjorie MASSOL;Marjorie MASSOL;16/02/2026;18/02/2026 13:09;"";Extrêmement urgent;Anomalie non bloquante
+6832;[URGENT] - [COMPTA] - Justification des comptes [EXTREMEMENT URGENT];En cours;Anomalie;Sébastien At;Stéphane LAPIERRE;10/02/2025;17/02/2026 13:13;"";Extrêmement urgent;Anomalie non bloquante
+8581;{IT}{Requête} -  Requête des effectifs prévoyances dure 2 jours au lieux de 2h30. ;En cours;Assistance;Merouan HAMZAOUI;Giovanni Raquil;20/01/2026;17/02/2026 10:09;"";;Anomalie non bloquante
+8446;{COM} -Problème d'affichage de remboursements de bénéficiaires GE sur contrat socle // ADEP-P2017-309768;En cours;Anomalie;Merouan HAMZAOUI;Merouan HAMZAOUI;10/11/2025;13/02/2026 08:30;https://maintenance.adep.com/tickets/MTN-528;Très urgent;Anomalie non bloquante
+8563;{Webservice} {Extranet B2B} - modification du WS concernant l'extranet b2b;Devis en attente de réponse;Evolution;Merouan HAMZAOUI;Elodie Doustaly;13/01/2026;12/02/2026 09:25;"";;Anomalie non bloquante
+8546;[Almerys] - Mise à jour adresse postale + envoi de la carte physique pour contrat Indiv.;A Recetter;Anomalie;Merouan HAMZAOUI;Merouan HAMZAOUI;08/01/2026;11/02/2026 11:10;"";Très urgent;Anomalie Bloquante
+8578;{Carte TP} - SMITH Dorothy - P032139_01 - MAJ impossible sur carte Almerys;Analyse;Assistance;Merouan HAMZAOUI;Sébastien Duquesne;20/01/2026;10/02/2026 16:40;"";;Anomalie non bloquante
+8587;[PATCH][VALIDATION] Ajout retour portefeuille complet dans WS apporteurs;En cours;Amélioration;Arnaud BORIES;Arnaud BORIES;21/01/2026;10/02/2026 16:28;"";"";Anomalie non bloquante
+8101;Vulnérabilités Drupal;En attente;Amélioration;Arnaud BORIES;SNL Développeurs;28/05/2025;10/02/2026 16:22;"";"";Anomalie non bloquante
+8608;{Controle Interne} - URGENT : pb export contrôles trimestriels;En cours;Anomalie;Merouan HAMZAOUI;Arnaud BORIES;27/01/2026;10/02/2026 10:55;https://maintenance.adep.com/tickets/MTN-702;Très urgent;Anomalie non bloquante
+8566;Base de zéro;En cours;Assistance;Arnaud BORIES;Arnaud BORIES;14/01/2026;09/02/2026 08:24;"";;Anomalie non bloquante
+8436;Nouvelle mécanique flux cartes;A Recetter;Evolution;Xavier Doustaly;Sébastien At;04/11/2025;23/01/2026 09:18;"";;Anomalie non bloquante
+7355;[COMPTA][Analyse des contrats en impayé][Anticiper les résiliations suite MEDS];Analyse;Evolution;Marjorie MASSOL;Marjorie MASSOL;27/06/2024;20/01/2026 08:36;"";Semble rapide à réaliser;Anomalie non bloquante
+8507;Affichage de la carte TP dans l'espace apporteur;A Recetter;Evolution;Merouan HAMZAOUI;Merouan HAMZAOUI;18/12/2025;13/01/2026 09:28;"";;Anomalie non bloquante
+8475;Commission précompte non prise en compte lors d'un avenant à date effet + 1s;En cours;Assistance;Arnaud BORIES;Marjorie MASSOL;02/12/2025;05/01/2026 14:02;"";;Anomalie non bloquante
+7429;[COMPTA][Commission ADEP reprise alors que non versée suite résil];Analyse;Assistance;Marjorie MASSOL;Marjorie MASSOL;17/07/2024;31/12/2025 10:49;"";Extrêmement urgent;Anomalie non bloquante
+8416;[COMPTA][PROBLEME ANALYSE CTX CONTRAT283651 HARITI ASNA][EXTREMENT URGENT];En cours;Anomalie;Marjorie MASSOL;Marjorie MASSOL;22/10/2025;24/12/2025 10:32;"";Très urgent;Anomalie non bloquante
+8072;[RECETTE][MODULO];A Recetter;Evolution;Sébastien Duquesne;Sébastien Duquesne;15/05/2025;19/12/2025 09:22;"";Urgent;Anomalie non bloquante
+8358;[COMPTA][Changement de fractionnement reprend la com ADEP];En attente;Anomalie;Marjorie MASSOL;Merouan HAMZAOUI;26/09/2025;17/12/2025 07:57;"";Urgent;Anomalie non bloquante
+8471;Flux noémie qui ne se filtre pas 291068400725480;Analyse;Anomalie;Sébastien At;Sébastien At;28/11/2025;28/11/2025 14:56;"";Urgent;Anomalie non bloquante
+7374;[Génération de courrier] - Multiprocesseur depuis OA;En attente;Evolution;Merouan HAMZAOUI;Merouan HAMZAOUI;04/07/2024;21/11/2025 15:18;"";Normal;Anomalie non bloquante
+8364;[COMPTA][Problème de calcul com ADEP sur CONTRAT PREVOYANCE Résilié à Terme];Analyse;Assistance;Marjorie MASSOL;Merouan HAMZAOUI;30/09/2025;02/10/2025 12:24;"";Urgent;Anomalie non bloquante
+8363;[COMPTA][Problème de calcul com ADEP sur majo/mino sur salariés risque Collectif];Analyse;Anomalie;Marjorie MASSOL;Xavier Doustaly;30/09/2025;30/09/2025 11:51;"";Urgent;Anomalie non bloquante
+8306;[DSN] - Fiche de paramétrage norme v1.39 et v1.40;En attente;Evolution;Sébastien At;Sébastien At;08/09/2025;29/09/2025 07:21;"";Normal;Aucune
+8254;[Compta] - Certains paiement ne sont pas remontés dans les notes via le WS encaissement. ;En cours;Anomalie;Merouan HAMZAOUI;Merouan HAMZAOUI;07/08/2025;25/09/2025 09:10;"";;Anomalie non bloquante
+8321;[ANOMALIE][IARD] CRM conducteur additionel n'évolue pas;Nouveau;Evolution;Sébastien Duquesne;Sébastien Duquesne;15/09/2025;15/09/2025 10:45;"";Urgent;Anomalie non bloquante
+8236;[COMPTA][Filtres Menu Comptes Clients];Nouveau;Anomalie;Marjorie MASSOL;SNL Développeurs;28/07/2025;29/07/2025 10:39;"";Semble rapide à réaliser;Anomalie non bloquante
+7114;[VIE/OBS][RACHAT AUTOMATIQUE] Modification des règles pour être conforme à l'article D223-2 du code de la mutualité concernant la gestion des rachats automatiques;En attente;Evolution;Jean-Luc Gasiorowski;Merouan HAMZAOUI;10/04/2024;19/05/2025 10:17;"";;Anomalie non bloquante
+7883;[COMPTA][ Commissions et reprises de com non transférées suite transfert portefeuille Apporteur];Analyse;Anomalie;Marjorie MASSOL;Marjorie MASSOL;10/02/2025;29/04/2025 10:59;"";Très urgent;Anomalie non bloquante
+7412;[Collective] Mise en place d'un contrôle lors de saisie d'un salarié. ;Analyse;Evolution;Merouan HAMZAOUI;Sébastien At;12/07/2024;07/04/2025 07:33;"";;Anomalie non bloquante
+7471;[COMPTA][Reporting date 1er Impayé suite résiliation];En attente;Evolution;Marjorie MASSOL;SNL Développeurs;09/08/2024;20/03/2025 13:48;"";;Anomalie non bloquante
+5644;Performances Open Assur [2023];En attente;Anomalie;Dimitri Chalencon;Sébastien At;13/01/2023;27/08/2024 12:29;"";;Anomalie non bloquante
+4922;[COMPTA][rec/résil Nettoyage acompte];En attente;Anomalie;Marjorie MASSOL;SNL Développeurs;28/06/2022;08/08/2024 07:12;"";Extrêmement urgent;Anomalie non bloquante
+6996;CRON OpenAssur se lance en double [DEMAT] - [05] - Chargement des contrats;Analyse;Anomalie;Arnaud BORIES;Arnaud BORIES;11/03/2024;25/07/2024 10:07;"";;Anomalie non bloquante
+7318;[AUTO] - Afficher un message lorsque les garantie sont à 0 euro pour les formules Auto;Analyse;Evolution;Merouan HAMZAOUI;Merouan HAMZAOUI;13/06/2024;14/06/2024 12:33;"";Extrêmement urgent;Aucune

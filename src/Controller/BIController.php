@@ -6,6 +6,7 @@ use App\Entity\Utilisateur;
 use App\Service\BIChartBuilderService;
 use App\Service\BIConfigurationService;
 use App\Service\BIModuleSettingsService;
+use App\Service\MicrosoftGraphAuthService;
 use App\Service\ModuleService;
 use App\Service\SharePointDataService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -25,6 +26,7 @@ final class BIController extends AbstractController
         private BIChartBuilderService $biChartBuilderService,
         private BIConfigurationService $biConfigurationService,
         private BIModuleSettingsService $biModuleSettingsService,
+        private MicrosoftGraphAuthService $microsoftGraphAuthService,
         private ModuleService $moduleService,
     ) {}
 
@@ -47,14 +49,20 @@ final class BIController extends AbstractController
             'connection',
             $preferences['defaultConnection'] ?? ($connections[0]['id'] ?? '')
         ));
+        if (
+            $selectedConnection !== ''
+            && !array_filter($connections, static fn (array $connection): bool => (string) ($connection['id'] ?? '') === $selectedConnection)
+        ) {
+            $selectedConnection = (string) ($connections[0]['id'] ?? '');
+        }
         $files = $selectedConnection !== ''
             ? $this->sharePointDataService->getAvailableFiles($selectedConnection)
             : [];
 
-        $selectedFile = trim((string) $request->query->get(
+        $selectedFile = $this->resolveSelectedFileId($files, trim((string) $request->query->get(
             'file',
             $preferences['defaultFile'] ?? ($files[0]['id'] ?? '')
-        ));
+        )));
 
         $datasetPayload = $selectedConnection !== '' && $selectedFile !== ''
             ? $this->sharePointDataService->getDatasetPayload($selectedConnection, $selectedFile)
@@ -70,6 +78,8 @@ final class BIController extends AbstractController
                 $this->sharePointDataService->getSuggestedColumns($datasetPayload)
             )
             : [];
+        $settingsFeedback = $this->consumeSettingsFeedback($request);
+        $microsoftAuth = $this->microsoftGraphAuthService->getConnectionStatus();
 
         return $this->render('bi/index.html.twig', [
             'biConnectionsUrl' => $this->generateUrl('app_bi_connections'),
@@ -87,6 +97,11 @@ final class BIController extends AbstractController
             'biSuggestedWidgets' => $suggestedWidgets,
             'biPreferencesPayload' => $preferences,
             'biModuleSettings' => $this->biModuleSettingsService->getSettings(),
+            'biMicrosoftAuth' => $microsoftAuth,
+            'biMicrosoftConnectUrl' => $this->generateUrl('app_bi_microsoft_connect'),
+            'biMicrosoftDisconnectUrl' => $this->generateUrl('app_bi_microsoft_disconnect'),
+            'biOpenSettingsOnLoad' => $request->query->getBoolean('openSettings') || $settingsFeedback !== null,
+            'biPreloadedSettingsFeedback' => $settingsFeedback,
             'biCanEdit' => $canEdit,
         ]);
     }
@@ -190,6 +205,17 @@ final class BIController extends AbstractController
                     (string) ($payload['label'] ?? ''),
                     (string) ($payload['url'] ?? ''),
                 ),
+                'add_api_source' => $this->biModuleSettingsService->addApiSource(
+                    (string) ($payload['label'] ?? ''),
+                    (string) ($payload['url'] ?? ''),
+                    (string) ($payload['token'] ?? ''),
+                ),
+                'update_source' => $this->biModuleSettingsService->updateSource(
+                    (string) ($payload['sourceId'] ?? ''),
+                    (string) ($payload['label'] ?? ''),
+                    array_key_exists('url', $payload) ? (string) ($payload['url'] ?? '') : null,
+                    array_key_exists('token', $payload) ? (string) ($payload['token'] ?? '') : null,
+                ),
                 'delete_source' => $this->biModuleSettingsService->removeSource((string) ($payload['sourceId'] ?? '')),
                 default => throw new \InvalidArgumentException('Action de parametrage BI inconnue.'),
             };
@@ -264,5 +290,31 @@ final class BIController extends AbstractController
         }
 
         return strcasecmp($user->getEffectiveProfileType(), 'Admin') === 0;
+    }
+
+    private function resolveSelectedFileId(array $files, string $selectedFile): string
+    {
+        $selectedFile = trim($selectedFile);
+        if ($selectedFile !== '') {
+            foreach ($files as $file) {
+                if ((string) ($file['id'] ?? '') === $selectedFile) {
+                    return $selectedFile;
+                }
+            }
+        }
+
+        return (string) ($files[0]['id'] ?? '');
+    }
+
+    private function consumeSettingsFeedback(Request $request): ?array
+    {
+        if (!$request->hasSession()) {
+            return null;
+        }
+
+        $messages = $request->getSession()->getFlashBag()->get('bi_settings_feedback', []);
+        $message = $messages[0] ?? null;
+
+        return is_array($message) ? $message : null;
     }
 }
