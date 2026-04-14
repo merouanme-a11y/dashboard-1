@@ -9,6 +9,8 @@
 .bi-inspector-form[hidden],
 .bi-filters-bar[hidden],
 .bi-widget-actions[hidden],
+#biConnectionField[hidden],
+#biFileField[hidden],
 #biAddPageBtn[hidden],
 #biDuplicatePageBtn[hidden],
 #biDeletePageBtn[hidden] {
