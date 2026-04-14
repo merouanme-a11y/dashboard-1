@@ -37,8 +37,10 @@ document.addEventListener("DOMContentLoaded", function () {
         widgetCardHeightValue: document.getElementById("biWidgetCardHeightValue"),
         widgetTextSize: document.getElementById("biWidgetTextSize"),
         widgetTextSizeValue: document.getElementById("biWidgetTextSizeValue"),
+        widgetTextSizeNumber: document.getElementById("biWidgetTextSizeNumber"),
         widgetValueSize: document.getElementById("biWidgetValueSize"),
         widgetValueSizeValue: document.getElementById("biWidgetValueSizeValue"),
+        widgetValueSizeNumber: document.getElementById("biWidgetValueSizeNumber"),
         widgetChartColor: document.getElementById("biWidgetChartColor"),
         widgetChartColorInput: document.getElementById("biWidgetChartColorInput"),
         widgetChartColorHex: document.getElementById("biWidgetChartColorHex"),
@@ -90,6 +92,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const palette = ["#2563eb", "#1d4ed8", "#0f766e", "#10b981", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#dc2626", "#ec4899", "#be185d", "#8b5cf6", "#7c3aed", "#06b6d4", "#334155"];
     const fractions = ["1/8", "2/8", "3/8", "4/8", "5/8", "6/8", "7/8", "8/8"];
     const transparentDragImage = createTransparentDragImage();
+    const WIDGET_TEXT_SIZE_MIN = 0;
+    const WIDGET_TEXT_SIZE_MAX = 150;
+    const WIDGET_TEXT_SIZE_DEFAULT = 15;
+    const WIDGET_VALUE_SIZE_MIN = 0;
+    const WIDGET_VALUE_SIZE_MAX = 150;
+    const WIDGET_VALUE_SIZE_DEFAULT = 48;
     const defaultWidgetCatalog = [
         { type: "kpi", label: "Indicateur KPI", icon: "bi-speedometer2", defaultTitle: "KPI principal" },
         { type: "counter", label: "Compteur", icon: "bi-123", defaultTitle: "Compteur global" },
@@ -279,6 +287,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (!state.editMode) {
                 state.selectedWidgetId = "";
                 closeModal("widget");
+                flushPendingSavePreferences();
             }
             dom.editModeBtn.innerHTML = state.editMode ? '<i class="bi bi-check2-square"></i>' : '<i class="bi bi-pencil-square"></i>';
             renderAll();
@@ -439,20 +448,62 @@ document.addEventListener("DOMContentLoaded", function () {
         dom.widgetTextSize?.addEventListener("input", function () {
             const widget = getSelectedWidget();
             if (!widget) return;
-            widget.textSize = clamp(parseInt(dom.widgetTextSize.value, 10) || 15, 12, 22);
-            if (dom.widgetTextSizeValue) {
-                dom.widgetTextSizeValue.textContent = String(widget.textSize) + " px";
+            widget.textSize = normalizeWidgetTextSize(dom.widgetTextSize.value);
+            syncWidgetTextSizeControls(widget.textSize);
+            refreshWidgetAfterModalEdit();
+        });
+
+        dom.widgetTextSizeNumber?.addEventListener("input", function () {
+            const widget = getSelectedWidget();
+            if (!widget) return;
+
+            const parsedValue = parseOptionalInteger(dom.widgetTextSizeNumber.value);
+            if (parsedValue === null) {
+                return;
             }
+
+            widget.textSize = normalizeWidgetTextSize(parsedValue);
+            syncWidgetTextSizeControls(widget.textSize);
+            refreshWidgetAfterModalEdit();
+        });
+
+        dom.widgetTextSizeNumber?.addEventListener("change", function () {
+            const widget = getSelectedWidget();
+            if (!widget) return;
+
+            widget.textSize = normalizeWidgetTextSize(dom.widgetTextSizeNumber.value);
+            syncWidgetTextSizeControls(widget.textSize);
             refreshWidgetAfterModalEdit();
         });
 
         dom.widgetValueSize?.addEventListener("input", function () {
             const widget = getSelectedWidget();
             if (!widget) return;
-            widget.valueSize = clamp(parseInt(dom.widgetValueSize.value, 10) || 48, 24, 72);
-            if (dom.widgetValueSizeValue) {
-                dom.widgetValueSizeValue.textContent = String(widget.valueSize) + " px";
+            widget.valueSize = normalizeWidgetValueSize(dom.widgetValueSize.value);
+            syncWidgetValueSizeControls(widget.valueSize);
+            refreshWidgetAfterModalEdit();
+        });
+
+        dom.widgetValueSizeNumber?.addEventListener("input", function () {
+            const widget = getSelectedWidget();
+            if (!widget) return;
+
+            const parsedValue = parseOptionalInteger(dom.widgetValueSizeNumber.value);
+            if (parsedValue === null) {
+                return;
             }
+
+            widget.valueSize = normalizeWidgetValueSize(parsedValue);
+            syncWidgetValueSizeControls(widget.valueSize);
+            refreshWidgetAfterModalEdit();
+        });
+
+        dom.widgetValueSizeNumber?.addEventListener("change", function () {
+            const widget = getSelectedWidget();
+            if (!widget) return;
+
+            widget.valueSize = normalizeWidgetValueSize(dom.widgetValueSizeNumber.value);
+            syncWidgetValueSizeControls(widget.valueSize);
             refreshWidgetAfterModalEdit();
         });
 
@@ -558,7 +609,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function syncModalBodyState() {
-        document.body.classList.toggle("bi-modal-open", Boolean((dom.widgetModal && !dom.widgetModal.hidden) || (dom.settingsModal && !dom.settingsModal.hidden)));
+        document.body.classList.toggle(
+            "bi-modal-open",
+            Boolean(
+                (dom.widgetModal && !dom.widgetModal.hidden)
+                || (dom.settingsModal && !dom.settingsModal.hidden)
+            )
+        );
     }
 
     function captureWidgetModalState() {
@@ -2064,7 +2121,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const body = card.querySelector(".bi-widget-body");
         if (!body) return;
         const chartTextColor = widget.textColor || getComputedStyle(card).color || "#e5e7eb";
-        const chartTextSize = clamp(parseInt(widget.textSize, 10) || 15, 12, 22);
+        const chartTextSize = normalizeWidgetTextSize(widget.textSize);
 
         if (result.kind === "empty") {
             body.innerHTML = '<div class="bi-widget-empty">' + escapeHtml(result.message) + "</div>";
@@ -2112,7 +2169,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const ctx = chart.ctx;
                 const chartArea = chart.chartArea || { left: 0, right: chart.width, top: 0, bottom: chart.height };
                 const baseColor = String(options.color || "#e5e7eb");
-                const fontSize = clamp(parseInt(options.fontSize, 10) || 12, 10, 18);
+                const fontSize = normalizeWidgetTextSize(options.fontSize, WIDGET_TEXT_SIZE_DEFAULT);
                 const chartType = String(options.chartType || chart.config.type || "");
                 const isPieLike = chartType === "pie" || chartType === "doughnut";
                 const isHorizontal = Boolean(options.horizontal);
@@ -2290,7 +2347,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     biValueLabels: {
                         display: !widget.hideText,
                         color: chartTextColor,
-                        fontSize: Math.max(11, chartTextSize - 1),
+                        fontSize: Math.max(0, chartTextSize - 1),
                         horizontal: Boolean(result.horizontal),
                         chartType: result.chartType,
                         formatter: function (value) {
@@ -2392,10 +2449,8 @@ document.addEventListener("DOMContentLoaded", function () {
         if (dom.widgetCardHeight) dom.widgetCardHeight.value = String(widget.cardHeight || 75);
         if (dom.widgetCardHeightValue) dom.widgetCardHeightValue.textContent = String(widget.cardHeight || 75) + " px";
         renderWidgetDataBuilder(widget, columns);
-        if (dom.widgetTextSize) dom.widgetTextSize.value = String(widget.textSize || 15);
-        if (dom.widgetTextSizeValue) dom.widgetTextSizeValue.textContent = String(widget.textSize || 15) + " px";
-        if (dom.widgetValueSize) dom.widgetValueSize.value = String(widget.valueSize || 48);
-        if (dom.widgetValueSizeValue) dom.widgetValueSizeValue.textContent = String(widget.valueSize || 48) + " px";
+        syncWidgetTextSizeControls(normalizeWidgetTextSize(widget.textSize));
+        syncWidgetValueSizeControls(normalizeWidgetValueSize(widget.valueSize));
         if (dom.widgetHideTitle) dom.widgetHideTitle.checked = Boolean(widget.hideTitle);
         if (dom.widgetHideText) dom.widgetHideText.checked = Boolean(widget.hideText);
         if (dom.widgetDataHint) {
@@ -2446,8 +2501,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const result = computeWidgetResult(widget);
         const alignment = String(widget.alignment || "left");
-        const textSize = clamp(parseInt(widget.textSize, 10) || 15, 12, 22);
-        const valueSize = clamp(parseInt(widget.valueSize, 10) || 48, 24, 72);
+        const textSize = normalizeWidgetTextSize(widget.textSize);
+        const valueSize = normalizeWidgetValueSize(widget.valueSize);
         const cardHeight = clamp(parseInt(widget.cardHeight, 10) || 75, 75, 520);
         const title = escapeHtml(widget.title || getWidgetDefinition(widget.type).defaultTitle || "Bloc BI");
         const subtitle = !widget.hideText && result.subtitle ? '<div class="bi-preview-subtitle">' + escapeHtml(result.subtitle) + '</div>' : "";
@@ -2461,7 +2516,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         const chartTextColor = widget.textColor || getComputedStyle(previewCard).color || "#e5e7eb";
-        const chartTextSize = clamp(parseInt(widget.textSize, 10) || 15, 12, 22);
+        const chartTextSize = normalizeWidgetTextSize(widget.textSize);
 
         if (result.kind === "empty") {
             previewBody.innerHTML = '<div class="bi-preview-empty">' + escapeHtml(result.message) + '</div>';
@@ -2640,8 +2695,8 @@ document.addEventListener("DOMContentLoaded", function () {
         card.classList.add("bi-align-" + String(widget.alignment || "left"));
         card.dataset.bgColor = widget.bgColor || "";
         card.dataset.textColor = widget.textColor || "";
-        card.style.setProperty("--bi-widget-text-size", String(widget.textSize || 15) + "px");
-        card.style.setProperty("--bi-widget-value-size", String(widget.valueSize || 48) + "px");
+        card.style.setProperty("--bi-widget-text-size", String(normalizeWidgetTextSize(widget.textSize)) + "px");
+        card.style.setProperty("--bi-widget-value-size", String(normalizeWidgetValueSize(widget.valueSize)) + "px");
         card.style.setProperty("--bi-widget-card-height", String(widget.cardHeight || 75) + "px");
         if (widget.bgColor) {
             card.style.setProperty("--bi-widget-bg", widget.bgColor);
@@ -2707,8 +2762,8 @@ document.addEventListener("DOMContentLoaded", function () {
             duplicate.layout = String(sourceCard?.getAttribute("data-card-fraction") || widget.layout || defaultLayoutForType(widget.type));
             duplicate.cardHeight = clamp(parseInt(widget.cardHeight, 10) || 75, 75, 520);
             duplicate.alignment = String(widget.alignment || "left");
-            duplicate.textSize = clamp(parseInt(widget.textSize, 10) || 15, 12, 22);
-            duplicate.valueSize = clamp(parseInt(widget.valueSize, 10) || 48, 24, 72);
+            duplicate.textSize = normalizeWidgetTextSize(widget.textSize);
+            duplicate.valueSize = normalizeWidgetValueSize(widget.valueSize);
             widgets.splice(index + 1, 0, duplicate);
             state.selectedWidgetId = duplicate.id;
         }
@@ -4026,6 +4081,13 @@ document.addEventListener("DOMContentLoaded", function () {
         state.saveTimer = window.setTimeout(savePreferences, 350);
     }
 
+    function flushPendingSavePreferences() {
+        clearTimeout(state.saveTimer);
+        state.saveTimer = 0;
+        state.preferencesRevision += 1;
+        savePreferences();
+    }
+
     function resolveSelectedFileId(files, selectedFileId) {
         const normalizedFileId = String(selectedFileId || "");
         if (normalizedFileId && files.some(function (file) { return String(file.id || "") === normalizedFileId; })) {
@@ -4411,8 +4473,8 @@ document.addEventListener("DOMContentLoaded", function () {
             titleColor: String(widget.titleColor || ""),
             valueColor: String(widget.valueColor || ""),
             alignment: ["left", "center", "right"].indexOf(String(widget.alignment || "")) !== -1 ? String(widget.alignment) : "left",
-            textSize: clamp(parseInt(widget.textSize, 10) || 15, 12, 22),
-            valueSize: clamp(parseInt(widget.valueSize, 10) || 48, 24, 72),
+            textSize: normalizeWidgetTextSize(widget.textSize),
+            valueSize: normalizeWidgetValueSize(widget.valueSize),
             cardHeight: clamp(parseInt(widget.cardHeight, 10) || 75, 75, 520),
             hideTitle: Boolean(widget.hideTitle),
             hideText: Boolean(widget.hideText),
@@ -4679,6 +4741,71 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function createId(prefix) {
         return prefix + "-" + Math.random().toString(36).slice(2, 9);
+    }
+
+    function parseOptionalInteger(value) {
+        const normalized = String(value ?? "").trim();
+        if (normalized === "") {
+            return null;
+        }
+
+        const parsed = parseInt(normalized, 10);
+
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function normalizeWidgetTextSize(value, fallback) {
+        const parsed = parseOptionalInteger(value);
+        const resolvedFallback = Number.isFinite(fallback) ? fallback : WIDGET_TEXT_SIZE_DEFAULT;
+
+        return clamp(
+            parsed === null ? resolvedFallback : parsed,
+            WIDGET_TEXT_SIZE_MIN,
+            WIDGET_TEXT_SIZE_MAX
+        );
+    }
+
+    function normalizeWidgetValueSize(value, fallback) {
+        const parsed = parseOptionalInteger(value);
+        const resolvedFallback = Number.isFinite(fallback) ? fallback : WIDGET_VALUE_SIZE_DEFAULT;
+
+        return clamp(
+            parsed === null ? resolvedFallback : parsed,
+            WIDGET_VALUE_SIZE_MIN,
+            WIDGET_VALUE_SIZE_MAX
+        );
+    }
+
+    function syncWidgetTextSizeControls(value) {
+        const normalizedValue = normalizeWidgetTextSize(value);
+
+        if (dom.widgetTextSize) {
+            dom.widgetTextSize.value = String(normalizedValue);
+        }
+
+        if (dom.widgetTextSizeNumber) {
+            dom.widgetTextSizeNumber.value = String(normalizedValue);
+        }
+
+        if (dom.widgetTextSizeValue) {
+            dom.widgetTextSizeValue.textContent = String(normalizedValue) + " px";
+        }
+    }
+
+    function syncWidgetValueSizeControls(value) {
+        const normalizedValue = normalizeWidgetValueSize(value);
+
+        if (dom.widgetValueSize) {
+            dom.widgetValueSize.value = String(normalizedValue);
+        }
+
+        if (dom.widgetValueSizeNumber) {
+            dom.widgetValueSizeNumber.value = String(normalizedValue);
+        }
+
+        if (dom.widgetValueSizeValue) {
+            dom.widgetValueSizeValue.textContent = String(normalizedValue) + " px";
+        }
     }
 
     function clamp(value, min, max) {

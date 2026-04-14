@@ -10,6 +10,7 @@ parameters:
     upload_dir: '%kernel.project_dir%/public/uploads'
     bi_sharepoint_data_dir: '%kernel.project_dir%/data/sharepoint'
     legacy_directory_db_name: 'mydash83'
+    quittancement_execution_port_default: 5432
     youtrack_url: 'https://maintenance.adep.com'
     youtrack_token: 'perm-TWVyb3Vhbg==.NTAtMTA=.VmHAxQFu0LsdFFg1p86ORO4nkelUus'
     youtrack_project: 'MTN'
@@ -18,6 +19,11 @@ parameters:
     youtrack_default_project_leader_email: 'm.hamzaoui@adep.com'
     youtrack_project_template_short_name: 'MLDP'
     microsoft_tenant_id: '%env(string:MICROSOFT_TENANT_ID)%'
+    quittancement_execution_host: '%env(string:default::QUITTANCEMENT_DB_HOST)%'
+    quittancement_execution_port: '%env(int:default:quittancement_execution_port_default:QUITTANCEMENT_DB_PORT)%'
+    quittancement_execution_database: '%env(string:default::QUITTANCEMENT_DB_NAME)%'
+    quittancement_execution_user: '%env(string:default::QUITTANCEMENT_DB_USER)%'
+    quittancement_execution_password: '%env(string:default::QUITTANCEMENT_DB_PASSWORD)%'
 
 services:
     # default configuration for services in *this* file
@@ -78,6 +84,23 @@ services:
             $tenantId: '%microsoft_tenant_id%'
             $clientId: '%env(string:MICROSOFT_CLIENT_ID)%'
             $clientSecret: '%env(string:MICROSOFT_CLIENT_SECRET)%'
+
+    App\Service\QuittancementExecutionService:
+        arguments:
+            $host: '%quittancement_execution_host%'
+            $port: '%quittancement_execution_port%'
+            $database: '%quittancement_execution_database%'
+            $username: '%quittancement_execution_user%'
+            $password: '%quittancement_execution_password%'
+
+    App\Service\QuittancementDatabaseTargetService:
+        arguments:
+            $defaultHost: '%quittancement_execution_host%'
+            $defaultPort: '%quittancement_execution_port%'
+            $defaultDatabase: '%quittancement_execution_database%'
+            $defaultUsername: '%quittancement_execution_user%'
+            $defaultPassword: '%quittancement_execution_password%'
+            $appSecret: '%kernel.secret%'
 
     App\Service\GanttLegacyRuntime:
         arguments:

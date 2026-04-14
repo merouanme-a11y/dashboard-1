@@ -119,4 +119,31 @@ final class QuittancementGeneratorServiceTest extends TestCase
         self::assertSame(1, substr_count($block3, 'insert into oa_requittancement_planification'));
         self::assertStringNotContainsString("'2026-04-27 23:00:00'", $block3);
     }
+
+    public function testApril2026EmailMatchesExpectedTemplate(): void
+    {
+        $repository = $this->createMock(ModuleRepository::class);
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+
+        $service = new QuittancementGeneratorService($repository, $entityManager);
+        $payload = $service->buildPageData([
+            'year' => '2026',
+            'month' => '4',
+        ]);
+
+        $expectedBody = <<<TEXT
+Bonjour,
+
+Le rattrapage des quittancements des mois de février 2026 au mois de avril 2026 aura lieu le 17/04/2026 à partir de 23:00 pour l'ensemble des risques.
+Le quittancement du mois de mai 2026 se fera le 24/04/2026 à partir de 23:00 pour tous les risques sauf santé collective avec un rattrapage depuis le mois de avril 2026.
+Pour le risque Santé Collective spécifiquement, les ajustements seront lancés le 27/04/2026 à 23:00
+Le quittancement de ce même risque pour le mois de mai 2026 sera lancé le 29/04/2026 à 23:00 avec un rattrapage depuis le mois de avril 2026.
+Pour rappel, le traitement d'ajustement est aussi exécuté tous les 14 du mois.
+
+Bonne réception
+Le service IT
+TEXT;
+
+        self::assertSame($expectedBody, $payload['emailData']['body']);
+    }
 }

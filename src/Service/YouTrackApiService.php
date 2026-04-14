@@ -14,6 +14,9 @@ class YouTrackApiService
     private const DETAIL_CACHE_PREFIX = 'youtrack_ticket_detail_v1_';
     private const PROJECT_TICKETS_CACHE_PREFIX = 'youtrack_project_tickets_v1_';
     private const PROJECTS_CACHE_KEY = 'youtrack_projects_v1';
+    private const PATCH_FORM_CACHE_KEY = 'youtrack_patch_form_v1';
+    private const PROJECT_REF_CACHE_KEY = 'youtrack_project_ref_v1';
+    private const PROJECT_CUSTOM_FIELDS_CACHE_KEY = 'youtrack_project_custom_fields_v1';
     private const LIST_CACHE_FRESH_TTL = 300;
     private const LIST_CACHE_STALE_TTL = 3300;
     private const DETAIL_CACHE_FRESH_TTL = 300;
@@ -22,6 +25,13 @@ class YouTrackApiService
     private const PROJECTS_CACHE_STALE_TTL = 41400;
     private const PROJECT_TICKETS_CACHE_FRESH_TTL = 300;
     private const PROJECT_TICKETS_CACHE_STALE_TTL = 3300;
+    private const PATCH_FORM_CACHE_FRESH_TTL = 1800;
+    private const PATCH_FORM_CACHE_STALE_TTL = 41400;
+    private const PROJECT_REF_CACHE_FRESH_TTL = 1800;
+    private const PROJECT_REF_CACHE_STALE_TTL = 41400;
+    private const PROJECT_CUSTOM_FIELDS_CACHE_FRESH_TTL = 1800;
+    private const PROJECT_CUSTOM_FIELDS_CACHE_STALE_TTL = 41400;
+    private const TYPE_FIELD = 'Type';
     private const SERVICE_FIELD = 'Service';
     private const STATE_FIELD = 'State';
     private const PRIORITY_FIELD = 'Priority';
@@ -30,9 +40,13 @@ class YouTrackApiService
     private const LIEN_RM_FIELD = 'Lien RM';
     private const ACTION_FIELD = 'Type Action';
     private const DEFAULT_STATE_FILTER = 'A FAIRE';
+    private const DEFAULT_TYPE_VALUE = 'Tache';
+    private const DEFAULT_PRIORITY_VALUE = 'MODEREE';
     private const LIST_PAGE_SIZE = 100;
     private const LIST_FIELDS = 'id,idReadable,summary,created,updated,reporter(id,login,name,fullName),customFields(name,value(id,login,name,presentation,text,fullName,login))';
     private const DETAIL_FIELDS = 'id,idReadable,summary,description,created,updated,reporter(id,login,name,fullName),customFields(name,value(id,login,name,presentation,text,fullName,login)),attachments(id,name,url),comments($top,id,text,created,updated,author(id,login,name,fullName),attachments(id,name,url))';
+    private const PROJECT_CUSTOM_FIELDS_QUERY = 'field(name),$type,bundle(name,$type,values(name),aggregatedUsers(id,login,name,fullName))';
+    private const PATCH_SUMMARY_TEMPLATE = 'Patch à mettre en production [RM#%s] [S%s]';
     private const RESOLVED_STATE_WORDS = [
         'resolu',
         'clos',
@@ -180,6 +194,123 @@ class YouTrackApiService
         );
     }
 
+    public function getPatchFormOptionsPayloadForUser(Utilisateur $user, bool $forceRefresh = false): array
+    {
+        $basePayload = $this->apiResultCache->remember(
+            self::PATCH_FORM_CACHE_KEY,
+            self::PATCH_FORM_CACHE_FRESH_TTL,
+            self::PATCH_FORM_CACHE_STALE_TTL,
+            fn (): array => $this->buildPatchFormOptionsPayload(),
+            $forceRefresh,
+        );
+
+        if (($basePayload['_error'] ?? '') !== '') {
+            return $basePayload;
+        }
+
+        $services = is_array($basePayload['services'] ?? null) ? $basePayload['services'] : [];
+
+        $payload = [
+            'services' => $services,
+            'project' => (string) ($basePayload['project'] ?? $this->youTrackProject),
+            'defaultService' => $this->resolveMatchingValue($services, (string) ($user->getService() ?? '')),
+            'defaults' => is_array($basePayload['defaults'] ?? null) ? $basePayload['defaults'] : [],
+        ];
+
+        if (is_array($basePayload['_cache'] ?? null)) {
+            $payload['_cache'] = $basePayload['_cache'];
+        }
+
+        return $payload;
+    }
+
+    public function createPatchTicket(Utilisateur $user, array $input): array
+    {
+        $redmineUrl = $this->normalizeExternalUrl((string) ($input['redmineUrl'] ?? ''));
+        if ($redmineUrl === '') {
+            return ['_error' => 'Le lien du ticket Redmine est obligatoire.'];
+        }
+
+        $ticketNumber = $this->sanitizeNumericString((string) ($input['ticketNumber'] ?? ''));
+        $extractedTicketNumber = $this->extractRedmineTicketNumber($redmineUrl);
+        if ($extractedTicketNumber !== '') {
+            $ticketNumber = $extractedTicketNumber;
+        }
+
+        if ($ticketNumber === '') {
+            return ['_error' => 'Impossible de determiner le numero du ticket Redmine.'];
+        }
+
+        $followUpNumber = $this->sanitizeNumericString((string) ($input['followUpNumber'] ?? ''));
+        if ($followUpNumber === '') {
+            return ['_error' => 'Le numero de suivi du patch est obligatoire.'];
+        }
+
+        $service = trim((string) ($input['service'] ?? ''));
+        if ($service === '') {
+            return ['_error' => 'Le service est obligatoire.'];
+        }
+
+        $dueDate = $this->normalizeIsoDate((string) ($input['dueDate'] ?? ''));
+        if ($dueDate === '') {
+            return ['_error' => 'La date de MEP souhaitee est obligatoire.'];
+        }
+
+        $relatedYouTrackUrl = trim((string) ($input['relatedYouTrackUrl'] ?? ''));
+        if ($relatedYouTrackUrl !== '') {
+            $relatedYouTrackUrl = $this->normalizeExternalUrl($relatedYouTrackUrl);
+            if ($relatedYouTrackUrl === '') {
+                return ['_error' => 'Le lien ticket Youtrack renseigne est invalide.'];
+            }
+        }
+
+        $projectRefPayload = $this->getProjectRefPayload();
+        if (($projectRefPayload['_error'] ?? '') !== '') {
+            return $projectRefPayload;
+        }
+
+        $customFieldPayload = $this->buildPatchCustomFieldsPayload($service, $dueDate, $redmineUrl);
+        if (($customFieldPayload['_error'] ?? '') !== '') {
+            return $customFieldPayload;
+        }
+
+        $summary = $this->buildPatchSummary($ticketNumber, $followUpNumber);
+        $description = $this->buildPatchDescription(
+            $user,
+            $redmineUrl,
+            $ticketNumber,
+            $followUpNumber,
+            $service,
+            $dueDate,
+            $relatedYouTrackUrl,
+            trim((string) ($input['details'] ?? '')),
+        );
+
+        $response = $this->request('POST', '/api/issues', [
+            'query' => [
+                'fields' => 'id,idReadable,summary',
+            ],
+            'json' => [
+                'project' => $projectRefPayload['projectRef'],
+                'summary' => $summary,
+                'description' => $description,
+                'customFields' => $customFieldPayload['customFields'],
+            ],
+        ]);
+
+        if (($response['_error'] ?? '') !== '') {
+            return $response;
+        }
+
+        $idReadable = trim((string) ($response['idReadable'] ?? ''));
+
+        return [
+            'idReadable' => $idReadable,
+            'summary' => $summary,
+            'url' => $idReadable !== '' ? $this->buildIssueUrl($idReadable) : '',
+        ];
+    }
+
     private function buildTicketsPayloadForUser(Utilisateur $user): array
     {
         $isAdmin = $this->isAdminUser($user);
@@ -323,6 +454,418 @@ class YouTrackApiService
         }
 
         return $payload;
+    }
+
+    private function buildPatchFormOptionsPayload(): array
+    {
+        $customFieldsPayload = $this->getProjectCustomFieldsPayload();
+        if (($customFieldsPayload['_error'] ?? '') !== '') {
+            return $customFieldsPayload;
+        }
+
+        $customFields = is_array($customFieldsPayload['customFields'] ?? null) ? $customFieldsPayload['customFields'] : [];
+        $serviceOptions = $this->extractProjectEnumValues($customFields, self::SERVICE_FIELD);
+        if ($serviceOptions === []) {
+            $serviceOptions = $this->directoryServiceManager->getServiceOptions();
+            sort($serviceOptions, SORT_NATURAL | SORT_FLAG_CASE);
+        }
+
+        return [
+            'project' => $this->youTrackProject,
+            'services' => $serviceOptions,
+            'defaults' => [
+                'type' => $this->resolveMatchingValue(
+                    $this->extractProjectEnumValues($customFields, self::TYPE_FIELD),
+                    self::DEFAULT_TYPE_VALUE,
+                ),
+                'state' => $this->resolveMatchingValue(
+                    $this->extractProjectEnumValues($customFields, self::STATE_FIELD),
+                    self::DEFAULT_STATE_FILTER,
+                ),
+                'priority' => $this->resolvePreferredPriorityValue(
+                    $this->extractProjectEnumValues($customFields, self::PRIORITY_FIELD),
+                ),
+            ],
+        ];
+    }
+
+    private function getProjectRefPayload(bool $forceRefresh = false): array
+    {
+        return $this->apiResultCache->remember(
+            self::PROJECT_REF_CACHE_KEY,
+            self::PROJECT_REF_CACHE_FRESH_TTL,
+            self::PROJECT_REF_CACHE_STALE_TTL,
+            function (): array {
+                $response = $this->request('GET', '/api/admin/projects', [
+                    'query' => [
+                        'fields' => 'id,name,shortName',
+                        'query' => $this->youTrackProject,
+                    ],
+                ]);
+
+                if (($response['_error'] ?? '') !== '') {
+                    return $response;
+                }
+
+                if (is_array($response)) {
+                    foreach ($response as $project) {
+                        if (!is_array($project)) {
+                            continue;
+                        }
+
+                        $projectId = trim((string) ($project['id'] ?? ''));
+                        $shortName = trim((string) ($project['shortName'] ?? ''));
+                        $name = trim((string) ($project['name'] ?? ''));
+
+                        if ($projectId === '') {
+                            continue;
+                        }
+
+                        if (
+                            strcasecmp($shortName, $this->youTrackProject) === 0
+                            || strcasecmp($name, $this->youTrackProject) === 0
+                            || count($response) === 1
+                        ) {
+                            return [
+                                'projectRef' => [
+                                    'id' => $projectId,
+                                    'shortName' => $shortName !== '' ? $shortName : $this->youTrackProject,
+                                ],
+                            ];
+                        }
+                    }
+                }
+
+                return [
+                    'projectRef' => [
+                        'shortName' => $this->youTrackProject,
+                    ],
+                ];
+            },
+            $forceRefresh,
+        );
+    }
+
+    private function getProjectCustomFieldsPayload(bool $forceRefresh = false): array
+    {
+        return $this->apiResultCache->remember(
+            self::PROJECT_CUSTOM_FIELDS_CACHE_KEY,
+            self::PROJECT_CUSTOM_FIELDS_CACHE_FRESH_TTL,
+            self::PROJECT_CUSTOM_FIELDS_CACHE_STALE_TTL,
+            function (): array {
+                $response = $this->request('GET', '/api/admin/projects/' . rawurlencode($this->youTrackProject) . '/customFields', [
+                    'query' => [
+                        'fields' => self::PROJECT_CUSTOM_FIELDS_QUERY,
+                        '$top' => 100,
+                    ],
+                ]);
+
+                if (($response['_error'] ?? '') !== '') {
+                    return $response;
+                }
+
+                return [
+                    'customFields' => is_array($response) ? $response : [],
+                ];
+            },
+            $forceRefresh,
+        );
+    }
+
+    private function buildPatchCustomFieldsPayload(string $service, string $dueDate, string $redmineUrl): array
+    {
+        $customFieldsPayload = $this->getProjectCustomFieldsPayload();
+        if (($customFieldsPayload['_error'] ?? '') !== '') {
+            return $customFieldsPayload;
+        }
+
+        $customFields = is_array($customFieldsPayload['customFields'] ?? null) ? $customFieldsPayload['customFields'] : [];
+
+        $resolvedService = $this->resolveMatchingValue(
+            $this->extractProjectEnumValues($customFields, self::SERVICE_FIELD),
+            $service,
+        );
+        if ($resolvedService === '') {
+            return ['_error' => 'Le service selectionne est introuvable dans YouTrack.'];
+        }
+
+        $issueCustomFields = [];
+        $this->appendEnumCustomField(
+            $issueCustomFields,
+            $this->resolveProjectFieldName($customFields, self::TYPE_FIELD),
+            $this->resolveMatchingValue(
+                $this->extractProjectEnumValues($customFields, self::TYPE_FIELD),
+                self::DEFAULT_TYPE_VALUE,
+            ),
+        );
+        $this->appendEnumCustomField(
+            $issueCustomFields,
+            $this->resolveProjectFieldName($customFields, self::STATE_FIELD),
+            $this->resolveMatchingValue(
+                $this->extractProjectEnumValues($customFields, self::STATE_FIELD),
+                self::DEFAULT_STATE_FILTER,
+            ),
+            'StateIssueCustomField',
+            'StateBundleElement',
+        );
+        $this->appendEnumCustomField(
+            $issueCustomFields,
+            $this->resolveProjectFieldName($customFields, self::PRIORITY_FIELD),
+            $this->resolvePreferredPriorityValue(
+                $this->extractProjectEnumValues($customFields, self::PRIORITY_FIELD),
+            ),
+        );
+        $this->appendEnumCustomField(
+            $issueCustomFields,
+            $this->resolveProjectFieldName($customFields, self::SERVICE_FIELD),
+            $resolvedService,
+        );
+
+        $dueDateFieldName = $this->resolveProjectFieldName($customFields, self::DUE_DATE_FIELD);
+        if ($dueDateFieldName !== '') {
+            $issueCustomFields[] = [
+                'name' => $dueDateFieldName,
+                '$type' => 'DateIssueCustomField',
+                'value' => $this->convertIsoDateToTimestamp($dueDate),
+            ];
+        }
+
+        $redmineFieldName = $this->resolveProjectFieldName($customFields, self::LIEN_RM_FIELD);
+        if ($redmineFieldName !== '') {
+            $issueCustomFields[] = [
+                'name' => $redmineFieldName,
+                '$type' => 'SimpleIssueCustomField',
+                'value' => $redmineUrl,
+            ];
+        }
+
+        return [
+            'customFields' => $issueCustomFields,
+        ];
+    }
+
+    private function appendEnumCustomField(
+        array &$target,
+        string $fieldName,
+        string $value,
+        string $issueFieldType = 'SingleEnumIssueCustomField',
+        string $valueType = 'EnumBundleElement'
+    ): void {
+        if ($fieldName === '' || $value === '') {
+            return;
+        }
+
+        $target[] = [
+            'name' => $fieldName,
+            '$type' => $issueFieldType,
+            'value' => [
+                'name' => $value,
+                '$type' => $valueType,
+            ],
+        ];
+    }
+
+    private function extractProjectEnumValues(array $customFields, string $fieldName): array
+    {
+        foreach ($customFields as $customField) {
+            if (!is_array($customField)) {
+                continue;
+            }
+
+            $projectField = is_array($customField['field'] ?? null) ? $customField['field'] : [];
+            if ($this->normalizeCompareValue((string) ($projectField['name'] ?? '')) !== $this->normalizeCompareValue($fieldName)) {
+                continue;
+            }
+
+            $values = [];
+            foreach ((array) ($customField['bundle']['values'] ?? []) as $value) {
+                if (!is_array($value)) {
+                    continue;
+                }
+
+                $name = trim((string) ($value['name'] ?? ''));
+                if ($name !== '' && !in_array($name, $values, true)) {
+                    $values[] = $name;
+                }
+            }
+
+            sort($values, SORT_NATURAL | SORT_FLAG_CASE);
+
+            return $values;
+        }
+
+        return [];
+    }
+
+    private function resolveProjectFieldName(array $customFields, string $preferredName): string
+    {
+        foreach ($customFields as $customField) {
+            if (!is_array($customField)) {
+                continue;
+            }
+
+            $projectField = is_array($customField['field'] ?? null) ? $customField['field'] : [];
+            $candidate = trim((string) ($projectField['name'] ?? ''));
+            if ($candidate === '') {
+                continue;
+            }
+
+            if ($this->normalizeCompareValue($candidate) === $this->normalizeCompareValue($preferredName)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    private function resolveMatchingValue(array $values, string $preferredValue): string
+    {
+        $preferredValue = trim($preferredValue);
+        if ($preferredValue === '') {
+            return '';
+        }
+
+        $normalizedPreferredValue = $this->normalizeCompareValue($preferredValue);
+        foreach ($values as $value) {
+            $candidate = trim((string) $value);
+            if ($candidate === '') {
+                continue;
+            }
+
+            if ($this->normalizeCompareValue($candidate) === $normalizedPreferredValue) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    private function resolvePreferredPriorityValue(array $values): string
+    {
+        $preferred = $this->resolveMatchingValue($values, self::DEFAULT_PRIORITY_VALUE);
+        if ($preferred !== '') {
+            return $preferred;
+        }
+
+        return trim((string) ($values[0] ?? ''));
+    }
+
+    private function buildPatchSummary(string $ticketNumber, string $followUpNumber): string
+    {
+        return sprintf(self::PATCH_SUMMARY_TEMPLATE, $ticketNumber, $followUpNumber);
+    }
+
+    private function buildPatchDescription(
+        Utilisateur $user,
+        string $redmineUrl,
+        string $ticketNumber,
+        string $followUpNumber,
+        string $service,
+        string $dueDate,
+        string $relatedYouTrackUrl,
+        string $details
+    ): string {
+        $displayName = trim(trim((string) ($user->getPrenom() ?? '')) . ' ' . trim((string) ($user->getNom() ?? '')));
+        $email = trim((string) ($user->getEmail() ?? ''));
+
+        $lines = [
+            'Demande de mise en production patch.',
+            '',
+            'Lien ticket Redmine : ' . $redmineUrl,
+            'Numero ticket Redmine : RM#' . $ticketNumber,
+            'Numero de suivi patch : [S' . $followUpNumber . ']',
+            'Service : ' . $service,
+            'Date de MEP souhaitee : ' . $this->formatIsoDateForDisplay($dueDate),
+        ];
+
+        if ($relatedYouTrackUrl !== '') {
+            $lines[] = 'Lien ticket Youtrack lie : ' . $relatedYouTrackUrl;
+        }
+
+        if ($displayName !== '' || $email !== '') {
+            $demandeur = trim($displayName . ($displayName !== '' && $email !== '' ? ' - ' : '') . $email);
+            if ($demandeur !== '') {
+                $lines[] = 'Demandeur : ' . $demandeur;
+            }
+        }
+
+        if ($details !== '') {
+            $lines[] = '';
+            $lines[] = 'Informations complementaires :';
+            $lines[] = $details;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function extractRedmineTicketNumber(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+
+        if (preg_match('#/issues/(\d+)(?:[/?\#].*)?$#i', $url, $matches) === 1) {
+            return (string) ($matches[1] ?? '');
+        }
+
+        if (preg_match('#/(\d+)(?:[/?\#].*)?$#', $url, $matches) === 1) {
+            return (string) ($matches[1] ?? '');
+        }
+
+        return '';
+    }
+
+    private function sanitizeNumericString(string $value): string
+    {
+        return preg_replace('/\D+/', '', trim($value)) ?? '';
+    }
+
+    private function normalizeExternalUrl(string $url): string
+    {
+        $url = trim($url);
+        $url = rtrim($url, " \t\n\r\0\x0B.,;)");
+
+        if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return '';
+        }
+
+        return $url;
+    }
+
+    private function normalizeIsoDate(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $date = \DateTimeImmutable::createFromFormat('Y-m-d', $value);
+        if (!$date instanceof \DateTimeImmutable) {
+            return '';
+        }
+
+        return $date->format('Y-m-d');
+    }
+
+    private function convertIsoDateToTimestamp(string $value): int
+    {
+        $date = \DateTimeImmutable::createFromFormat('Y-m-d', $value);
+        if (!$date instanceof \DateTimeImmutable) {
+            return 0;
+        }
+
+        return $date->setTime(0, 0)->getTimestamp() * 1000;
+    }
+
+    private function formatIsoDateForDisplay(string $value): string
+    {
+        $date = \DateTimeImmutable::createFromFormat('Y-m-d', $value);
+        if (!$date instanceof \DateTimeImmutable) {
+            return $value;
+        }
+
+        return $date->format('d/m/Y');
     }
 
     private function buildTicketDetailPayload(string $ticketId): array
@@ -530,12 +1073,7 @@ class YouTrackApiService
             return '';
         }
 
-        $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
-        if (is_string($ascii) && $ascii !== '') {
-            $value = $ascii;
-        }
-
-        $value = mb_strtolower($value);
+        $value = $this->normalizeCompareValue($value);
         $value = preg_replace('/[^a-z0-9]+/', '', $value);
 
         return trim((string) $value);
@@ -856,6 +1394,17 @@ class YouTrackApiService
     private function normalizeCompareValue(string $value): string
     {
         $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        if (class_exists(\Normalizer::class)) {
+            $normalized = \Normalizer::normalize($value, \Normalizer::FORM_D);
+            if (is_string($normalized) && $normalized !== '') {
+                $value = preg_replace('/\p{Mn}+/u', '', $normalized) ?? $normalized;
+            }
+        }
+
         $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
         if (is_string($ascii) && $ascii !== '') {
             $value = $ascii;

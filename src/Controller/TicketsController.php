@@ -41,6 +41,23 @@ final class TicketsController extends AbstractController
         return $this->applyPrivateCacheHeaders($response, 300);
     }
 
+    #[Route('/formulaire-patch', name: 'app_tickets_patch', methods: ['GET'], defaults: ['_managed_page_path' => 'app_tickets_patch'])]
+    public function patchForm(): Response
+    {
+        $this->ensureModuleIsActive();
+        $user = $this->getRequiredUser();
+        $patchFormPayload = $this->youTrackApiService->getPatchFormOptionsPayloadForUser($user);
+        $statusCode = ($patchFormPayload['_error'] ?? '') !== '' ? Response::HTTP_BAD_GATEWAY : Response::HTTP_OK;
+
+        $response = $this->render('tickets/patch_form.html.twig', [
+            'patchFormSubmitUrl' => $this->generateUrl('app_tickets_patch_create'),
+            'patchFormPayload' => $patchFormPayload,
+            'patchFormCsrfToken' => $this->container->get('security.csrf.token_manager')->getToken('tickets_patch_create')->getValue(),
+        ], new Response('', $statusCode));
+
+        return $this->applyPrivateCacheHeaders($response, 300);
+    }
+
     #[Route('/data', name: 'app_tickets_data', methods: ['GET'], defaults: ['_managed_page_path' => 'app_tickets'])]
     public function data(Request $request): JsonResponse
     {
@@ -56,7 +73,36 @@ final class TicketsController extends AbstractController
         return $this->applyPrivateCacheHeaders($response, 300);
     }
 
-    #[Route('/{id}', name: 'app_ticket_detail', methods: ['GET'], requirements: ['id' => '(?!data$)[A-Za-z0-9\-]+'], defaults: ['_managed_page_path' => 'app_tickets'])]
+    #[Route('/formulaire-patch/create', name: 'app_tickets_patch_create', methods: ['POST'], defaults: ['_managed_page_path' => 'app_tickets_patch'])]
+    public function createPatch(Request $request): JsonResponse
+    {
+        $this->ensureModuleIsActive();
+
+        if (!$this->isCsrfTokenValid('tickets_patch_create', (string) $request->headers->get('X-CSRF-Token'))) {
+            return $this->applyNoStoreHeaders(new JsonResponse([
+                '_error' => 'Jeton CSRF invalide.',
+            ], Response::HTTP_FORBIDDEN));
+        }
+
+        try {
+            $payload = json_decode((string) $request->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return $this->applyNoStoreHeaders(new JsonResponse([
+                '_error' => 'Payload JSON invalide.',
+            ], Response::HTTP_BAD_REQUEST));
+        }
+
+        $result = $this->youTrackApiService->createPatchTicket(
+            $this->getRequiredUser(),
+            is_array($payload) ? $payload : [],
+        );
+
+        $statusCode = $this->resolvePatchCreateStatusCode($result);
+
+        return $this->applyNoStoreHeaders(new JsonResponse($result, $statusCode));
+    }
+
+    #[Route('/{id}', name: 'app_ticket_detail', methods: ['GET'], requirements: ['id' => '(?!data$|formulaire-patch$)[A-Za-z0-9\-]+'], defaults: ['_managed_page_path' => 'app_tickets'])]
     public function show(string $id): Response
     {
         $this->ensureModuleIsActive();
@@ -105,5 +151,35 @@ final class TicketsController extends AbstractController
         $response->setVary(['Cookie', 'X-Requested-With'], false);
 
         return $response;
+    }
+
+    private function applyNoStoreHeaders(JsonResponse $response): JsonResponse
+    {
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective('no-store', true);
+        $response->headers->addCacheControlDirective('must-revalidate', true);
+        $response->setVary(['Cookie', 'X-Requested-With'], false);
+
+        return $response;
+    }
+
+    private function resolvePatchCreateStatusCode(array $payload): int
+    {
+        if (($payload['_error'] ?? '') === '') {
+            return Response::HTTP_OK;
+        }
+
+        $error = trim((string) ($payload['_error'] ?? ''));
+
+        if (
+            str_starts_with($error, 'HTTP ')
+            || str_contains($error, 'YouTrack')
+            || str_contains($error, 'connexion')
+            || str_contains($error, 'JSON')
+        ) {
+            return Response::HTTP_BAD_GATEWAY;
+        }
+
+        return Response::HTTP_BAD_REQUEST;
     }
 }

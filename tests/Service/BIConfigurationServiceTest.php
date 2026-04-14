@@ -165,4 +165,62 @@ final class BIConfigurationServiceTest extends TestCase
         self::assertSame('State', $widget['widgetFilters'][0]['column'] ?? null);
         self::assertSame('A FAIRE', $widget['widgetFilters'][0]['value'] ?? null);
     }
+
+    public function testSaveForUserKeepsExtendedTextAndValueSizes(): void
+    {
+        $user = new Utilisateur();
+        $savedPreference = null;
+
+        $preferenceRepository = $this->createMock(UserPagePreferenceRepository::class);
+        $preferenceRepository
+            ->expects($this->once())
+            ->method('findOneForUserAndPage')
+            ->with($user, BIConfigurationService::PAGE_KEY)
+            ->willReturn(null);
+
+        $moduleRepository = $this->createMock(ModuleRepository::class);
+        $moduleRepository
+            ->expects($this->once())
+            ->method('findByName')
+            ->with(BIConfigurationService::MODULE_NAME)
+            ->willReturn(new Module());
+
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager
+            ->expects($this->once())
+            ->method('persist')
+            ->with($this->callback(function ($entity) use (&$savedPreference, $user): bool {
+                $savedPreference = $entity;
+
+                return $entity instanceof UserPagePreference
+                    && $entity->getUtilisateur() === $user
+                    && $entity->getPageKey() === BIConfigurationService::PAGE_KEY;
+            }));
+        $entityManager
+            ->expects($this->once())
+            ->method('flush');
+
+        $service = new BIConfigurationService($preferenceRepository, $moduleRepository, $entityManager);
+        $saved = $service->saveForUser($user, [
+            'pages' => [[
+                'id' => 'page-1',
+                'name' => 'Page BI',
+                'widgets' => [[
+                    'id' => 'widget-1',
+                    'type' => 'kpi',
+                    'title' => 'Test taille',
+                    'layout' => '4/8',
+                    'textSize' => 0,
+                    'valueSize' => 150,
+                ]],
+            ]],
+        ]);
+
+        self::assertInstanceOf(UserPagePreference::class, $savedPreference);
+        self::assertSame($saved, $savedPreference->getPreferencePayload());
+
+        $widget = $saved['pages'][0]['widgets'][0] ?? [];
+        self::assertSame(0, $widget['textSize'] ?? null);
+        self::assertSame(150, $widget['valueSize'] ?? null);
+    }
 }

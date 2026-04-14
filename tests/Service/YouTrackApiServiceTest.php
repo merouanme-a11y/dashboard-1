@@ -135,6 +135,142 @@ final class YouTrackApiServiceTest extends TestCase
         );
     }
 
+    public function testCreatePatchTicketBuildsExpectedSummaryAndCustomFields(): void
+    {
+        $customFieldsResponse = [
+            [
+                'field' => ['name' => 'Type'],
+                'bundle' => [
+                    'values' => [
+                        ['name' => 'Tâche'],
+                        ['name' => 'Projet'],
+                    ],
+                ],
+            ],
+            [
+                'field' => ['name' => 'State'],
+                'bundle' => [
+                    'values' => [
+                        ['name' => 'A FAIRE'],
+                        ['name' => 'EN COURS'],
+                    ],
+                ],
+            ],
+            [
+                'field' => ['name' => 'Priority'],
+                'bundle' => [
+                    'values' => [
+                        ['name' => 'MODÉRÉE'],
+                        ['name' => 'URGENT'],
+                    ],
+                ],
+            ],
+            [
+                'field' => ['name' => 'Service'],
+                'bundle' => [
+                    'values' => [
+                        ['name' => 'IT'],
+                        ['name' => 'PATCH'],
+                    ],
+                ],
+            ],
+            [
+                'field' => ['name' => 'Date échéance'],
+            ],
+            [
+                'field' => ['name' => 'Lien RM'],
+            ],
+        ];
+
+        $recordedRequests = [];
+
+        $httpClient = new MockHttpClient(function (string $method, string $url, array $options) use (&$recordedRequests, $customFieldsResponse): MockResponse {
+            $recordedRequests[] = [
+                'method' => $method,
+                'url' => $url,
+                'options' => $options,
+            ];
+
+            if (str_contains($url, '/api/admin/projects?')) {
+                return new MockResponse((string) json_encode([
+                    [
+                        'id' => '0-0',
+                        'name' => 'Maintenance',
+                        'shortName' => 'MTN',
+                    ],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            }
+
+            if (str_contains($url, '/api/admin/projects/MTN/customFields')) {
+                return new MockResponse((string) json_encode($customFieldsResponse, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            }
+
+            if (str_contains($url, '/api/issues')) {
+                return new MockResponse((string) json_encode([
+                    'idReadable' => 'MTN-999',
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            }
+
+            return new MockResponse('{"error":"unexpected"}', ['http_code' => 500]);
+        });
+
+        $service = new YouTrackApiService(
+            $httpClient,
+            $this->createMock(DirectoryServiceManager::class),
+            $this->createApiResultCacheService(),
+            'https://maintenance.adep.com',
+            'token',
+            'MTN',
+        );
+
+        $user = (new Utilisateur())
+            ->setPrenom('Merouan')
+            ->setNom('Hamzaoui')
+            ->setEmail('m.hamzaoui@adep.com')
+            ->setService('IT')
+            ->setRoles(['ROLE_EMPLOYE'])
+            ->setProfileType('Employe');
+
+        $result = $service->createPatchTicket($user, [
+            'redmineUrl' => 'https://redmine.snlogica.com/issues/8775',
+            'ticketNumber' => '',
+            'followUpNumber' => '12',
+            'service' => 'IT',
+            'dueDate' => '2026-04-20',
+            'relatedYouTrackUrl' => 'https://maintenance.adep.com/issue/MTN-321',
+            'details' => 'Livrer la correction en production.',
+        ]);
+
+        self::assertSame('MTN-999', $result['idReadable'] ?? null);
+        self::assertSame('https://maintenance.adep.com/issue/MTN-999', $result['url'] ?? null);
+        self::assertSame('Patch à mettre en production [RM#8775] [S12]', $result['summary'] ?? null);
+        self::assertCount(3, $recordedRequests);
+
+        $postRequest = $recordedRequests[2] ?? null;
+        self::assertNotNull($postRequest);
+        self::assertSame('POST', $postRequest['method'] ?? null);
+
+        $payload = json_decode((string) ($postRequest['options']['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('Patch à mettre en production [RM#8775] [S12]', $payload['summary'] ?? null);
+        self::assertSame('0-0', $payload['project']['id'] ?? null);
+        self::assertStringContainsString('Lien ticket Redmine : https://redmine.snlogica.com/issues/8775', (string) ($payload['description'] ?? ''));
+        self::assertStringContainsString('Numero de suivi patch : [S12]', (string) ($payload['description'] ?? ''));
+        self::assertStringContainsString('Lien ticket Youtrack lie : https://maintenance.adep.com/issue/MTN-321', (string) ($payload['description'] ?? ''));
+        self::assertStringContainsString('Demandeur : Merouan Hamzaoui - m.hamzaoui@adep.com', (string) ($payload['description'] ?? ''));
+        self::assertStringContainsString('Livrer la correction en production.', (string) ($payload['description'] ?? ''));
+
+        $customFields = $payload['customFields'] ?? [];
+        self::assertSame('Tâche', $this->findCustomFieldValue($customFields, 'Type'));
+        self::assertSame('A FAIRE', $this->findCustomFieldValue($customFields, 'State'));
+        self::assertSame('MODÉRÉE', $this->findCustomFieldValue($customFields, 'Priority'));
+        self::assertSame('IT', $this->findCustomFieldValue($customFields, 'Service'));
+        self::assertSame('https://redmine.snlogica.com/issues/8775', $this->findCustomFieldValue($customFields, 'Lien RM'));
+        self::assertSame(
+            (\DateTimeImmutable::createFromFormat('Y-m-d', '2026-04-20')?->setTime(0, 0)->getTimestamp() ?? 0) * 1000,
+            $this->findCustomFieldValue($customFields, 'Date échéance')
+        );
+    }
+
     private function createIssue(
         string $idReadable,
         string $summary,
@@ -170,5 +306,23 @@ final class YouTrackApiServiceTest extends TestCase
         $adapter = new ArrayAdapter();
 
         return new ApiResultCacheService($adapter, $adapter);
+    }
+
+    private function findCustomFieldValue(array $customFields, string $fieldName): mixed
+    {
+        foreach ($customFields as $customField) {
+            if (($customField['name'] ?? null) !== $fieldName) {
+                continue;
+            }
+
+            $value = $customField['value'] ?? null;
+            if (is_array($value) && array_key_exists('name', $value)) {
+                return $value['name'];
+            }
+
+            return $value;
+        }
+
+        return null;
     }
 }

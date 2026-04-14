@@ -371,7 +371,7 @@
 }
 
 .bi-widget-kpi-value {
-    font-size: clamp(2rem, var(--bi-widget-value-size, 48px), 4.5rem);
+    font-size: var(--bi-widget-value-size, 48px);
     font-weight: 800;
     line-height: 1;
     color: var(--bi-widget-value-color, inherit);
@@ -452,6 +452,8 @@
 
 .bi-distribution-head {
     display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 1.15fr);
+    align-items: end;
     gap: 0.1rem;
     width: 100%;
 }
@@ -487,8 +489,14 @@
 .bi-distribution-row,
 .bi-widget-distribution-total {
     display: grid;
+    align-items: center;
     gap: 0.35rem;
     width: 100%;
+}
+
+.bi-distribution-row {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 1.15fr);
+    column-gap: 0.85rem;
 }
 
 .bi-distribution-row-main {
@@ -501,7 +509,7 @@
 
 .bi-distribution-row:not(.bi-widget-distribution-total) .bi-distribution-row-main,
 .bi-widget-distribution-total .bi-distribution-row-main {
-    padding: 0.16rem 0 0;
+    padding: 0;
 }
 
 .bi-distribution-row {
@@ -520,6 +528,23 @@
 
 .bi-widget-distribution-total {
     padding: 0.16rem 0 0;
+}
+
+.bi-distribution-head-gauge,
+.bi-widget-distribution-gauge-cell {
+    align-self: center;
+}
+
+@media (max-width: 720px) {
+    .bi-distribution-head,
+    .bi-distribution-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .bi-distribution-head-gauge,
+    .bi-widget-distribution-gauge-cell {
+        padding-top: 0.15rem;
+    }
 }
 
 .bi-distribution-label {
@@ -1132,6 +1157,16 @@ body.bi-modal-open .bi-container {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.55rem;
     align-items: center;
+}
+
+.bi-range-field-with-input {
+    grid-template-columns: minmax(0, 1fr) auto minmax(72px, 86px);
+}
+
+.bi-range-number {
+    width: 100%;
+    min-width: 72px;
+    text-align: right;
 }
 
 .bi-modal-color-grid {

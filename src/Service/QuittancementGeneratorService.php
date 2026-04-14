@@ -227,6 +227,8 @@ class QuittancementGeneratorService
         $d15 = $dates['d15']['date'];
         $d25 = $dates['d25']['date'];
         $d27 = $dates['d27']['date'];
+        $historicRange = $this->getHistoricPlanificationRange($d3);
+        $forwardRange = $this->getForwardPlanificationRange($d25);
 
         $planningMonth = $this->getMonthNameFr((int) $d15->format('n'));
         $subject = sprintf(
@@ -238,17 +240,13 @@ class QuittancementGeneratorService
         $body = <<<TEXT
 Bonjour,
 
-Le rattrapage des quittancements du mois de {$planningMonth} {$d3->format('Y')} aura lieu le {$d3->format('d/m/Y')} a partir de 23h00 pour l'ensemble des risques.
+Le rattrapage des quittancements des mois de {$this->getMonthNameFr($historicRange['start_month'])} {$historicRange['start_year']} au mois de {$this->getMonthNameFr($historicRange['end_month'])} {$historicRange['end_year']} aura lieu le {$d3->format('d/m/Y')} à partir de {$this->formatEmailTime($dates['d3']['time'])} pour l'ensemble des risques.
+Le quittancement du mois de {$this->getMonthNameFr($forwardRange['end_month'])} {$forwardRange['end_year']} se fera le {$d15->format('d/m/Y')} à partir de {$this->formatEmailTime($dates['d15']['time'])} pour tous les risques sauf santé collective avec un rattrapage depuis le mois de {$this->getMonthNameFr($forwardRange['start_month'])} {$forwardRange['start_year']}.
+Pour le risque Santé Collective spécifiquement, les ajustements seront lancés le {$d27->format('d/m/Y')} à {$this->formatEmailTime($dates['d27']['time'])}
+Le quittancement de ce même risque pour le mois de {$this->getMonthNameFr($forwardRange['end_month'])} {$forwardRange['end_year']} sera lancé le {$d25->format('d/m/Y')} à {$this->formatEmailTime($dates['d25']['time'])} avec un rattrapage depuis le mois de {$this->getMonthNameFr($forwardRange['start_month'])} {$forwardRange['start_year']}.
+Pour rappel, le traitement d'ajustement est aussi exécuté tous les 14 du mois.
 
-Le quittancement du mois de {$planningMonth} {$d15->format('Y')} se fera le {$d15->format('d/m/Y')} a partir de 23h00 pour tous les risques sauf sante collective.
-
-Pour le risque Sante Collective specifiquement, les ajustements seront lances le {$d27->format('d/m/Y')} a {$dates['d27']['time']}.
-
-Le quittancement de ce meme risque pour le mois de {$planningMonth} {$d25->format('Y')} sera lance le {$d25->format('d/m/Y')} a {$dates['d25']['time']}.
-
-Pour rappel, le traitement d'ajustement est aussi execute tous les 14 du mois.
-
-Bonne reception
+Bonne réception
 Le service IT
 TEXT;
 
@@ -402,20 +400,30 @@ TEXT;
     {
         $months = [
             1 => 'janvier',
-            2 => 'fevrier',
+            2 => 'février',
             3 => 'mars',
             4 => 'avril',
             5 => 'mai',
             6 => 'juin',
             7 => 'juillet',
-            8 => 'aout',
+            8 => 'août',
             9 => 'septembre',
             10 => 'octobre',
             11 => 'novembre',
-            12 => 'decembre',
+            12 => 'décembre',
         ];
 
         return $months[$month] ?? 'mois';
+    }
+
+    private function formatEmailTime(string $time): string
+    {
+        $normalized = trim($time);
+        if ($normalized === '') {
+            return '';
+        }
+
+        return str_replace('h', ':', $normalized);
     }
 
     private function getCutoffTime(DateTimeImmutable $date): string

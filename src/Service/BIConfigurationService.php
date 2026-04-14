@@ -13,6 +13,12 @@ class BIConfigurationService
 {
     public const PAGE_KEY = 'bi';
     public const MODULE_NAME = 'bi';
+    private const WIDGET_TEXT_SIZE_MIN = 0;
+    private const WIDGET_TEXT_SIZE_MAX = 150;
+    private const WIDGET_TEXT_SIZE_DEFAULT = 15;
+    private const WIDGET_VALUE_SIZE_MIN = 0;
+    private const WIDGET_VALUE_SIZE_MAX = 150;
+    private const WIDGET_VALUE_SIZE_DEFAULT = 48;
 
     private const MAX_PAGES = 12;
     private const MAX_WIDGETS = 32;
@@ -249,8 +255,18 @@ class BIConfigurationService
             'titleColor' => $this->normalizeColor($widget['titleColor'] ?? null),
             'valueColor' => $this->normalizeColor($widget['valueColor'] ?? null),
             'alignment' => $this->normalizeAlignment($widget['alignment'] ?? 'left'),
-            'textSize' => $this->normalizeInteger($widget['textSize'] ?? 15, 12, 22, 15),
-            'valueSize' => $this->normalizeInteger($widget['valueSize'] ?? 48, 24, 72, 48),
+            'textSize' => $this->normalizeInteger(
+                $widget['textSize'] ?? self::WIDGET_TEXT_SIZE_DEFAULT,
+                self::WIDGET_TEXT_SIZE_MIN,
+                self::WIDGET_TEXT_SIZE_MAX,
+                self::WIDGET_TEXT_SIZE_DEFAULT
+            ),
+            'valueSize' => $this->normalizeInteger(
+                $widget['valueSize'] ?? self::WIDGET_VALUE_SIZE_DEFAULT,
+                self::WIDGET_VALUE_SIZE_MIN,
+                self::WIDGET_VALUE_SIZE_MAX,
+                self::WIDGET_VALUE_SIZE_DEFAULT
+            ),
             'cardHeight' => $this->normalizeInteger($widget['cardHeight'] ?? 75, 75, 520, 75),
             'hideTitle' => (bool) ($widget['hideTitle'] ?? false),
             'hideText' => (bool) ($widget['hideText'] ?? false),

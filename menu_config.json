@@ -188,6 +188,15 @@
                         "icon_only": false
                     },
                     {
+                        "page": "app_tickets_patch",
+                        "url": "/dashboard/tickets/formulaire-patch",
+                        "label": "Formulaire Patch",
+                        "icon": "bi-patch-plus",
+                        "folder": "pages",
+                        "parent_page": "app_tickets",
+                        "icon_only": false
+                    },
+                    {
                         "page": "app_stats",
                         "url": "/dashboard/stats",
                         "label": "Statistiques",
@@ -318,6 +327,15 @@
                         "icon_only": false
                     },
                     {
+                        "page": "app_tickets_patch",
+                        "url": "/dashboard/tickets/formulaire-patch",
+                        "label": "Tickets formulaire patch",
+                        "icon": "bi-file-earmark-text",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
                         "page": "app_stats",
                         "url": "/dashboard/stats",
                         "label": "Statistiques",
@@ -387,6 +405,15 @@
                         "icon": "bi-cash-stack",
                         "folder": "pages",
                         "parent_page": "app_livre_de_caisse",
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_quittancement_generator",
+                        "url": "/dashboard/quittancement-generator",
+                        "label": "Generateur de quittancements",
+                        "icon": "bi-calendar2-check",
+                        "folder": "pages",
+                        "parent_page": null,
                         "icon_only": false
                     }
                 ],

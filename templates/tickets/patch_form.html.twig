@@ -1,0 +1,478 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Formulaire Patch{% endblock %}
+
+{% block body %}
+{% set pageTitle = page_display_service.resolveNavigationLabel('app_tickets_patch', 'Formulaire Patch') %}
+<div class="patch-page">
+    <div class="patch-header">
+        <div>
+            <h1 class="page-title-heading patch-title">
+                {{ page_display_service.renderNavigationIcon('app_tickets_patch', 'bi-patch-plus', 'bootstrap')|raw }}
+                <span>{{ pageTitle }}</span>
+            </h1>
+            <p class="patch-subtitle">Creez un ticket YouTrack de patch avec titre automatique, lien Redmine et date de MEP.</p>
+        </div>
+    </div>
+
+    {% if patchFormPayload._error is defined and patchFormPayload._error %}
+        <div class="alert alert-danger">
+            {{ patchFormPayload._detail|default(patchFormPayload._error) }}
+        </div>
+    {% endif %}
+
+    <div class="patch-layout">
+        <section class="patch-panel">
+            <form id="patch-form" novalidate>
+                <div class="patch-grid">
+                    <div class="form-group patch-field-full">
+                        <label for="patch-redmine-url">Lien ticket Redmine *</label>
+                        <input
+                            type="url"
+                            id="patch-redmine-url"
+                            class="form-control"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="patch-ticket-number">Numero ticket Redmine *</label>
+                        <input
+                            type="text"
+                            id="patch-ticket-number"
+                            class="form-control"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="patch-follow-up-number">Numero suivi patch *</label>
+                        <input
+                            type="text"
+                            id="patch-follow-up-number"
+                            class="form-control"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="patch-service">Service *</label>
+                        <select id="patch-service" class="form-control" required>
+                            <option value=""></option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="patch-due-date">Date de MEP souhaitee *</label>
+                        <input type="date" id="patch-due-date" class="form-control" required>
+                    </div>
+
+                    <div class="form-group patch-field-full">
+                        <label for="patch-related-youtrack-url">Lien ticket Youtrack</label>
+                        <input type="url" id="patch-related-youtrack-url" class="form-control">
+                    </div>
+
+                    <div class="form-group patch-field-full">
+                        <label for="patch-details">Informations complementaires</label>
+                        <textarea id="patch-details" class="form-control patch-textarea"></textarea>
+                    </div>
+                </div>
+
+                <div id="patch-form-feedback" class="patch-feedback" hidden></div>
+
+                <div class="patch-actions">
+                    <button type="submit" id="patch-submit-button" class="btn btn-primary">Creer le ticket patch</button>
+                </div>
+            </form>
+        </section>
+
+        <aside class="patch-panel patch-panel-side">
+            <div class="patch-side-block">
+                <h2>Resultat</h2>
+                <p id="patch-result-description" class="patch-side-text">Le titre se previsualise ici pendant la saisie. Le lien Youtrack du patch apparait apres envoi du formulaire.</p>
+                <label for="patch-result-title">Titre</label>
+                <input id="patch-result-title" class="form-control" type="text" readonly>
+                <label for="patch-youtrack-link" class="patch-result-label">Lien Youtrack du Patch</label>
+                <textarea id="patch-youtrack-link" class="form-control patch-result-textarea" readonly></textarea>
+                <a id="patch-youtrack-open" class="btn patch-open-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Voir ticket dans Youtrack</a>
+            </div>
+
+            <div class="patch-side-block">
+                <h2>Format du titre</h2>
+                <p class="patch-side-text"><code>Patch à mettre en production [RM#8775] [S21]</code></p>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<style>
+    .patch-page {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .patch-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .patch-title {
+        margin: 0;
+    }
+
+    .patch-subtitle {
+        margin: 0.35rem 0 0;
+        color: var(--text-muted);
+    }
+
+    .patch-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+        gap: 1rem;
+    }
+
+    .patch-panel {
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-primary);
+        box-shadow: 0 2px 10px var(--shadow);
+    }
+
+    .patch-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .patch-field-full {
+        grid-column: 1 / -1;
+    }
+
+    .form-group {
+        margin-bottom: 0;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
+    .form-group small {
+        display: block;
+        margin-top: 0.35rem;
+        color: var(--text-muted);
+        font-size: 0.84rem;
+    }
+
+    .form-control {
+        width: 100%;
+        min-height: 46px;
+        padding: 0.75rem 0.85rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+
+    .patch-textarea,
+    .patch-result-textarea {
+        min-height: 160px;
+        resize: vertical;
+    }
+
+    .patch-result-textarea {
+        min-height: 120px;
+        margin-top: 0.5rem;
+    }
+
+    .patch-result-label {
+        margin-top: 1rem;
+    }
+
+    .patch-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 1rem;
+    }
+
+    .patch-feedback {
+        margin-top: 1rem;
+        padding: 0.85rem 1rem;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        font-weight: 500;
+    }
+
+    .patch-feedback[data-state="success"] {
+        background: rgba(16, 185, 129, 0.12);
+        border-color: rgba(16, 185, 129, 0.35);
+        color: #047857;
+    }
+
+    .patch-feedback[data-state="error"] {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.25);
+        color: #b91c1c;
+    }
+
+    .patch-panel-side {
+        display: grid;
+        gap: 1rem;
+        align-content: start;
+    }
+
+    .patch-side-block h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1.05rem;
+    }
+
+    .patch-side-text {
+        margin: 0;
+        color: var(--text-muted);
+        line-height: 1.5;
+    }
+
+    .patch-open-link {
+        margin-top: 0.75rem;
+        background: #FB42AE;
+        border-color: #FB42AE;
+        color: #fff;
+    }
+
+    .patch-open-link:hover,
+    .patch-open-link:focus {
+        background: #e2359c;
+        border-color: #e2359c;
+        color: #fff;
+    }
+
+    @media (max-width: 900px) {
+        .patch-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 720px) {
+        .patch-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const config = {
+            submitUrl: {{ patchFormSubmitUrl|json_encode|raw }},
+            csrfToken: {{ patchFormCsrfToken|json_encode|raw }},
+            payload: {{ patchFormPayload|default({})|json_encode|raw }}
+        };
+
+        const form = document.getElementById('patch-form');
+        const redmineUrlInput = document.getElementById('patch-redmine-url');
+        const ticketNumberInput = document.getElementById('patch-ticket-number');
+        const followUpNumberInput = document.getElementById('patch-follow-up-number');
+        const serviceSelect = document.getElementById('patch-service');
+        const dueDateInput = document.getElementById('patch-due-date');
+        const relatedYouTrackUrlInput = document.getElementById('patch-related-youtrack-url');
+        const detailsInput = document.getElementById('patch-details');
+        const feedbackBox = document.getElementById('patch-form-feedback');
+        const submitButton = document.getElementById('patch-submit-button');
+        const resultDescription = document.getElementById('patch-result-description');
+        const resultTitleOutput = document.getElementById('patch-result-title');
+        const youTrackLinkOutput = document.getElementById('patch-youtrack-link');
+        const youTrackOpenLink = document.getElementById('patch-youtrack-open');
+
+        const services = Array.isArray(config.payload && config.payload.services) ? config.payload.services : [];
+        const defaultService = String(config.payload && config.payload.defaultService || '').trim();
+
+        services.forEach(function(service) {
+            const option = document.createElement('option');
+            option.value = service;
+            option.textContent = service;
+            serviceSelect.appendChild(option);
+        });
+
+        if (defaultService !== '' && services.indexOf(defaultService) !== -1) {
+            serviceSelect.value = defaultService;
+        }
+
+        redmineUrlInput.addEventListener('input', function() {
+            const ticketNumber = extractRedmineTicketNumber(redmineUrlInput.value);
+            if (ticketNumber !== '') {
+                ticketNumberInput.value = ticketNumber;
+            }
+            refreshSummary();
+        });
+
+        ticketNumberInput.addEventListener('input', function() {
+            ticketNumberInput.value = sanitizeDigits(ticketNumberInput.value);
+            refreshSummary();
+        });
+
+        followUpNumberInput.addEventListener('input', function() {
+            followUpNumberInput.value = sanitizeDigits(followUpNumberInput.value);
+            refreshSummary();
+        });
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            hideFeedback();
+
+            const payload = {
+                redmineUrl: String(redmineUrlInput.value || '').trim(),
+                ticketNumber: sanitizeDigits(ticketNumberInput.value),
+                followUpNumber: sanitizeDigits(followUpNumberInput.value),
+                service: String(serviceSelect.value || '').trim(),
+                dueDate: String(dueDateInput.value || '').trim(),
+                relatedYouTrackUrl: String(relatedYouTrackUrlInput.value || '').trim(),
+                details: String(detailsInput.value || '').trim()
+            };
+
+            if (!payload.redmineUrl) {
+                showFeedback('Le lien du ticket Redmine est obligatoire.', 'error');
+                redmineUrlInput.focus();
+                return;
+            }
+
+            if (!payload.ticketNumber) {
+                showFeedback('Le numero du ticket Redmine est obligatoire.', 'error');
+                ticketNumberInput.focus();
+                return;
+            }
+
+            if (!payload.followUpNumber) {
+                showFeedback('Le numero de suivi du patch est obligatoire.', 'error');
+                followUpNumberInput.focus();
+                return;
+            }
+
+            if (!payload.service) {
+                showFeedback('Le service est obligatoire.', 'error');
+                serviceSelect.focus();
+                return;
+            }
+
+            if (!payload.dueDate) {
+                showFeedback('La date de MEP souhaitee est obligatoire.', 'error');
+                dueDateInput.focus();
+                return;
+            }
+
+            setSubmitting(true);
+
+            fetch(config.submitUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': config.csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            })
+                .then(function(response) {
+                    return response.json().catch(function() {
+                        return {
+                            _error: 'Reponse JSON invalide.'
+                        };
+                    });
+                })
+                .then(function(responsePayload) {
+                    if (responsePayload && responsePayload._error) {
+                        throw new Error(responsePayload._detail || responsePayload._error);
+                    }
+
+                    const issueSummary = String(responsePayload.summary || buildSummaryPreview()).trim();
+                    const issueUrl = String(responsePayload.url || '').trim();
+                    resultTitleOutput.value = issueSummary;
+                    youTrackLinkOutput.value = issueUrl;
+
+                    if (issueUrl) {
+                        youTrackOpenLink.href = issueUrl;
+                        youTrackOpenLink.hidden = false;
+                    } else {
+                        youTrackOpenLink.hidden = true;
+                    }
+
+                    resultDescription.textContent = responsePayload.idReadable
+                        ? 'Ticket ' + responsePayload.idReadable + ' cree. Le titre et le lien Youtrack du patch sont disponibles ci-dessous.'
+                        : 'Le titre et le lien Youtrack du patch sont disponibles ci-dessous.';
+
+                    showFeedback(
+                        'Ticket cree avec succes' + (responsePayload.idReadable ? ' : ' + responsePayload.idReadable : '.'),
+                        'success'
+                    );
+                })
+                .catch(function(error) {
+                    showFeedback(error && error.message ? error.message : 'Erreur reseau.', 'error');
+                })
+                .finally(function() {
+                    setSubmitting(false);
+                });
+        });
+
+        refreshSummary();
+
+        function refreshSummary() {
+            resultTitleOutput.value = buildSummaryPreview();
+        }
+
+        function buildSummaryPreview() {
+            const ticketNumber = sanitizeDigits(ticketNumberInput.value);
+            const followUpNumber = sanitizeDigits(followUpNumberInput.value);
+            const ticketPart = ticketNumber ? '[RM#' + ticketNumber + ']' : '[RM#]';
+            const followUpPart = followUpNumber ? '[S' + followUpNumber + ']' : '[S]';
+
+            return 'Patch à mettre en production ' + ticketPart + ' ' + followUpPart;
+        }
+
+        function extractRedmineTicketNumber(url) {
+            const cleanedUrl = String(url || '').trim().replace(/[.,;)]$/, '');
+            const issueMatch = cleanedUrl.match(/\/issues\/(\d+)(?:[/?#].*)?$/i);
+            if (issueMatch && issueMatch[1]) {
+                return issueMatch[1];
+            }
+
+            const trailingMatch = cleanedUrl.match(/\/(\d+)(?:[/?#].*)?$/);
+            return trailingMatch && trailingMatch[1] ? trailingMatch[1] : '';
+        }
+
+        function sanitizeDigits(value) {
+            return String(value || '').replace(/\D+/g, '');
+        }
+
+        function showFeedback(message, state) {
+            feedbackBox.hidden = false;
+            feedbackBox.dataset.state = state;
+            feedbackBox.textContent = message;
+        }
+
+        function hideFeedback() {
+            feedbackBox.hidden = true;
+            feedbackBox.textContent = '';
+            feedbackBox.dataset.state = '';
+        }
+
+        function setSubmitting(isSubmitting) {
+            submitButton.disabled = isSubmitting;
+            submitButton.textContent = isSubmitting ? 'Creation en cours...' : 'Creer le ticket patch';
+        }
+    });
+</script>
+{% endblock %}
