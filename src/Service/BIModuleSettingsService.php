@@ -260,6 +260,13 @@ class BIModuleSettingsService
         $fileName = basename($path);
         $extension = strtolower((string) pathinfo($fileName, PATHINFO_EXTENSION));
 
+        if ($this->looksLikeSharePointSharedFileUrl($normalizedUrl)) {
+            $extension = $this->inferSharePointSharedFileExtension($normalizedUrl);
+            $fileName = $fileName !== '' && $fileName !== basename($path)
+                ? $fileName
+                : ('partage-sharepoint.' . $extension);
+        }
+
         if ($fileName === '' || $extension === '') {
             throw new \InvalidArgumentException('Le lien SharePoint doit pointer directement vers un fichier CSV, Excel ou JSON.');
         }
@@ -304,6 +311,11 @@ class BIModuleSettingsService
             'uploadedSources' => [],
             'remoteSources' => [],
             'apiSources' => [],
+            'sharedPages' => [],
+            'pageCreationPermissions' => [
+                'userIds' => [],
+                'profileTypes' => [],
+            ],
         ];
 
         foreach ((array) ($settings['uploadedSources'] ?? []) as $source) {
@@ -390,7 +402,58 @@ class BIModuleSettingsService
             $normalized['apiSources'][] = $apiSource;
         }
 
+        foreach ((array) ($settings['sharedPages'] ?? []) as $page) {
+            if (!is_array($page)) {
+                continue;
+            }
+
+            $normalized['sharedPages'][] = $page;
+            if (count($normalized['sharedPages']) >= 50) {
+                break;
+            }
+        }
+
+        $normalized['pageCreationPermissions'] = [
+            'userIds' => $this->normalizeIntegerList($settings['pageCreationPermissions']['userIds'] ?? []),
+            'profileTypes' => $this->normalizeScalarList($settings['pageCreationPermissions']['profileTypes'] ?? [], 80),
+        ];
+
         return $normalized;
+    }
+
+    public function getSharedPages(): array
+    {
+        $settings = $this->getSettings(true);
+
+        return array_values(is_array($settings['sharedPages'] ?? null) ? $settings['sharedPages'] : []);
+    }
+
+    public function saveSharedPages(array $pages): array
+    {
+        $settings = $this->getSettings(true);
+        $settings['sharedPages'] = array_values($pages);
+
+        return $this->saveSettings($settings)['sharedPages'] ?? [];
+    }
+
+    public function getPageCreationPermissions(): array
+    {
+        $settings = $this->getSettings(true);
+
+        return is_array($settings['pageCreationPermissions'] ?? null)
+            ? $settings['pageCreationPermissions']
+            : ['userIds' => [], 'profileTypes' => []];
+    }
+
+    public function updatePageCreationPermissions(array $userIds, array $profileTypes): array
+    {
+        $settings = $this->getSettings(true);
+        $settings['pageCreationPermissions'] = [
+            'userIds' => $this->normalizeIntegerList($userIds),
+            'profileTypes' => $this->normalizeScalarList($profileTypes, 80),
+        ];
+
+        return $this->sanitizeSettings($this->saveSettings($settings));
     }
 
     private function maskSecret(string $value): string
@@ -441,5 +504,64 @@ class BIModuleSettingsService
         $value = preg_replace('/\s+/', ' ', (string) $value);
 
         return trim((string) $value);
+    }
+
+    private function looksLikeSharePointSharedFileUrl(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $path = (string) parse_url($url, PHP_URL_PATH);
+
+        return $host !== ''
+            && str_ends_with($host, '.sharepoint.com')
+            && preg_match('#/(?:\:([a-z])\:/)#i', $path) === 1;
+    }
+
+    private function inferSharePointSharedFileExtension(string $url): string
+    {
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        if (preg_match('#/\:([a-z])\:/#i', $path, $matches) === 1) {
+            return match (strtolower((string) ($matches[1] ?? ''))) {
+                'x' => 'xlsx',
+                default => '',
+            };
+        }
+
+        return '';
+    }
+
+    /**
+     * @param iterable<mixed> $values
+     * @return array<int, int>
+     */
+    private function normalizeIntegerList(iterable $values): array
+    {
+        $normalized = [];
+
+        foreach ($values as $value) {
+            $integer = (int) $value;
+            if ($integer > 0) {
+                $normalized[$integer] = $integer;
+            }
+        }
+
+        return array_values($normalized);
+    }
+
+    /**
+     * @param iterable<mixed> $values
+     * @return array<int, string>
+     */
+    private function normalizeScalarList(iterable $values, int $maxLength): array
+    {
+        $normalized = [];
+
+        foreach ($values as $value) {
+            $scalar = $this->normalizeScalar($value, $maxLength);
+            if ($scalar !== '') {
+                $normalized[$scalar] = $scalar;
+            }
+        }
+
+        return array_values($normalized);
     }
 }

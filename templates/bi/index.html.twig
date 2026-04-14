@@ -24,11 +24,15 @@
             builderOptions: biBuilderOptions,
             suggestedWidgets: biSuggestedWidgets,
             preferences: biPreferencesPayload,
-            canEdit: biCanEdit,
+            access: {
+                canCreatePages: biPreferencesPayload.canCreatePages ?? false,
+                canManageSettings: biPreferencesPayload.canManageSettings ?? false
+            },
             settingsUrl: biSettingsUrl,
             uploadSourceUrl: biUploadSourceUrl,
             settingsCsrfToken: csrf_token('bi_settings'),
             moduleSettings: biModuleSettings,
+            rightsDirectory: biRightsDirectory,
             microsoftAuth: biMicrosoftAuth,
             openSettingsOnLoad: biOpenSettingsOnLoad,
             preloadedSettingsFeedback: biPreloadedSettingsFeedback
@@ -37,33 +41,43 @@
 
     <div class="bi-container">
         <div class="stats-toolbar bi-toolbar">
-            <div class="stats-toolbar-field">
-                <label for="biConnectionSelect">Source de donnees</label>
-                <select id="biConnectionSelect" class="stats-select"></select>
-            </div>
+            {% if biHasEditablePage %}
+                <div id="biConnectionField" class="stats-toolbar-field" hidden>
+                    <label for="biConnectionSelect">Source de donnees</label>
+                    <select id="biConnectionSelect" class="stats-select"></select>
+                </div>
+            {% endif %}
 
-            <div class="stats-toolbar-field">
-                <label for="biFileSelect">Fichier source</label>
-                <select id="biFileSelect" class="stats-select"></select>
-            </div>
+            {% if biHasEditablePage %}
+                <div id="biFileField" class="stats-toolbar-field" hidden>
+                    <label for="biFileSelect">Fichier source</label>
+                    <select id="biFileSelect" class="stats-select"></select>
+                </div>
+            {% endif %}
 
             <div class="stats-toolbar-field bi-page-field">
                 <label for="biPageSelect">Page BI</label>
                 <div class="bi-page-controls">
                     <select id="biPageSelect" class="stats-select"></select>
-                    <button id="biAddPageBtn" type="button" class="stats-edit-button bi-icon-button" title="Nouvelle page" aria-label="Nouvelle page"{{ biCanEdit ? '' : ' hidden' }}><i class="bi bi-file-earmark-plus"></i></button>
-                    <button id="biDuplicatePageBtn" type="button" class="stats-edit-button bi-icon-button" title="Dupliquer la page" aria-label="Dupliquer la page"{{ biCanEdit ? '' : ' hidden' }}><i class="bi bi-copy"></i></button>
-                    <button id="biDeletePageBtn" type="button" class="stats-edit-button bi-icon-button" title="Supprimer la page" aria-label="Supprimer la page"{{ biCanEdit ? '' : ' hidden' }}><i class="bi bi-trash3"></i></button>
+                    {% if biHasEditablePage or biPreferencesPayload.canCreatePages %}
+                        <button id="biAddPageBtn" type="button" class="stats-edit-button bi-icon-button" title="Nouvelle page" aria-label="Nouvelle page" hidden><i class="bi bi-file-earmark-plus"></i></button>
+                        <button id="biDuplicatePageBtn" type="button" class="stats-edit-button bi-icon-button" title="Dupliquer la page" aria-label="Dupliquer la page" hidden><i class="bi bi-copy"></i></button>
+                        <button id="biDeletePageBtn" type="button" class="stats-edit-button bi-icon-button" title="Supprimer la page" aria-label="Supprimer la page" hidden><i class="bi bi-trash3"></i></button>
+                    {% endif %}
                 </div>
             </div>
 
-            <button id="biSettingsBtn" type="button" class="stats-edit-button bi-icon-button" title="Parametres du module BI" aria-label="Parametres du module BI"{{ (biCanEdit or biMicrosoftAuth.configured) ? '' : ' hidden' }}>
-                <i class="bi bi-gear"></i>
-            </button>
+            {% if biCanManageSettings or biCanManagePagePermissions %}
+                <button id="biSettingsBtn" type="button" class="stats-edit-button bi-icon-button" title="Parametres du module BI" aria-label="Parametres du module BI" hidden>
+                    <i class="bi bi-gear"></i>
+                </button>
+            {% endif %}
 
-            <button id="biEditModeBtn" type="button" class="stats-edit-button bi-icon-button" title="Activer le mode de modification" aria-label="Modifier la page BI"{{ biCanEdit ? '' : ' hidden' }}>
-                <i class="bi bi-pencil-square"></i>
-            </button>
+            {% if biHasEditablePage %}
+                <button id="biEditModeBtn" type="button" class="stats-edit-button bi-icon-button" title="Activer le mode de modification" aria-label="Modifier la page BI" hidden>
+                    <i class="bi bi-pencil-square"></i>
+                </button>
+            {% endif %}
 
             <button id="biRefreshBtn" type="button" class="stats-edit-button bi-icon-button" title="Recharger les donnees" aria-label="Actualiser">
                 <i class="bi bi-arrow-clockwise"></i>
@@ -279,7 +293,14 @@
 
             <p id="biSettingsFeedback" class="bi-settings-feedback" hidden></p>
 
+            <div class="bi-settings-tabs" role="tablist" aria-label="Sections des parametres BI">
+                <button type="button" id="biSettingsTabConnections" class="bi-settings-tab is-active" data-settings-tab="connections" role="tab" aria-selected="true">Connexions</button>
+                <button type="button" id="biSettingsTabSources" class="bi-settings-tab" data-settings-tab="sources" role="tab" aria-selected="false">Sources</button>
+                <button type="button" id="biSettingsTabRights" class="bi-settings-tab" data-settings-tab="rights" role="tab" aria-selected="false">Droits</button>
+            </div>
+
             <div class="bi-settings-sections">
+                <section class="bi-settings-panel" data-settings-panel="connections">
                 <section class="bi-settings-card">
                     <div class="bi-settings-card-header">
                         <h4>Connexion Microsoft</h4>
@@ -287,8 +308,8 @@
                     </div>
                     <div class="bi-settings-auth-card">
                         {% if not biMicrosoftAuth.configured %}
-                            <div class="bi-settings-auth-status is-warning">
-                                L integration Microsoft n est pas encore configuree sur le serveur. Renseignez <code>MICROSOFT_TENANT_ID</code>, <code>MICROSOFT_CLIENT_ID</code> et <code>MICROSOFT_CLIENT_SECRET</code>.
+                            <div class="bi-settings-auth-status">
+                                Les fichiers publics partages via une URL directe peuvent etre charges sans connexion Microsoft.
                             </div>
                         {% elseif biMicrosoftAuth.connected %}
                             <div class="bi-settings-auth-status is-success">
@@ -318,8 +339,10 @@
                         {% endif %}
                     </div>
                 </section>
+                </section>
 
-                {% if biCanEdit %}
+                {% if biCanManageSettings %}
+                <section class="bi-settings-panel" data-settings-panel="sources" hidden>
                 <section class="bi-settings-card">
                     <div class="bi-settings-card-header">
                         <h4>Importer un fichier sur le site</h4>
@@ -428,7 +451,52 @@
                     </div>
                     <div id="biSettingsSourcesList" class="bi-settings-sources-list"></div>
                 </section>
+                </section>
                 {% endif %}
+
+                <section class="bi-settings-panel" data-settings-panel="rights" hidden>
+                    {% if biCanManageSettings %}
+                    <section class="bi-settings-card">
+                        <div class="bi-settings-card-header">
+                            <h4>Droits de creation des pages BI</h4>
+                            <p>Les administrateurs gardent toujours l acces. Ajoutez ici les utilisateurs ou profils autorises a creer des pages BI.</p>
+                        </div>
+                        <form id="biCreationPermissionsForm" class="bi-settings-form">
+                            <div class="bi-settings-form-grid">
+                                <div class="bi-inspector-field bi-inspector-field-wide">
+                                    <label for="biCreationPermissionsUsers">Utilisateurs autorises</label>
+                                    <select id="biCreationPermissionsUsers" class="stats-select" multiple size="6"></select>
+                                </div>
+                                <div class="bi-inspector-field bi-inspector-field-wide">
+                                    <label for="biCreationPermissionsProfiles">Profils autorises</label>
+                                    <select id="biCreationPermissionsProfiles" class="stats-select" multiple size="6"></select>
+                                </div>
+                            </div>
+                            <button type="submit" class="stats-edit-button">Enregistrer les droits de creation</button>
+                        </form>
+                    </section>
+                    {% endif %}
+
+                    <section id="biPagePermissionsCard" class="bi-settings-card" hidden>
+                        <div class="bi-settings-card-header">
+                            <h4>Visibilite de la page BI</h4>
+                            <p id="biPagePermissionsDescription">Choisissez les utilisateurs ou profils qui peuvent afficher la page courante. Sans selection, la page reste visible pour tous les utilisateurs connectes.</p>
+                        </div>
+                        <form id="biPagePermissionsForm" class="bi-settings-form">
+                            <div class="bi-settings-form-grid">
+                                <div class="bi-inspector-field bi-inspector-field-wide">
+                                    <label for="biPagePermissionsUsers">Utilisateurs autorises</label>
+                                    <select id="biPagePermissionsUsers" class="stats-select" multiple size="6"></select>
+                                </div>
+                                <div class="bi-inspector-field bi-inspector-field-wide">
+                                    <label for="biPagePermissionsProfiles">Profils autorises</label>
+                                    <select id="biPagePermissionsProfiles" class="stats-select" multiple size="6"></select>
+                                </div>
+                            </div>
+                            <button type="submit" class="stats-edit-button">Enregistrer la visibilite</button>
+                        </form>
+                    </section>
+                </section>
             </div>
         </div>
     </div>

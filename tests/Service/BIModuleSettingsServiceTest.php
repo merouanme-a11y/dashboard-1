@@ -64,6 +64,37 @@ final class BIModuleSettingsServiceTest extends TestCase
         self::assertSame('Suivi Tickets', $settings['remoteSources'][0]['label'] ?? null);
     }
 
+    public function testAddRemoteSourceAcceptsPublicSharePointShareLink(): void
+    {
+        $repository = $this->createMock(ThemeSettingRepository::class);
+        $repository
+            ->expects($this->exactly(2))
+            ->method('findByKey')
+            ->willReturn(null);
+
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager
+            ->expects($this->once())
+            ->method('persist');
+        $entityManager
+            ->expects($this->once())
+            ->method('flush');
+
+        $service = new BIModuleSettingsService(
+            $repository,
+            $entityManager,
+            $this->createMock(KernelInterface::class),
+        );
+
+        $settings = $service->addRemoteSource(
+            'Partage public Excel',
+            'https://adep0-my.sharepoint.com/:x:/g/personal/m_hamzaoui_adep_com/IQBcJKNzXWwDQYs-41yFPaJOAeCC9q7GKo-qAjHp3N0bgbg?e=JQmgKq',
+        );
+
+        self::assertSame('xlsx', $settings['remoteSources'][0]['extension'] ?? null);
+        self::assertSame('Partage public Excel', $settings['remoteSources'][0]['label'] ?? null);
+    }
+
     public function testAddApiSourceKeepsTokenServerSideWithoutExposingIt(): void
     {
         $repository = $this->createMock(ThemeSettingRepository::class);

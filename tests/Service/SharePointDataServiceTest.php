@@ -300,6 +300,41 @@ final class SharePointDataServiceTest extends TestCase
         self::assertSame('18', $payload['rows'][1]['Quantite'] ?? null);
     }
 
+    public function testRemotePublicSharePointShareLinkUsesDownloadModeAndParsesXlsx(): void
+    {
+        $httpClient = new MockHttpClient([
+            new MockResponse($this->createXlsxBinary([
+                ['Nom', 'Quantite'],
+                ['Alice', '12'],
+                ['Bob', '18'],
+            ]), [
+                'response_headers' => [
+                    'content-type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ],
+            ]),
+        ]);
+
+        $service = $this->createService(
+            $httpClient,
+            [
+                'uploadedSources' => [],
+                'remoteSources' => [[
+                    'id' => 'remote-share-link',
+                    'label' => 'Partage public',
+                    'url' => 'https://nonexistent-dashboard-test.sharepoint.com/:x:/g/personal/demo_user/example-token?e=test',
+                    'extension' => 'xlsx',
+                    'createdAt' => '2026-04-07T00:00:00+00:00',
+                ]],
+            ],
+        );
+
+        $payload = $service->getDatasetPayload('remote-share-link', 'partage-public.xlsx');
+
+        self::assertSame('sharepoint-url', $payload['connection']['type'] ?? null);
+        self::assertSame(2, $payload['rowCount'] ?? null);
+        self::assertSame('Alice', $payload['rows'][0]['Nom'] ?? null);
+    }
+
     public function testRemoteLegacyXlsHtmlPayloadIsParsed(): void
     {
         $service = $this->createService(

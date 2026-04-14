@@ -1562,6 +1562,42 @@ body.bi-modal-open .bi-container {
     color: #065f46;
 }
 
+.bi-settings-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.bi-settings-tab {
+    padding: 0.65rem 0.95rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.7rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.bi-settings-tab:hover {
+    border-color: rgba(59, 130, 246, 0.38);
+    color: var(--primary);
+}
+
+.bi-settings-tab.is-active {
+    border-color: rgba(59, 130, 246, 0.42);
+    background: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+}
+
+.bi-settings-panel {
+    display: grid;
+    gap: 1rem;
+}
+
+.bi-settings-panel[hidden] {
+    display: none !important;
+}
+
 .bi-settings-card {
     padding: 1rem;
     border-radius: 0.95rem;

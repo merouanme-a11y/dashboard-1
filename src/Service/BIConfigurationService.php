@@ -19,13 +19,14 @@ class BIConfigurationService
     private const WIDGET_VALUE_SIZE_MIN = 0;
     private const WIDGET_VALUE_SIZE_MAX = 150;
     private const WIDGET_VALUE_SIZE_DEFAULT = 48;
-
     private const MAX_PAGES = 12;
     private const MAX_WIDGETS = 32;
     private const MAX_FILTERS = 8;
     private const MAX_WIDGET_FILTERS = 5;
     private const MAX_WIDGET_DIMENSIONS = 1;
     private const MAX_WIDGET_MEASURES = 1;
+    private const MAX_ALLOWED_USERS = 25;
+    private const MAX_ALLOWED_PROFILES = 10;
     private const ALLOWED_FRACTIONS = [
         '1/8',
         '2/8',
@@ -51,10 +52,12 @@ class BIConfigurationService
     ];
     private const ALLOWED_AGGREGATIONS = ['count', 'sum', 'avg', 'percentage'];
     private const ALLOWED_ALIGNMENTS = ['left', 'center', 'right'];
+
     public function __construct(
         private UserPagePreferenceRepository $preferenceRepository,
         private ModuleRepository $moduleRepository,
         private EntityManagerInterface $em,
+        private BIModuleSettingsService $biModuleSettingsService,
     ) {}
 
     public function ensureModuleExists(): Module
@@ -87,50 +90,159 @@ class BIConfigurationService
     {
         $this->ensureModuleExists();
 
-        $preference = $this->preferenceRepository->findOneForUserAndPage($user, self::PAGE_KEY);
+        $sharedPages = $this->getSharedPages();
+        $visiblePages = [];
 
-        return $this->normalizePreferences($preference?->getPreferencePayload() ?? []);
+        foreach ($sharedPages as $page) {
+            if (!$this->canViewPage($user, $page)) {
+                continue;
+            }
+
+            $page['canEdit'] = $this->canEditPage($user, $page);
+            $page['canManagePermissions'] = $this->canManagePagePermissions($user, $page);
+            $visiblePages[] = $page;
+        }
+
+        if ($visiblePages === []) {
+            $visiblePages[] = $this->createPlaceholderPage();
+        }
+
+        $state = $this->getUserState($user);
+        $selectedPageId = $this->normalizeScalar($state['selectedPageId'] ?? '', 80);
+        $pageIds = array_column($visiblePages, 'id');
+        if ($selectedPageId === '' || !in_array($selectedPageId, $pageIds, true)) {
+            $selectedPageId = (string) ($visiblePages[0]['id'] ?? 'page-bi-placeholder');
+        }
+
+        $selectedPage = $visiblePages[0];
+        foreach ($visiblePages as $page) {
+            if ((string) ($page['id'] ?? '') === $selectedPageId) {
+                $selectedPage = $page;
+                break;
+            }
+        }
+
+        return [
+            'defaultConnection' => (string) ($selectedPage['connectionId'] ?? ''),
+            'defaultFile' => (string) ($selectedPage['fileId'] ?? ''),
+            'selectedPageId' => $selectedPageId,
+            'pages' => $visiblePages,
+            'canCreatePages' => $this->canCreatePages($user),
+            'canManageSettings' => $this->isAdmin($user),
+        ];
     }
 
     public function saveForUser(Utilisateur $user, array $preferences): array
     {
         $this->ensureModuleExists();
 
-        $normalized = $this->normalizePreferences($preferences);
-        $preference = $this->preferenceRepository->findOneForUserAndPage($user, self::PAGE_KEY);
+        $sharedPages = $this->getSharedPages();
+        $incomingPages = $this->normalizeIncomingPages($preferences['pages'] ?? []);
+        $incomingById = [];
+        foreach ($incomingPages as $page) {
+            $incomingById[(string) $page['id']] = $page;
+        }
 
-        if (!$this->hasAnyPreferences($normalized)) {
-            if ($preference instanceof UserPagePreference) {
-                $this->em->remove($preference);
-                $this->em->flush();
+        $canCreatePages = $this->canCreatePages($user);
+        $mergedPages = [];
+
+        foreach ($sharedPages as $existingPage) {
+            $pageId = (string) ($existingPage['id'] ?? '');
+            if ($pageId === '') {
+                continue;
             }
 
-            return $normalized;
+            if (!array_key_exists($pageId, $incomingById)) {
+                if ($this->canEditPage($user, $existingPage)) {
+                    continue;
+                }
+
+                $mergedPages[] = $existingPage;
+                continue;
+            }
+
+            if (!$this->canEditPage($user, $existingPage)) {
+                $mergedPages[] = $existingPage;
+                unset($incomingById[$pageId]);
+                continue;
+            }
+
+            $mergedPages[] = $this->mergeEditablePage($existingPage, $incomingById[$pageId]);
+            unset($incomingById[$pageId]);
         }
 
-        if (!$preference instanceof UserPagePreference) {
-            $preference = (new UserPagePreference())
-                ->setUtilisateur($user)
-                ->setPageKey(self::PAGE_KEY);
-            $this->em->persist($preference);
+        foreach ($incomingById as $incomingPage) {
+            if (!$canCreatePages) {
+                throw new \DomainException('Vous n avez pas les droits pour creer une page BI.');
+            }
+
+            $mergedPages[] = $this->initializeOwnedPage($incomingPage, $user);
         }
 
-        $preference->setPreferencePayload($normalized);
-        $this->em->flush();
+        $this->biModuleSettingsService->saveSharedPages($mergedPages);
+        $this->saveUserState($user, [
+            'selectedPageId' => $this->normalizeScalar($preferences['selectedPageId'] ?? '', 80),
+        ]);
 
-        return $normalized;
+        return $this->getForUser($user);
     }
 
-    private function normalizePreferences(array $preferences): array
+    public function updatePageVisibility(Utilisateur $user, string $pageId, array $userIds, array $profileTypes): array
     {
-        $normalized = [
-            'defaultConnection' => $this->normalizeScalar($preferences['defaultConnection'] ?? '', 120),
-            'defaultFile' => $this->normalizeScalar($preferences['defaultFile'] ?? '', 255),
-            'selectedPageId' => $this->normalizeScalar($preferences['selectedPageId'] ?? '', 80),
-            'pages' => [],
-        ];
+        $this->ensureModuleExists();
 
-        $rawPages = is_array($preferences['pages'] ?? null) ? $preferences['pages'] : [];
+        $sharedPages = $this->getSharedPages();
+        $updated = [];
+        $found = false;
+
+        foreach ($sharedPages as $page) {
+            if ((string) ($page['id'] ?? '') !== trim($pageId)) {
+                $updated[] = $page;
+                continue;
+            }
+
+            if (!$this->canManagePagePermissions($user, $page)) {
+                throw new \DomainException('Vous n avez pas les droits pour gerer la visibilite de cette page BI.');
+            }
+
+            $page['allowedUserIds'] = $this->normalizeIntegerCollection($userIds, self::MAX_ALLOWED_USERS);
+            $page['allowedProfileTypes'] = $this->normalizeStringCollection($profileTypes, 80, self::MAX_ALLOWED_PROFILES);
+            $updated[] = $page;
+            $found = true;
+        }
+
+        if (!$found) {
+            throw new \InvalidArgumentException('Page BI introuvable.');
+        }
+
+        $this->biModuleSettingsService->saveSharedPages($updated);
+
+        return $this->getForUser($user);
+    }
+
+    public function canCreatePages(Utilisateur $user): bool
+    {
+        if ($this->isAdmin($user)) {
+            return true;
+        }
+
+        $permissions = $this->biModuleSettingsService->getPageCreationPermissions();
+        $allowedUserIds = $this->normalizeIntegerCollection($permissions['userIds'] ?? [], self::MAX_ALLOWED_USERS);
+        if (in_array((int) ($user->getId() ?? 0), $allowedUserIds, true)) {
+            return true;
+        }
+
+        $allowedProfiles = array_map('mb_strtolower', $this->normalizeStringCollection($permissions['profileTypes'] ?? [], 80, self::MAX_ALLOWED_PROFILES));
+
+        return in_array(mb_strtolower($user->getEffectiveProfileType()), $allowedProfiles, true);
+    }
+
+    private function getSharedPages(): array
+    {
+        $rawPages = $this->biModuleSettingsService->getSharedPages();
+        $normalizedPages = [];
+        $knownIds = [];
+
         foreach ($rawPages as $rawPage) {
             if (!is_array($rawPage)) {
                 continue;
@@ -141,30 +253,150 @@ class BIConfigurationService
                 continue;
             }
 
-            $normalized['pages'][] = $page;
-            if (count($normalized['pages']) >= self::MAX_PAGES) {
+            $page['id'] = $this->ensureUniquePageId($page['id'], $knownIds);
+            $knownIds[$page['id']] = true;
+            $normalizedPages[] = $page;
+            if (count($normalizedPages) >= self::MAX_PAGES) {
                 break;
             }
         }
 
-        if ($normalized['pages'] === []) {
-            $normalized['pages'][] = $this->createDefaultPage();
+        if ($normalizedPages !== []) {
+            return $normalizedPages;
         }
 
-        $selectedPageId = $normalized['selectedPageId'];
-        $pageIds = array_column($normalized['pages'], 'id');
-        if ($selectedPageId === '' || !in_array($selectedPageId, $pageIds, true)) {
-            $normalized['selectedPageId'] = (string) ($normalized['pages'][0]['id'] ?? 'page-1');
+        $migratedPages = $this->migrateLegacyPages();
+        if ($migratedPages !== []) {
+            return $migratedPages;
+        }
+
+        return [];
+    }
+
+    private function migrateLegacyPages(): array
+    {
+        $preferences = $this->preferenceRepository->findBy(['pageKey' => self::PAGE_KEY]);
+        $normalizedPages = [];
+        $knownIds = [];
+
+        foreach ($preferences as $preference) {
+            if (!$preference instanceof UserPagePreference) {
+                continue;
+            }
+
+            $owner = $preference->getUtilisateur();
+            if (!$owner instanceof Utilisateur) {
+                continue;
+            }
+
+            $payload = $preference->getPreferencePayload();
+            foreach ((array) ($payload['pages'] ?? []) as $rawPage) {
+                if (!is_array($rawPage)) {
+                    continue;
+                }
+
+                $page = $this->normalizePage($rawPage, $owner);
+                if ($page === null) {
+                    continue;
+                }
+
+                $page['id'] = $this->ensureUniquePageId($page['id'], $knownIds);
+                $knownIds[$page['id']] = true;
+                $normalizedPages[] = $page;
+                if (count($normalizedPages) >= self::MAX_PAGES) {
+                    break 2;
+                }
+            }
+        }
+
+        if ($normalizedPages !== []) {
+            $this->biModuleSettingsService->saveSharedPages($normalizedPages);
+        }
+
+        return $normalizedPages;
+    }
+
+    private function normalizeIncomingPages(mixed $pages): array
+    {
+        $normalized = [];
+
+        foreach (is_array($pages) ? $pages : [] as $rawPage) {
+            if (!is_array($rawPage)) {
+                continue;
+            }
+
+            $page = $this->normalizePage($rawPage);
+            if ($page === null || !empty($page['isPlaceholder'])) {
+                continue;
+            }
+
+            $normalized[] = $page;
+            if (count($normalized) >= self::MAX_PAGES) {
+                break;
+            }
         }
 
         return $normalized;
     }
 
-    private function normalizePage(array $page): ?array
+    private function mergeEditablePage(array $existingPage, array $incomingPage): array
+    {
+        return [
+            'id' => (string) $existingPage['id'],
+            'name' => (string) $incomingPage['name'],
+            'connectionId' => (string) $incomingPage['connectionId'],
+            'fileId' => (string) $incomingPage['fileId'],
+            'filters' => $incomingPage['filters'],
+            'widgets' => $incomingPage['widgets'],
+            'ownerUserId' => (int) ($existingPage['ownerUserId'] ?? 0),
+            'ownerEmail' => (string) ($existingPage['ownerEmail'] ?? ''),
+            'ownerDisplayName' => (string) ($existingPage['ownerDisplayName'] ?? ''),
+            'allowedUserIds' => $this->normalizeIntegerCollection($existingPage['allowedUserIds'] ?? [], self::MAX_ALLOWED_USERS),
+            'allowedProfileTypes' => $this->normalizeStringCollection($existingPage['allowedProfileTypes'] ?? [], 80, self::MAX_ALLOWED_PROFILES),
+        ];
+    }
+
+    private function initializeOwnedPage(array $page, Utilisateur $user): array
+    {
+        $page['ownerUserId'] = (int) ($user->getId() ?? 0);
+        $page['ownerEmail'] = mb_strtolower(trim((string) ($user->getEmail() ?? '')));
+        $page['ownerDisplayName'] = $this->formatUserDisplayName($user);
+        $page['allowedUserIds'] = $this->normalizeIntegerCollection($page['allowedUserIds'] ?? [], self::MAX_ALLOWED_USERS);
+        $page['allowedProfileTypes'] = $this->normalizeStringCollection($page['allowedProfileTypes'] ?? [], 80, self::MAX_ALLOWED_PROFILES);
+
+        return $page;
+    }
+
+    private function getUserState(Utilisateur $user): array
+    {
+        $preference = $this->preferenceRepository->findOneForUserAndPage($user, self::PAGE_KEY);
+        $payload = $preference?->getPreferencePayload() ?? [];
+
+        return [
+            'selectedPageId' => $this->normalizeScalar($payload['selectedPageId'] ?? '', 80),
+        ];
+    }
+
+    private function saveUserState(Utilisateur $user, array $state): void
+    {
+        $preference = $this->preferenceRepository->findOneForUserAndPage($user, self::PAGE_KEY);
+        if (!$preference instanceof UserPagePreference) {
+            $preference = (new UserPagePreference())
+                ->setUtilisateur($user)
+                ->setPageKey(self::PAGE_KEY);
+            $this->em->persist($preference);
+        }
+
+        $preference->setPreferencePayload([
+            'selectedPageId' => $this->normalizeScalar($state['selectedPageId'] ?? '', 80),
+        ]);
+        $this->em->flush();
+    }
+
+    private function normalizePage(array $page, ?Utilisateur $owner = null): ?array
     {
         $id = $this->normalizeScalar($page['id'] ?? '', 80);
         $name = $this->normalizeScalar($page['name'] ?? '', 120);
-
         if ($id === '') {
             return null;
         }
@@ -176,6 +408,11 @@ class BIConfigurationService
             'fileId' => $this->normalizeScalar($page['fileId'] ?? '', 255),
             'filters' => [],
             'widgets' => [],
+            'ownerUserId' => (int) ($page['ownerUserId'] ?? ($owner?->getId() ?? 0)),
+            'ownerEmail' => mb_strtolower($this->normalizeScalar($page['ownerEmail'] ?? ($owner?->getEmail() ?? ''), 180)),
+            'ownerDisplayName' => $this->normalizeScalar($page['ownerDisplayName'] ?? ($owner ? $this->formatUserDisplayName($owner) : ''), 180),
+            'allowedUserIds' => $this->normalizeIntegerCollection($page['allowedUserIds'] ?? [], self::MAX_ALLOWED_USERS),
+            'allowedProfileTypes' => $this->normalizeStringCollection($page['allowedProfileTypes'] ?? [], 80, self::MAX_ALLOWED_PROFILES),
         ];
 
         $rawFilters = is_array($page['filters'] ?? null) ? $page['filters'] : [];
@@ -283,16 +520,99 @@ class BIConfigurationService
         ];
     }
 
-    private function createDefaultPage(): array
+    private function createPlaceholderPage(): array
     {
         return [
-            'id' => 'page-bi-1',
-            'name' => 'Page BI principale',
+            'id' => 'page-bi-placeholder',
+            'name' => 'Page BI',
             'connectionId' => '',
             'fileId' => '',
             'filters' => [],
             'widgets' => [],
+            'ownerUserId' => 0,
+            'ownerEmail' => '',
+            'ownerDisplayName' => '',
+            'allowedUserIds' => [],
+            'allowedProfileTypes' => [],
+            'canEdit' => false,
+            'canManagePermissions' => false,
+            'isPlaceholder' => true,
         ];
+    }
+
+    private function canViewPage(Utilisateur $user, array $page): bool
+    {
+        if ($this->isAdmin($user) || $this->isOwner($user, $page)) {
+            return true;
+        }
+
+        $allowedUserIds = $this->normalizeIntegerCollection($page['allowedUserIds'] ?? [], self::MAX_ALLOWED_USERS);
+        if (in_array((int) ($user->getId() ?? 0), $allowedUserIds, true)) {
+            return true;
+        }
+
+        $allowedProfiles = array_map('mb_strtolower', $this->normalizeStringCollection($page['allowedProfileTypes'] ?? [], 80, self::MAX_ALLOWED_PROFILES));
+        if (in_array(mb_strtolower($user->getEffectiveProfileType()), $allowedProfiles, true)) {
+            return true;
+        }
+
+        return $allowedUserIds === [] && $allowedProfiles === [];
+    }
+
+    private function canEditPage(Utilisateur $user, array $page): bool
+    {
+        if (!empty($page['isPlaceholder'])) {
+            return false;
+        }
+
+        return $this->isAdmin($user) || $this->isOwner($user, $page);
+    }
+
+    private function canManagePagePermissions(Utilisateur $user, array $page): bool
+    {
+        return $this->canEditPage($user, $page);
+    }
+
+    private function isOwner(Utilisateur $user, array $page): bool
+    {
+        $ownerUserId = (int) ($page['ownerUserId'] ?? 0);
+        if ($ownerUserId > 0 && $ownerUserId === (int) ($user->getId() ?? 0)) {
+            return true;
+        }
+
+        $ownerEmail = mb_strtolower(trim((string) ($page['ownerEmail'] ?? '')));
+        $userEmail = mb_strtolower(trim((string) ($user->getEmail() ?? '')));
+
+        return $ownerEmail !== '' && $ownerEmail === $userEmail;
+    }
+
+    private function isAdmin(Utilisateur $user): bool
+    {
+        if (in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+            return true;
+        }
+
+        return strcasecmp($user->getEffectiveProfileType(), 'Admin') === 0;
+    }
+
+    private function ensureUniquePageId(string $pageId, array $knownIds): string
+    {
+        $candidate = $pageId !== '' ? $pageId : 'page-bi';
+        $suffix = 1;
+
+        while (isset($knownIds[$candidate])) {
+            $suffix++;
+            $candidate = $pageId . '-' . $suffix;
+        }
+
+        return $candidate;
+    }
+
+    private function formatUserDisplayName(Utilisateur $user): string
+    {
+        $displayName = trim((string) $user->getPrenom() . ' ' . (string) $user->getNom());
+
+        return $displayName !== '' ? $displayName : (string) ($user->getEmail() ?? 'Utilisateur');
     }
 
     private function normalizeScalar(mixed $value, int $maxLength): string
@@ -338,6 +658,44 @@ class BIConfigurationService
         }
 
         return $alignment;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function normalizeIntegerCollection(mixed $values, int $limit): array
+    {
+        $normalized = [];
+        foreach (is_array($values) ? $values : [] as $value) {
+            $integer = (int) $value;
+            if ($integer > 0) {
+                $normalized[$integer] = $integer;
+            }
+            if (count($normalized) >= $limit) {
+                break;
+            }
+        }
+
+        return array_values($normalized);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function normalizeStringCollection(mixed $values, int $maxLength, int $limit): array
+    {
+        $normalized = [];
+        foreach (is_array($values) ? $values : [] as $value) {
+            $scalar = $this->normalizeScalar($value, $maxLength);
+            if ($scalar !== '') {
+                $normalized[$scalar] = $scalar;
+            }
+            if (count($normalized) >= $limit) {
+                break;
+            }
+        }
+
+        return array_values($normalized);
     }
 
     private function normalizeDimensionCollection(mixed $dimensions, mixed $legacyValue = ''): array
@@ -471,17 +829,5 @@ class BIConfigurationService
             'column' => $column,
             'value' => $value,
         ];
-    }
-
-    private function hasAnyPreferences(array $preferences): bool
-    {
-        foreach ((array) ($preferences['pages'] ?? []) as $page) {
-            if (!empty($page['widgets']) || trim((string) ($page['connectionId'] ?? '')) !== '' || trim((string) ($page['fileId'] ?? '')) !== '') {
-                return true;
-            }
-        }
-
-        return trim((string) ($preferences['defaultConnection'] ?? '')) !== ''
-            || trim((string) ($preferences['defaultFile'] ?? '')) !== '';
     }
 }

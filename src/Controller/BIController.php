@@ -3,6 +3,8 @@
 namespace App\Controller;
 
 use App\Entity\Utilisateur;
+use App\Repository\UtilisateurRepository;
+use App\Service\AdminUserDirectoryService;
 use App\Service\BIChartBuilderService;
 use App\Service\BIConfigurationService;
 use App\Service\BIModuleSettingsService;
@@ -28,6 +30,8 @@ final class BIController extends AbstractController
         private BIModuleSettingsService $biModuleSettingsService,
         private MicrosoftGraphAuthService $microsoftGraphAuthService,
         private ModuleService $moduleService,
+        private UtilisateurRepository $utilisateurRepository,
+        private AdminUserDirectoryService $adminUserDirectoryService,
     ) {}
 
     #[Route('', name: 'app_bi', methods: ['GET'])]
@@ -42,12 +46,31 @@ final class BIController extends AbstractController
         }
 
         $preferences = $this->biConfigurationService->getForUser($user);
-        $canEdit = $this->canEditBuilder($user);
         $connections = $this->sharePointDataService->getAvailableConnections();
+        $selectedPage = null;
+        $hasEditablePage = false;
+        $canManagePagePermissions = false;
+        foreach ((array) ($preferences['pages'] ?? []) as $candidatePage) {
+            if (($candidatePage['canEdit'] ?? false) === true) {
+                $hasEditablePage = true;
+            }
+            if (($candidatePage['canManagePermissions'] ?? false) === true) {
+                $canManagePagePermissions = true;
+            }
+        }
+        foreach ((array) ($preferences['pages'] ?? []) as $page) {
+            if ((string) ($page['id'] ?? '') === (string) ($preferences['selectedPageId'] ?? '')) {
+                $selectedPage = $page;
+                break;
+            }
+        }
+        if (!is_array($selectedPage)) {
+            $selectedPage = $preferences['pages'][0] ?? [];
+        }
 
         $selectedConnection = trim((string) $request->query->get(
             'connection',
-            $preferences['defaultConnection'] ?? ($connections[0]['id'] ?? '')
+            $selectedPage['connectionId'] ?? ($connections[0]['id'] ?? '')
         ));
         if (
             $selectedConnection !== ''
@@ -61,7 +84,7 @@ final class BIController extends AbstractController
 
         $selectedFile = $this->resolveSelectedFileId($files, trim((string) $request->query->get(
             'file',
-            $preferences['defaultFile'] ?? ($files[0]['id'] ?? '')
+            $selectedPage['fileId'] ?? ($files[0]['id'] ?? '')
         )));
 
         $preloadedDataset = $selectedConnection !== '' && $selectedFile !== ''
@@ -98,12 +121,15 @@ final class BIController extends AbstractController
             'biSuggestedWidgets' => $suggestedWidgets,
             'biPreferencesPayload' => $preferences,
             'biModuleSettings' => $this->biModuleSettingsService->getSettings(),
+            'biRightsDirectory' => $this->buildRightsDirectory(),
             'biMicrosoftAuth' => $microsoftAuth,
             'biMicrosoftConnectUrl' => $this->generateUrl('app_bi_microsoft_connect'),
             'biMicrosoftDisconnectUrl' => $this->generateUrl('app_bi_microsoft_disconnect'),
             'biOpenSettingsOnLoad' => $request->query->getBoolean('openSettings') || $settingsFeedback !== null,
             'biPreloadedSettingsFeedback' => $settingsFeedback,
-            'biCanEdit' => $canEdit,
+            'biCanManageSettings' => $this->canManageBISettings($user),
+            'biHasEditablePage' => $hasEditablePage,
+            'biCanManagePagePermissions' => $canManagePagePermissions,
         ]);
 
         return $this->applyPrivateCacheHeaders($response, 300);
@@ -152,9 +178,6 @@ final class BIController extends AbstractController
     {
         $this->ensureModuleIsActive();
         $user = $this->getRequiredUser();
-        if (!$this->canEditBuilder($user)) {
-            return new JsonResponse(['_error' => 'Vous n avez pas les droits pour modifier cette page BI.'], Response::HTTP_FORBIDDEN);
-        }
 
         if (!$this->isCsrfTokenValid('bi_preferences', (string) $request->headers->get('X-CSRF-Token'))) {
             return new JsonResponse(['_error' => 'Jeton CSRF invalide.'], Response::HTTP_FORBIDDEN);
@@ -166,12 +189,20 @@ final class BIController extends AbstractController
             return new JsonResponse(['_error' => 'Payload JSON invalide.'], Response::HTTP_BAD_REQUEST);
         }
 
-        return new JsonResponse([
-            'saved' => true,
-            'preferences' => $this->biConfigurationService->saveForUser(
+        try {
+            $preferences = $this->biConfigurationService->saveForUser(
                 $user,
                 is_array($payload['preferences'] ?? null) ? $payload['preferences'] : [],
-            ),
+            );
+        } catch (\DomainException $exception) {
+            return new JsonResponse(['_error' => $exception->getMessage()], Response::HTTP_FORBIDDEN);
+        } catch (\InvalidArgumentException $exception) {
+            return new JsonResponse(['_error' => $exception->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+
+        return new JsonResponse([
+            'saved' => true,
+            'preferences' => $preferences,
         ]);
     }
 
@@ -185,10 +216,6 @@ final class BIController extends AbstractController
             return new JsonResponse([
                 'settings' => $this->biModuleSettingsService->getSettings(),
             ]);
-        }
-
-        if (!$this->canEditBuilder($user)) {
-            return new JsonResponse(['_error' => 'Vous n avez pas les droits pour modifier les parametres BI.'], Response::HTTP_FORBIDDEN);
         }
 
         if (!$this->isCsrfTokenValid('bi_settings', (string) $request->headers->get('X-CSRF-Token'))) {
@@ -205,26 +232,52 @@ final class BIController extends AbstractController
 
         try {
             $settings = match ($action) {
-                'add_remote_source' => $this->biModuleSettingsService->addRemoteSource(
+                'update_page_creation_permissions' => $this->requireSettingsManager($user, fn () => $this->biModuleSettingsService->updatePageCreationPermissions(
+                    is_array($payload['userIds'] ?? null) ? $payload['userIds'] : [],
+                    is_array($payload['profileTypes'] ?? null) ? $payload['profileTypes'] : [],
+                )),
+                'update_page_visibility' => $this->biConfigurationService->updatePageVisibility(
+                    $user,
+                    (string) ($payload['pageId'] ?? ''),
+                    is_array($payload['userIds'] ?? null) ? $payload['userIds'] : [],
+                    is_array($payload['profileTypes'] ?? null) ? $payload['profileTypes'] : [],
+                ),
+                'add_remote_source' => $this->requireSettingsManager($user, fn () => $this->biModuleSettingsService->addRemoteSource(
                     (string) ($payload['label'] ?? ''),
                     (string) ($payload['url'] ?? ''),
-                ),
-                'add_api_source' => $this->biModuleSettingsService->addApiSource(
+                )),
+                'add_api_source' => $this->requireSettingsManager($user, fn () => $this->biModuleSettingsService->addApiSource(
                     (string) ($payload['label'] ?? ''),
                     (string) ($payload['url'] ?? ''),
                     (string) ($payload['token'] ?? ''),
-                ),
-                'update_source' => $this->biModuleSettingsService->updateSource(
+                )),
+                'update_source' => $this->requireSettingsManager($user, fn () => $this->biModuleSettingsService->updateSource(
                     (string) ($payload['sourceId'] ?? ''),
                     (string) ($payload['label'] ?? ''),
                     array_key_exists('url', $payload) ? (string) ($payload['url'] ?? '') : null,
                     array_key_exists('token', $payload) ? (string) ($payload['token'] ?? '') : null,
-                ),
-                'delete_source' => $this->biModuleSettingsService->removeSource((string) ($payload['sourceId'] ?? '')),
+                )),
+                'delete_source' => $this->requireSettingsManager($user, fn () => $this->biModuleSettingsService->removeSource((string) ($payload['sourceId'] ?? ''))),
                 default => throw new \InvalidArgumentException('Action de parametrage BI inconnue.'),
             };
         } catch (\Throwable $exception) {
-            return new JsonResponse(['_error' => $exception->getMessage()], Response::HTTP_BAD_REQUEST);
+            $statusCode = $exception instanceof \DomainException ? Response::HTTP_FORBIDDEN : Response::HTTP_BAD_REQUEST;
+
+            return new JsonResponse(['_error' => $exception->getMessage()], $statusCode);
+        }
+
+        if ($action === 'update_page_creation_permissions') {
+            return new JsonResponse([
+                'saved' => true,
+                'settings' => $settings,
+            ]);
+        }
+
+        if ($action === 'update_page_visibility') {
+            return new JsonResponse([
+                'saved' => true,
+                'preferences' => $settings,
+            ]);
         }
 
         return new JsonResponse([
@@ -239,7 +292,7 @@ final class BIController extends AbstractController
         $this->ensureModuleIsActive();
         $user = $this->getRequiredUser();
 
-        if (!$this->canEditBuilder($user)) {
+        if (!$this->canManageBISettings($user)) {
             return new JsonResponse(['_error' => 'Vous n avez pas les droits pour importer des sources BI.'], Response::HTTP_FORBIDDEN);
         }
 
@@ -287,13 +340,48 @@ final class BIController extends AbstractController
         return $user;
     }
 
-    private function canEditBuilder(Utilisateur $user): bool
+    private function canManageBISettings(Utilisateur $user): bool
     {
         if (in_array('ROLE_ADMIN', $user->getRoles(), true)) {
             return true;
         }
 
         return strcasecmp($user->getEffectiveProfileType(), 'Admin') === 0;
+    }
+
+    /**
+     * @template T
+     * @param callable():T $callback
+     * @return T
+     */
+    private function requireSettingsManager(Utilisateur $user, callable $callback): mixed
+    {
+        if (!$this->canManageBISettings($user)) {
+            throw new \DomainException('Vous n avez pas les droits pour modifier les parametres BI.');
+        }
+
+        return $callback();
+    }
+
+    private function buildRightsDirectory(): array
+    {
+        $users = [];
+        foreach ($this->utilisateurRepository->findAllSorted() as $candidate) {
+            if (!$candidate instanceof Utilisateur || (int) ($candidate->getId() ?? 0) < 1) {
+                continue;
+            }
+
+            $users[] = [
+                'id' => (int) $candidate->getId(),
+                'label' => trim((string) $candidate->getPrenom() . ' ' . (string) $candidate->getNom()) ?: (string) $candidate->getEmail(),
+                'email' => (string) $candidate->getEmail(),
+            ];
+        }
+
+        return [
+            'users' => $users,
+            'profiles' => $this->adminUserDirectoryService->getAvailableProfileTypes(),
+        ];
     }
 
     private function buildBrowserCacheKey(Utilisateur $user): string

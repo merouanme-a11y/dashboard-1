@@ -2,7 +2,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const cfg = window.__BI_CONFIG__ || {};
     const dom = {
         connectionSelect: document.getElementById("biConnectionSelect"),
+        connectionField: document.getElementById("biConnectionField"),
         fileSelect: document.getElementById("biFileSelect"),
+        fileField: document.getElementById("biFileField"),
         pageSelect: document.getElementById("biPageSelect"),
         addPageBtn: document.getElementById("biAddPageBtn"),
         duplicatePageBtn: document.getElementById("biDuplicatePageBtn"),
@@ -61,6 +63,8 @@ document.addEventListener("DOMContentLoaded", function () {
         settingsModal: document.getElementById("biSettingsModal"),
         settingsModalClose: document.getElementById("biSettingsModalClose"),
         settingsFeedback: document.getElementById("biSettingsFeedback"),
+        settingsTabs: document.querySelectorAll("[data-settings-tab]"),
+        settingsPanels: document.querySelectorAll("[data-settings-panel]"),
         uploadSourceForm: document.getElementById("biUploadSourceForm"),
         uploadSourceLabel: document.getElementById("biUploadSourceLabel"),
         uploadSourceFile: document.getElementById("biUploadSourceFile"),
@@ -88,6 +92,14 @@ document.addEventListener("DOMContentLoaded", function () {
         editSourceSubmit: document.getElementById("biEditSourceSubmit"),
         editSourceCancel: document.getElementById("biEditSourceCancel"),
         settingsSourcesList: document.getElementById("biSettingsSourcesList"),
+        creationPermissionsForm: document.getElementById("biCreationPermissionsForm"),
+        creationPermissionsUsers: document.getElementById("biCreationPermissionsUsers"),
+        creationPermissionsProfiles: document.getElementById("biCreationPermissionsProfiles"),
+        pagePermissionsCard: document.getElementById("biPagePermissionsCard"),
+        pagePermissionsDescription: document.getElementById("biPagePermissionsDescription"),
+        pagePermissionsForm: document.getElementById("biPagePermissionsForm"),
+        pagePermissionsUsers: document.getElementById("biPagePermissionsUsers"),
+        pagePermissionsProfiles: document.getElementById("biPagePermissionsProfiles"),
     };
     const palette = ["#2563eb", "#1d4ed8", "#0f766e", "#10b981", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#dc2626", "#ec4899", "#be185d", "#8b5cf6", "#7c3aed", "#06b6d4", "#334155"];
     const fractions = ["1/8", "2/8", "3/8", "4/8", "5/8", "6/8", "7/8", "8/8"];
@@ -121,10 +133,12 @@ document.addEventListener("DOMContentLoaded", function () {
         widgetCatalog: mergeWidgetCatalog(cfg.builderOptions?.widgets),
         preferences: normalizePreferences(cfg.preferences),
         moduleSettings: normalizeModuleSettings(cfg.moduleSettings),
+        rightsDirectory: normalizeRightsDirectory(cfg.rightsDirectory),
         microsoftAuthConfigured: Boolean(cfg.microsoftAuth?.configured),
         selectedPageId: "",
         selectedWidgetId: "",
-        canEdit: Boolean(cfg.canEdit),
+        canCreatePages: Boolean(cfg.access?.canCreatePages),
+        canManageSettings: Boolean(cfg.access?.canManageSettings),
         editMode: false,
         charts: {},
         previewChart: null,
@@ -141,8 +155,11 @@ document.addEventListener("DOMContentLoaded", function () {
         dataFeedbackMessage: String(cfg.preloadedDataset?._error || ""),
         dataFeedbackType: cfg.preloadedDataset?._error ? "error" : "",
         editingModuleSourceId: "",
+        activeSettingsTab: "connections",
     };
 
+    state.canCreatePages = Boolean(state.preferences.canCreatePages || state.canCreatePages);
+    state.canManageSettings = Boolean(state.preferences.canManageSettings || state.canManageSettings);
     state.selectedPageId = String(state.preferences.selectedPageId || state.preferences.pages[0]?.id || "page-bi-1");
 
     bindEvents();
@@ -191,11 +208,9 @@ document.addEventListener("DOMContentLoaded", function () {
     function bindEvents() {
         dom.connectionSelect?.addEventListener("change", function () {
             const page = getCurrentPage();
-            if (!page) return;
+            if (!page || !canEditCurrentPage() || !state.editMode) return;
             page.connectionId = String(dom.connectionSelect.value || "");
             page.fileId = "";
-            state.preferences.defaultConnection = page.connectionId;
-            state.preferences.defaultFile = "";
             state.dataset = null;
             state.builderOptions = buildBuilderOptionsFromDataset(null);
             state.selectedWidgetId = "";
@@ -205,9 +220,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
         dom.fileSelect?.addEventListener("change", function () {
             const page = getCurrentPage();
-            if (!page) return;
+            if (!page || !canEditCurrentPage() || !state.editMode) return;
             page.fileId = String(dom.fileSelect.value || "");
-            state.preferences.defaultFile = page.fileId;
             loadDataset(page.connectionId, page.fileId, false);
             scheduleSavePreferences();
         });
@@ -222,16 +236,24 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         dom.addPageBtn?.addEventListener("click", function () {
+            if (!state.canCreatePages) return;
             const name = window.prompt("Nom de la nouvelle page BI", "Nouvelle page BI");
             if (!name) return;
             const current = getCurrentPage();
             const nextPage = {
                 id: createId("page"),
                 name: String(name).trim() || "Nouvelle page BI",
-                connectionId: current?.connectionId || state.preferences.defaultConnection || state.connections[0]?.id || "",
-                fileId: current?.fileId || state.preferences.defaultFile || "",
+                connectionId: current?.connectionId || state.connections[0]?.id || "",
+                fileId: current?.fileId || "",
                 filters: [],
                 widgets: [],
+                ownerUserId: 0,
+                ownerEmail: "",
+                ownerDisplayName: "",
+                allowedUserIds: [],
+                allowedProfileTypes: [],
+                canEdit: true,
+                canManagePermissions: true,
             };
             state.preferences.pages.push(nextPage);
             state.selectedPageId = nextPage.id;
@@ -243,6 +265,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         dom.duplicatePageBtn?.addEventListener("click", function () {
+            if (!state.canCreatePages) return;
             const page = getCurrentPage();
             if (!page) return;
             const duplicate = deepClone(page);
@@ -252,6 +275,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 widget.id = createId("widget");
                 return widget;
             });
+            duplicate.ownerUserId = 0;
+            duplicate.ownerEmail = "";
+            duplicate.ownerDisplayName = "";
+            duplicate.canEdit = true;
+            duplicate.canManagePermissions = true;
             state.preferences.pages.push(duplicate);
             state.selectedPageId = duplicate.id;
             state.preferences.selectedPageId = duplicate.id;
@@ -262,6 +290,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         dom.deletePageBtn?.addEventListener("click", function () {
+            if (!canEditCurrentPage()) return;
             if (state.preferences.pages.length <= 1) return;
             const page = getCurrentPage();
             if (!page || !window.confirm("Supprimer cette page BI ?")) return;
@@ -277,7 +306,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         dom.settingsBtn?.addEventListener("click", function () {
-            if (!(state.canEdit || state.microsoftAuthConfigured)) return;
+            if (!(state.canManageSettings || canManageCurrentPagePermissions() || state.microsoftAuthConfigured)) return;
             clearSettingsFeedback();
             resetEditSourceForm();
             renderSettingsModal();
@@ -285,7 +314,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         dom.editModeBtn?.addEventListener("click", function () {
-            if (!state.canEdit) return;
+            if (!canEditCurrentPage()) return;
             state.editMode = !state.editMode;
             if (!state.editMode) {
                 state.selectedWidgetId = "";
@@ -305,7 +334,7 @@ document.addEventListener("DOMContentLoaded", function () {
         dom.addFilterBtn?.addEventListener("click", function () {
             const page = getCurrentPage();
             const columns = getColumnOptions();
-            if (!page || !columns.length) return;
+            if (!page || !columns.length || !canEditCurrentPage()) return;
             const firstColumn = columns.find(function (column) { return column.type === "string" || column.type === "boolean"; }) || columns[0];
             const values = getDistinctColumnValues(firstColumn.key);
             page.filters.push({ column: firstColumn.key, value: values[0] || "" });
@@ -314,7 +343,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         dom.widgetsGrid?.addEventListener("click", function (event) {
-            if (!state.canEdit || !state.editMode) return;
+            if (!canEditCurrentPage() || !state.editMode) return;
             if (event.target === dom.widgetsGrid) {
                 state.selectedWidgetId = "";
                 syncSelectedWidgetCardState();
@@ -324,13 +353,13 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         dom.widgetsGrid?.addEventListener("dragenter", function (event) {
-            if (state.canEdit && state.editMode && state.draggingCard) {
+            if (canEditCurrentPage() && state.editMode && state.draggingCard) {
                 event.preventDefault();
             }
         });
 
         dom.widgetsGrid?.addEventListener("dragover", function (event) {
-            if (!(state.canEdit && state.editMode) || !state.draggingCard) return;
+            if (!(canEditCurrentPage() && state.editMode) || !state.draggingCard) return;
             event.preventDefault();
             if (event.dataTransfer) {
                 event.dataTransfer.dropEffect = "move";
@@ -350,7 +379,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         dom.widgetsGrid?.addEventListener("drop", function (event) {
-            if (!(state.canEdit && state.editMode) || !state.draggingCard) return;
+            if (!(canEditCurrentPage() && state.editMode) || !state.draggingCard) return;
             event.preventDefault();
             reorderWidgetsFromDrop();
             cleanupDraggingState();
@@ -370,6 +399,12 @@ document.addEventListener("DOMContentLoaded", function () {
             element.addEventListener("click", function () {
                 const modalName = String(element.getAttribute("data-modal-close") || "");
                 closeModal(modalName);
+            });
+        });
+
+        dom.settingsTabs?.forEach(function (button) {
+            button.addEventListener("click", function () {
+                setActiveSettingsTab(String(button.getAttribute("data-settings-tab") || "connections"));
             });
         });
 
@@ -398,6 +433,8 @@ document.addEventListener("DOMContentLoaded", function () {
         dom.editSourceCancel?.addEventListener("click", function () {
             resetEditSourceForm();
         });
+        dom.creationPermissionsForm?.addEventListener("submit", handleCreationPermissionsSubmit);
+        dom.pagePermissionsForm?.addEventListener("submit", handlePagePermissionsSubmit);
 
         bindInspectorEvents();
     }
@@ -528,12 +565,24 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function renderAll() {
         closeColorPopover();
-        dom.shell?.classList.toggle("is-edit-mode", state.canEdit && state.editMode);
-        const showEditTools = state.canEdit && state.editMode;
-        if (dom.addPageBtn) dom.addPageBtn.hidden = !showEditTools;
-        if (dom.duplicatePageBtn) dom.duplicatePageBtn.hidden = !showEditTools;
-        if (dom.deletePageBtn) dom.deletePageBtn.hidden = !showEditTools;
-        if (dom.settingsBtn) dom.settingsBtn.hidden = !(state.canEdit || state.microsoftAuthConfigured);
+        const pageCanEdit = canEditCurrentPage();
+        dom.shell?.classList.toggle("is-edit-mode", pageCanEdit && state.editMode);
+        if (!pageCanEdit && state.editMode) {
+            state.editMode = false;
+            if (dom.editModeBtn) {
+                dom.editModeBtn.innerHTML = '<i class="bi bi-pencil-square"></i>';
+            }
+        }
+        const showSourceSelectors = pageCanEdit && state.editMode;
+        if (dom.connectionField) dom.connectionField.hidden = !showSourceSelectors;
+        if (dom.fileField) dom.fileField.hidden = !showSourceSelectors;
+        if (dom.connectionSelect) dom.connectionSelect.disabled = !showSourceSelectors;
+        if (dom.fileSelect) dom.fileSelect.disabled = !showSourceSelectors;
+        if (dom.addPageBtn) dom.addPageBtn.hidden = !(state.canCreatePages && state.editMode);
+        if (dom.duplicatePageBtn) dom.duplicatePageBtn.hidden = !(state.canCreatePages && state.editMode);
+        if (dom.deletePageBtn) dom.deletePageBtn.hidden = !(pageCanEdit && state.editMode);
+        if (dom.settingsBtn) dom.settingsBtn.hidden = !(state.canManageSettings || canManageCurrentPagePermissions());
+        if (dom.editModeBtn) dom.editModeBtn.hidden = !pageCanEdit;
         renderConnections();
         renderFiles();
         renderPages();
@@ -558,6 +607,7 @@ document.addEventListener("DOMContentLoaded", function () {
             options.push('<option value="' + escapeHtml(connection.id) + '"' + selected + ">" + escapeHtml(connection.label) + "</option>");
         });
         dom.connectionSelect.innerHTML = options.join("");
+        dom.connectionSelect.disabled = !(canEditCurrentPage() && state.editMode);
     }
 
     function renderFiles() {
@@ -569,17 +619,19 @@ document.addEventListener("DOMContentLoaded", function () {
             options.push('<option value="' + escapeHtml(file.id) + '"' + selected + ">" + escapeHtml(file.name) + " (" + escapeHtml(file.extension.toUpperCase()) + ")</option>");
         });
         dom.fileSelect.innerHTML = options.join("");
+        dom.fileSelect.disabled = !(canEditCurrentPage() && state.editMode);
     }
 
     function renderPages() {
         if (!dom.pageSelect) return;
         dom.pageSelect.innerHTML = state.preferences.pages.map(function (page) {
             const selected = page.id === state.selectedPageId ? " selected" : "";
-            return '<option value="' + escapeHtml(page.id) + '"' + selected + ">" + escapeHtml(page.name) + "</option>";
+            const suffix = page.ownerDisplayName ? " - " + page.ownerDisplayName : "";
+            return '<option value="' + escapeHtml(page.id) + '"' + selected + ">" + escapeHtml(page.name + suffix) + "</option>";
         }).join("");
 
         if (dom.deletePageBtn) {
-            dom.deletePageBtn.disabled = state.preferences.pages.length <= 1;
+            dom.deletePageBtn.disabled = state.preferences.pages.length <= 1 || !canEditCurrentPage();
         }
     }
 
@@ -1666,6 +1718,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function renderSettingsModal() {
+        renderCreationPermissionsForm();
+        renderPagePermissionsForm();
+        syncSettingsTabs();
         if (!dom.settingsSourcesList) return;
         const items = [];
         (state.moduleSettings.uploadedSources || []).forEach(function (source) {
@@ -1733,6 +1788,106 @@ document.addEventListener("DOMContentLoaded", function () {
                 deleteModuleSource(String(button.getAttribute("data-remove-source") || ""));
             });
         });
+    }
+
+    function renderCreationPermissionsForm() {
+        if (!dom.creationPermissionsUsers || !dom.creationPermissionsProfiles) return;
+        renderMultiSelectOptions(
+            dom.creationPermissionsUsers,
+            state.rightsDirectory.users.map(function (user) {
+                return { value: String(user.id), label: user.label + (user.email ? " - " + user.email : "") };
+            }),
+            (state.moduleSettings.pageCreationPermissions?.userIds || []).map(function (value) { return String(value); })
+        );
+        renderMultiSelectOptions(
+            dom.creationPermissionsProfiles,
+            state.rightsDirectory.profiles.map(function (profile) {
+                return { value: String(profile), label: String(profile) };
+            }),
+            state.moduleSettings.pageCreationPermissions?.profileTypes || []
+        );
+    }
+
+    function renderPagePermissionsForm() {
+        if (!dom.pagePermissionsCard || !dom.pagePermissionsUsers || !dom.pagePermissionsProfiles) return;
+        const page = getCurrentPage();
+        const canManage = canManageCurrentPagePermissions();
+        dom.pagePermissionsCard.hidden = !(page && !page.isPlaceholder && canManage);
+        if (!page || page.isPlaceholder || !canManage) {
+            return;
+        }
+
+        if (dom.pagePermissionsDescription) {
+            const owner = String(page.ownerDisplayName || page.ownerEmail || "Utilisateur");
+            dom.pagePermissionsDescription.textContent = "Page proprietaire : " + owner + ". Sans selection, la page reste visible pour tous les utilisateurs connectes.";
+        }
+
+        renderMultiSelectOptions(
+            dom.pagePermissionsUsers,
+            state.rightsDirectory.users.map(function (user) {
+                return { value: String(user.id), label: user.label + (user.email ? " - " + user.email : "") };
+            }),
+            (page.allowedUserIds || []).map(function (value) { return String(value); })
+        );
+        renderMultiSelectOptions(
+            dom.pagePermissionsProfiles,
+            state.rightsDirectory.profiles.map(function (profile) {
+                return { value: String(profile), label: String(profile) };
+            }),
+            page.allowedProfileTypes || []
+        );
+    }
+
+    function setActiveSettingsTab(tabName) {
+        state.activeSettingsTab = String(tabName || "connections");
+        syncSettingsTabs();
+    }
+
+    function syncSettingsTabs() {
+        const availableTabs = [];
+        dom.settingsPanels?.forEach(function (panel) {
+            const tabName = String(panel.getAttribute("data-settings-panel") || "");
+            const hasVisibleContent = !panel.hidden || tabName === "connections" || tabName === "sources" || tabName === "rights";
+            if (tabName !== "" && hasVisibleContent) {
+                availableTabs.push(tabName);
+            }
+        });
+
+        if (availableTabs.indexOf(state.activeSettingsTab) === -1) {
+            state.activeSettingsTab = availableTabs[0] || "connections";
+        }
+
+        dom.settingsTabs?.forEach(function (button) {
+            const tabName = String(button.getAttribute("data-settings-tab") || "");
+            const isActive = tabName === state.activeSettingsTab;
+            button.classList.toggle("is-active", isActive);
+            button.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+
+        dom.settingsPanels?.forEach(function (panel) {
+            const tabName = String(panel.getAttribute("data-settings-panel") || "");
+            panel.hidden = tabName !== state.activeSettingsTab;
+        });
+    }
+
+    function renderMultiSelectOptions(select, options, selectedValues) {
+        if (!select) return;
+        const selectedSet = new Set((Array.isArray(selectedValues) ? selectedValues : []).map(function (value) {
+            return String(value);
+        }));
+        select.innerHTML = (Array.isArray(options) ? options : []).map(function (option) {
+            const value = String(option.value || "");
+            const label = String(option.label || value);
+            const selected = selectedSet.has(value) ? " selected" : "";
+            return '<option value="' + escapeHtml(value) + '"' + selected + ">" + escapeHtml(label) + "</option>";
+        }).join("");
+    }
+
+    function getSelectedMultiValues(select) {
+        if (!select) return [];
+        return Array.from(select.selectedOptions || []).map(function (option) {
+            return String(option.value || "");
+        }).filter(Boolean);
     }
 
     function findModuleSourceById(sourceId) {
@@ -1985,7 +2140,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function renderPalette() {
         if (!dom.builderTopbar || !dom.widgetPalette) return;
-        dom.builderTopbar.hidden = !(state.canEdit && state.editMode);
+        dom.builderTopbar.hidden = !(canEditCurrentPage() && state.editMode);
         const paletteTones = ["#60a5fa", "#22c55e", "#f59e0b", "#f472b6", "#a78bfa", "#06b6d4", "#f97316", "#84cc16", "#ef4444"];
         dom.widgetPalette.innerHTML = state.widgetCatalog.map(function (widget) {
             const tone = paletteTones[Math.abs(hashCode(String(widget.type || widget.label || "bi")) % paletteTones.length)];
@@ -2018,7 +2173,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         const columnOptions = getColumnOptions();
-        const isEditMode = state.canEdit && state.editMode;
+        const isEditMode = canEditCurrentPage() && state.editMode;
         dom.filtersBar.hidden = false;
         dom.filtersBar.innerHTML = page.filters.map(function (filter, index) {
             const values = getDistinctColumnValues(filter.column);
@@ -2595,15 +2750,15 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            if (!(state.canEdit && state.editMode)) {
+            if (!(canEditCurrentPage() && state.editMode)) {
                 return;
             }
         });
 
-        card.draggable = state.canEdit && state.editMode;
-        card.classList.toggle("is-editable", state.canEdit && state.editMode);
+        card.draggable = canEditCurrentPage() && state.editMode;
+        card.classList.toggle("is-editable", canEditCurrentPage() && state.editMode);
         card.addEventListener("dragstart", function (event) {
-            if (!(state.canEdit && state.editMode)) {
+            if (!(canEditCurrentPage() && state.editMode)) {
                 event.preventDefault();
                 return;
             }
@@ -2632,7 +2787,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function ensureWidgetControls(card, widget) {
-        if (!state.canEdit) {
+        if (!canEditCurrentPage()) {
             return;
         }
 
@@ -2643,7 +2798,7 @@ document.addEventListener("DOMContentLoaded", function () {
     function ensureResizeControls(card, widget) {
         const controls = document.createElement("div");
         controls.className = "stats-resize-controls";
-        controls.hidden = !(state.canEdit && state.editMode);
+        controls.hidden = !(canEditCurrentPage() && state.editMode);
         controls.innerHTML = '<button type="button" class="stats-resize-button" data-action="edit" title="Modifier le bloc"><i class="bi bi-pencil-square"></i></button><button type="button" class="stats-resize-button" data-direction="smaller" title="Reduire">-</button><button type="button" class="stats-resize-button" data-direction="larger" title="Agrandir">+</button><button type="button" class="stats-resize-button" data-action="duplicate" title="Dupliquer"><i class="bi bi-copy"></i></button><button type="button" class="stats-resize-button" data-action="delete" title="Supprimer"><i class="bi bi-trash3"></i></button>';
         card.appendChild(controls);
 
@@ -2651,7 +2806,7 @@ document.addEventListener("DOMContentLoaded", function () {
             button.addEventListener("click", function (event) {
                 event.preventDefault();
                 event.stopPropagation();
-                if (!(state.canEdit && state.editMode)) return;
+                if (!(canEditCurrentPage() && state.editMode)) return;
                 const action = String(button.getAttribute("data-action") || "");
                 if (action !== "") {
                     const page = getCurrentPage();
@@ -2678,7 +2833,7 @@ document.addEventListener("DOMContentLoaded", function () {
         toggle.addEventListener("click", function (event) {
             event.preventDefault();
             event.stopPropagation();
-            if (!state.canEdit) return;
+            if (!canEditCurrentPage()) return;
             widget.hidden = !widget.hidden;
             card.classList.toggle("card-hidden", Boolean(widget.hidden));
             updateVisibilityIcon(toggle, widget);
@@ -2732,7 +2887,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function handleWidgetAction(action, index) {
-        if (!state.canEdit) return;
+        if (!canEditCurrentPage()) return;
         const page = getCurrentPage();
         if (!page) return;
         const widgets = page.widgets;
@@ -2815,7 +2970,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function addWidget(type) {
-        if (!state.canEdit) return;
+        if (!canEditCurrentPage()) return;
         const page = getCurrentPage();
         if (!page) return;
         const definition = getWidgetDefinition(type);
@@ -3601,11 +3756,15 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function buildEmptyStateHtml() {
+        const page = getCurrentPage();
+        if (page && page.isPlaceholder) {
+            return "Aucune statistique BI n est disponible pour votre utilisateur ou votre profil.";
+        }
         const suggestions = (Array.isArray(cfg.suggestedWidgets) ? cfg.suggestedWidgets : []).map(function (widget) {
             return '<button type="button" class="bi-palette-button" data-suggested-widget="' + escapeHtml(widget.type) + '">' + escapeHtml(widget.title || widget.type) + "</button>";
         }).join("");
         let html = "Ajoutez un premier composant depuis la palette pour construire votre page BI.";
-        if (state.canEdit && state.editMode && suggestions) {
+        if (canEditCurrentPage() && state.editMode && suggestions) {
             html += '<div class="bi-widget-palette" style="margin-top:1rem;">' + suggestions + "</div>";
         }
         return html;
@@ -3637,8 +3796,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 page.connectionId = connectionId;
                 page.fileId = fileId;
             }
-            state.preferences.defaultConnection = connectionId;
-            state.preferences.defaultFile = fileId;
             renderFiles();
             if (fileId) {
                 loadDataset(connectionId, fileId, Boolean(cfg.preloadedDataset && !cfg.preloadedDataset._error && String(cfg.preloadedFileId || "") === fileId), forceRefresh);
@@ -3663,8 +3820,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     page.connectionId = connectionId;
                     page.fileId = fileId;
                 }
-                state.preferences.defaultConnection = connectionId;
-                state.preferences.defaultFile = fileId;
                 renderFiles();
                 if (fileId) {
                     loadDataset(connectionId, fileId, false, forceRefresh);
@@ -3814,7 +3969,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function handleUploadSourceSubmit(event) {
         event.preventDefault();
-        if (!state.canEdit || !dom.uploadSourceForm || !dom.uploadSourceFile?.files?.length) {
+        if (!state.canManageSettings || !dom.uploadSourceForm || !dom.uploadSourceFile?.files?.length) {
             return;
         }
 
@@ -3854,7 +4009,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function handleRemoteSourceSubmit(event) {
         event.preventDefault();
-        if (!state.canEdit) return;
+        if (!state.canManageSettings) return;
         const label = String(dom.remoteSourceLabel?.value || "").trim();
         const url = String(dom.remoteSourceUrl?.value || "").trim();
         if (url === "") {
@@ -3904,7 +4059,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function handleApiSourceSubmit(event) {
         event.preventDefault();
-        if (!state.canEdit) return;
+        if (!state.canManageSettings) return;
 
         const label = String(dom.apiSourceLabel?.value || "").trim();
         const url = String(dom.apiSourceUrl?.value || "").trim();
@@ -3963,7 +4118,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function handleEditSourceSubmit(event) {
         event.preventDefault();
-        if (!state.canEdit) return;
+        if (!state.canManageSettings) return;
 
         const sourceId = String(dom.editSourceId?.value || state.editingModuleSourceId || "").trim();
         const label = String(dom.editSourceLabel?.value || "").trim();
@@ -4041,7 +4196,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function deleteModuleSource(sourceId) {
-        if (!state.canEdit || sourceId === "") return;
+        if (!state.canManageSettings || sourceId === "") return;
         if (!window.confirm("Supprimer cette source BI ?")) return;
 
         showSettingsFeedback("Suppression de la source...", "");
@@ -4075,6 +4230,70 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 
+    function handleCreationPermissionsSubmit(event) {
+        event.preventDefault();
+        if (!state.canManageSettings) return;
+
+        showSettingsFeedback("Enregistrement des droits de creation...", "");
+        fetchJson(cfg.settingsUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": String(cfg.settingsCsrfToken || ""),
+            },
+            body: JSON.stringify({
+                action: "update_page_creation_permissions",
+                userIds: getSelectedMultiValues(dom.creationPermissionsUsers).map(function (value) { return parseInt(value, 10) || 0; }).filter(Boolean),
+                profileTypes: getSelectedMultiValues(dom.creationPermissionsProfiles),
+            }),
+        })
+            .then(function (payload) {
+                state.moduleSettings = normalizeModuleSettings(payload.settings || state.moduleSettings);
+                renderSettingsModal();
+                showSettingsFeedback("Droits de creation enregistres.", "is-success");
+                showSaveStatus("Droits enregistres", "is-success");
+            })
+            .catch(function (error) {
+                showSettingsFeedback(error.message || "Impossible d enregistrer les droits de creation.", "is-error");
+                handleError(error);
+            });
+    }
+
+    function handlePagePermissionsSubmit(event) {
+        event.preventDefault();
+        const page = getCurrentPage();
+        if (!page || !canManageCurrentPagePermissions()) return;
+
+        showSettingsFeedback("Enregistrement de la visibilite...", "");
+        fetchJson(cfg.settingsUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": String(cfg.settingsCsrfToken || ""),
+            },
+            body: JSON.stringify({
+                action: "update_page_visibility",
+                pageId: String(page.id || ""),
+                userIds: getSelectedMultiValues(dom.pagePermissionsUsers).map(function (value) { return parseInt(value, 10) || 0; }).filter(Boolean),
+                profileTypes: getSelectedMultiValues(dom.pagePermissionsProfiles),
+            }),
+        })
+            .then(function (payload) {
+                state.preferences = normalizePreferences(payload.preferences || state.preferences);
+                state.canCreatePages = Boolean(state.preferences.canCreatePages);
+                state.canManageSettings = Boolean(state.preferences.canManageSettings);
+                state.selectedPageId = String(state.preferences.selectedPageId || state.selectedPageId || "");
+                renderSettingsModal();
+                renderAll();
+                showSettingsFeedback("Visibilite de la page enregistree.", "is-success");
+                showSaveStatus("Visibilite enregistree", "is-success");
+            })
+            .catch(function (error) {
+                showSettingsFeedback(error.message || "Impossible d enregistrer la visibilite de la page.", "is-error");
+                handleError(error);
+            });
+    }
+
     function getRemoteSourceUrlError(url) {
         let parsedUrl = null;
         try {
@@ -4087,6 +4306,16 @@ document.addEventListener("DOMContentLoaded", function () {
         const normalizedPath = decodedPath.toLowerCase();
         if (normalizedPath.indexOf("/:f:/") !== -1) {
             return "Ce lien SharePoint pointe vers un dossier. Utilisez un lien direct vers un fichier CSV, Excel ou JSON.";
+        }
+
+        const sharedFileMatch = normalizedPath.match(/\/:([a-z]):\//i);
+        if (sharedFileMatch) {
+            const sharedFileType = String(sharedFileMatch[1] || "").toLowerCase();
+            if (sharedFileType === "x") {
+                return "";
+            }
+
+            return "Seuls les fichiers CSV, Excel et JSON sont supportes pour les sources SharePoint.";
         }
 
         const pathSegments = decodedPath.split("/").filter(Boolean);
@@ -4135,8 +4364,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (preferredConnectionId && state.connections.some(function (connection) { return connection.id === preferredConnectionId; })) {
                     page.connectionId = preferredConnectionId;
                     page.fileId = "";
-                    state.preferences.defaultConnection = preferredConnectionId;
-                    state.preferences.defaultFile = "";
                     state.dataset = null;
                     state.builderOptions = buildBuilderOptionsFromDataset(null);
                     renderAll();
@@ -4149,8 +4376,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (page.connectionId && !state.connections.some(function (connection) { return connection.id === page.connectionId; })) {
                     page.connectionId = "";
                     page.fileId = "";
-                    state.preferences.defaultConnection = "";
-                    state.preferences.defaultFile = "";
                     state.files = [];
                     state.dataset = null;
                     state.builderOptions = buildBuilderOptionsFromDataset(null);
@@ -4248,7 +4473,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function savePreferences() {
-        if (!state.canEdit) {
+        if (!hasAnyEditablePage()) {
             return;
         }
 
@@ -4278,6 +4503,9 @@ document.addEventListener("DOMContentLoaded", function () {
                     const nextPreferences = normalizePreferences(payload.preferences || requestPreferences);
                     if (!isWidgetModalOpen()) {
                         state.preferences = nextPreferences;
+                        state.canCreatePages = Boolean(nextPreferences.canCreatePages);
+                        state.canManageSettings = Boolean(nextPreferences.canManageSettings);
+                        state.selectedPageId = String(nextPreferences.selectedPageId || state.selectedPageId || "");
                     }
                 }
                 showSaveStatus("Configuration enregistree", "is-success");
@@ -4309,6 +4537,22 @@ document.addEventListener("DOMContentLoaded", function () {
         return state.preferences.pages.find(function (page) {
             return page.id === state.selectedPageId;
         }) || state.preferences.pages[0] || null;
+    }
+
+    function canEditCurrentPage() {
+        const page = getCurrentPage();
+        return Boolean(page && page.canEdit && !page.isPlaceholder);
+    }
+
+    function canManageCurrentPagePermissions() {
+        const page = getCurrentPage();
+        return Boolean(page && page.canManagePermissions && !page.isPlaceholder);
+    }
+
+    function hasAnyEditablePage() {
+        return state.preferences.pages.some(function (page) {
+            return Boolean(page && page.canEdit && !page.isPlaceholder);
+        });
     }
 
     function getSelectedWidget() {
@@ -4465,29 +4709,45 @@ document.addEventListener("DOMContentLoaded", function () {
             pages.push({
                 id: "page-bi-1",
                 name: "Page BI principale",
-                connectionId: String(safe.defaultConnection || cfg.preloadedConnectionId || ""),
-                fileId: String(safe.defaultFile || cfg.preloadedFileId || ""),
+                connectionId: String(cfg.preloadedConnectionId || ""),
+                fileId: String(cfg.preloadedFileId || ""),
                 filters: [],
                 widgets: [],
+                ownerUserId: 0,
+                ownerEmail: "",
+                ownerDisplayName: "",
+                allowedUserIds: [],
+                allowedProfileTypes: [],
+                canEdit: false,
+                canManagePermissions: false,
+                isPlaceholder: false,
             });
         }
 
         return {
-            defaultConnection: String(safe.defaultConnection || cfg.preloadedConnectionId || ""),
-            defaultFile: String(safe.defaultFile || cfg.preloadedFileId || ""),
             selectedPageId: String(safe.selectedPageId || pages[0].id || "page-bi-1"),
+            canCreatePages: Boolean(safe.canCreatePages),
+            canManageSettings: Boolean(safe.canManageSettings),
             pages: pages.map(function (page, pageIndex) {
                 return {
                     id: String(page.id || "page-bi-" + (pageIndex + 1)),
                     name: String(page.name || "Page BI"),
-                    connectionId: String(page.connectionId || safe.defaultConnection || cfg.preloadedConnectionId || ""),
-                    fileId: String(page.fileId || safe.defaultFile || cfg.preloadedFileId || ""),
+                    connectionId: String(page.connectionId || cfg.preloadedConnectionId || ""),
+                    fileId: String(page.fileId || cfg.preloadedFileId || ""),
                     filters: Array.isArray(page.filters) ? page.filters.map(function (filter) {
                         return { column: String(filter.column || ""), value: String(filter.value || "") };
                     }) : [],
                     widgets: Array.isArray(page.widgets) ? page.widgets.map(function (widget, widgetIndex) {
                         return normalizeWidget(widget, widgetIndex);
                     }) : [],
+                    ownerUserId: parseInt(page.ownerUserId, 10) || 0,
+                    ownerEmail: String(page.ownerEmail || ""),
+                    ownerDisplayName: String(page.ownerDisplayName || ""),
+                    allowedUserIds: Array.isArray(page.allowedUserIds) ? page.allowedUserIds.map(function (value) { return parseInt(value, 10) || 0; }).filter(Boolean) : [],
+                    allowedProfileTypes: Array.isArray(page.allowedProfileTypes) ? page.allowedProfileTypes.map(function (value) { return String(value || ""); }).filter(Boolean) : [],
+                    canEdit: Boolean(page.canEdit),
+                    canManagePermissions: Boolean(page.canManagePermissions),
+                    isPlaceholder: Boolean(page.isPlaceholder),
                 };
             }),
         };
@@ -4526,6 +4786,26 @@ document.addEventListener("DOMContentLoaded", function () {
                     tokenPreview: String(source.tokenPreview || ""),
                 };
             }).filter(function (source) { return source.id !== ""; }) : [],
+            pageCreationPermissions: {
+                userIds: Array.isArray(safe.pageCreationPermissions?.userIds) ? safe.pageCreationPermissions.userIds.map(function (value) { return parseInt(value, 10) || 0; }).filter(Boolean) : [],
+                profileTypes: Array.isArray(safe.pageCreationPermissions?.profileTypes) ? safe.pageCreationPermissions.profileTypes.map(function (value) { return String(value || ""); }).filter(Boolean) : [],
+            },
+        };
+    }
+
+    function normalizeRightsDirectory(directory) {
+        const safe = directory && typeof directory === "object" ? deepClone(directory) : {};
+        return {
+            users: Array.isArray(safe.users) ? safe.users.map(function (user) {
+                return {
+                    id: parseInt(user.id, 10) || 0,
+                    label: String(user.label || user.email || ""),
+                    email: String(user.email || ""),
+                };
+            }).filter(function (user) { return user.id > 0; }) : [],
+            profiles: Array.isArray(safe.profiles) ? safe.profiles.map(function (profile) {
+                return String(profile || "");
+            }).filter(Boolean) : [],
         };
     }
 

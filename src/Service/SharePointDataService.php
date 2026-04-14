@@ -107,8 +107,7 @@ class SharePointDataService
         }
 
         if (($connection['type'] ?? '') === 'sharepoint-url') {
-            $urlPath = (string) parse_url((string) ($connection['url'] ?? ''), PHP_URL_PATH);
-            $fileName = basename($urlPath);
+            $fileName = $this->resolveRemoteSourceFileName($connection);
 
             return [[
                 'id' => $fileName !== '' ? $fileName : 'source.' . (string) ($connection['extension'] ?? 'csv'),
@@ -324,6 +323,19 @@ class SharePointDataService
         $content = null;
         $contentType = '';
         $authenticatedDownloadError = '';
+        $downloadUrl = $this->resolveRemoteDownloadUrl($url);
+
+        if ($this->looksLikeSharePointSharedFileUrl($url)) {
+            $curlDownload = $this->tryCurlRemoteDownload($downloadUrl, true);
+            if ((!is_array($curlDownload) || (int) ($curlDownload['status'] ?? 0) < 200 || (int) ($curlDownload['status'] ?? 0) >= 400) && !$this->microsoftGraphAuthService->hasConnectedAccount()) {
+                $curlDownload = $this->tryCurlRemoteDownload($downloadUrl, false);
+            }
+            if (is_array($curlDownload) && (int) ($curlDownload['status'] ?? 0) >= 200 && (int) ($curlDownload['status'] ?? 0) < 400) {
+                $content = (string) ($curlDownload['content'] ?? '');
+                $contentType = strtolower((string) ($curlDownload['contentType'] ?? ''));
+            }
+        }
+
         if ($this->isMicrosoftSharePointUrl($url) && $this->microsoftGraphAuthService->hasConnectedAccount()) {
             try {
                 $download = $this->microsoftGraphAuthService->downloadSharedFile($url);
@@ -336,29 +348,65 @@ class SharePointDataService
 
         if ($content === null) {
             try {
-                $response = $this->httpClient->request('GET', $url, [
-                    'headers' => [
-                        'Accept' => 'text/csv,application/json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain;q=0.9,*/*;q=0.8',
-                    ],
-                ]);
+                $response = $this->requestRemoteSource($downloadUrl, true);
                 $statusCode = $response->getStatusCode();
                 $headers = $response->getHeaders(false);
                 $contentType = strtolower((string) ($headers['content-type'][0] ?? ''));
                 $content = $response->getContent(false);
-            } catch (\Throwable) {
-                if ($authenticatedDownloadError !== '') {
-                    return ['_error' => $authenticatedDownloadError];
+            } catch (\Throwable $exception) {
+                $allowInsecureRetry = $this->isSslCertificateError($exception);
+                $curlDownload = $this->tryCurlRemoteDownload($downloadUrl, !$allowInsecureRetry);
+                if ((!is_array($curlDownload) || (int) ($curlDownload['status'] ?? 0) < 200 || (int) ($curlDownload['status'] ?? 0) >= 400) && $allowInsecureRetry) {
+                    $curlDownload = $this->tryCurlRemoteDownload($downloadUrl, false);
                 }
+                if (is_array($curlDownload) && (int) ($curlDownload['status'] ?? 0) > 0 && (int) ($curlDownload['status'] ?? 0) < 400) {
+                    $content = (string) ($curlDownload['content'] ?? '');
+                    $contentType = strtolower((string) ($curlDownload['contentType'] ?? ''));
+                } else {
+                    $transportError = trim($exception->getMessage());
+                    if ($authenticatedDownloadError !== '') {
+                        return ['_error' => $authenticatedDownloadError];
+                    }
 
-                return ['_error' => 'Impossible de lire la source SharePoint distante.'];
+                    return ['_error' => $transportError !== ''
+                        ? 'Impossible de lire la source SharePoint distante. Detail: ' . $transportError
+                        : 'Impossible de lire la source SharePoint distante.'];
+                }
             }
 
-            if ($statusCode >= 400) {
+            if ($content !== null && !isset($statusCode)) {
+                $statusCode = 200;
+                $headers = ['content-type' => [$contentType]];
+            }
+
+            if (($statusCode ?? 0) >= 400) {
+                $curlDownload = $this->tryCurlRemoteDownload($downloadUrl, true);
+                if (is_array($curlDownload) && (int) ($curlDownload['status'] ?? 0) > 0 && (int) ($curlDownload['status'] ?? 0) < 400) {
+                    $content = (string) ($curlDownload['content'] ?? '');
+                    $contentType = strtolower((string) ($curlDownload['contentType'] ?? ''));
+                    $statusCode = 200;
+                }
+            }
+
+            if (($statusCode ?? 0) >= 400) {
                 if ($authenticatedDownloadError !== '') {
                     return ['_error' => $authenticatedDownloadError];
                 }
 
-                return ['_error' => $this->buildRemoteSourceHttpError($statusCode, $headers, $url)];
+                return ['_error' => $this->buildRemoteSourceHttpError((int) $statusCode, $headers ?? [], $url)];
+            }
+        }
+
+        if ($this->shouldRejectHtmlPayload($content, $contentType, $extension)) {
+            $curlDownload = $this->tryCurlRemoteDownload($downloadUrl, true);
+            if (is_array($curlDownload)) {
+                $curlContent = (string) ($curlDownload['content'] ?? '');
+                $curlContentType = strtolower((string) ($curlDownload['contentType'] ?? ''));
+
+                if ($curlContent !== '' && !$this->shouldRejectHtmlPayload($curlContent, $curlContentType, $extension)) {
+                    $content = $curlContent;
+                    $contentType = $curlContentType;
+                }
             }
         }
 
@@ -376,7 +424,7 @@ class SharePointDataService
         }
 
         $columns = $this->analyzeColumns($rows);
-        $fileName = basename((string) parse_url($url, PHP_URL_PATH));
+        $fileName = $this->resolveRemoteSourceFileName($connection);
 
         return [
             'connection' => [
@@ -1363,7 +1411,9 @@ class SharePointDataService
         return str_contains($prefix, 'microsoft corporation')
             || str_contains($prefix, 'sharepoint')
             || str_contains($prefix, '_forms/default.aspx')
-            || str_contains($prefix, 'login automatically');
+            || str_contains($prefix, 'login automatically')
+            || str_contains($prefix, 'onedrive')
+            || str_contains($prefix, 'download your files');
     }
 
     private function looksLikeLegacySpreadsheetHtml(string $content): bool
@@ -1380,6 +1430,52 @@ class SharePointDataService
         $host = strtolower((string) parse_url($url, PHP_URL_HOST));
 
         return $host !== '' && (str_ends_with($host, '.sharepoint.com') || $host === 'sharepoint.com');
+    }
+
+    private function resolveRemoteDownloadUrl(string $url): string
+    {
+        if (!$this->looksLikeSharePointSharedFileUrl($url)) {
+            return $url;
+        }
+
+        $parts = parse_url($url);
+        $query = [];
+        parse_str((string) ($parts['query'] ?? ''), $query);
+        $query['download'] = '1';
+
+        $rebuilt = ($parts['scheme'] ?? 'https') . '://' . ($parts['host'] ?? '');
+        if (($parts['path'] ?? '') !== '') {
+            $rebuilt .= (string) $parts['path'];
+        }
+        $rebuilt .= '?' . http_build_query($query);
+
+        return $rebuilt;
+    }
+
+    private function resolveRemoteSourceFileName(array $connection): string
+    {
+        $url = trim((string) ($connection['url'] ?? ''));
+        $urlPath = (string) parse_url($url, PHP_URL_PATH);
+        $fileName = basename($urlPath);
+        if ($fileName !== '' && str_contains($fileName, '.')) {
+            return $fileName;
+        }
+
+        $extension = strtolower((string) ($connection['extension'] ?? 'csv'));
+        $label = trim((string) ($connection['label'] ?? 'source distante'));
+        $baseName = $this->slugify($label);
+
+        return $baseName . '.' . $extension;
+    }
+
+    private function looksLikeSharePointSharedFileUrl(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $path = (string) parse_url($url, PHP_URL_PATH);
+
+        return $host !== ''
+            && str_ends_with($host, '.sharepoint.com')
+            && preg_match('#/\:([a-z])\:/#i', $path) === 1;
     }
 
     private function buildRemoteSourceHttpError(int $statusCode, array $headers, string $url): string
@@ -1418,6 +1514,94 @@ class SharePointDataService
         }
 
         return sprintf('Impossible de lire la source SharePoint distante (HTTP %d).', $statusCode);
+    }
+
+    private function requestRemoteSource(string $url, bool $verifyPeer): \Symfony\Contracts\HttpClient\ResponseInterface
+    {
+        return $this->httpClient->request('GET', $url, [
+            'headers' => [
+                'Accept' => 'text/csv,application/json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain;q=0.9,*/*;q=0.8',
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+            ],
+            'max_redirects' => 10,
+            'verify_peer' => $verifyPeer,
+            'verify_host' => $verifyPeer,
+        ]);
+    }
+
+    private function tryCurlRemoteDownload(string $url, bool $verifyPeer = true): ?array
+    {
+        if (!function_exists('curl_init')) {
+            return null;
+        }
+
+        $handle = curl_init($url);
+        if ($handle === false) {
+            return null;
+        }
+
+        $cookieFile = tempnam(sys_get_temp_dir(), 'bi-sharepoint-cookie-');
+        if ($cookieFile === false) {
+            $cookieFile = null;
+        }
+
+        curl_setopt_array($handle, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 45,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_SSL_VERIFYPEER => $verifyPeer,
+            CURLOPT_SSL_VERIFYHOST => $verifyPeer ? 2 : 0,
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+            CURLOPT_HTTPHEADER => [
+                'Accept: text/csv,application/json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain;q=0.9,*/*;q=0.8',
+            ],
+            CURLOPT_HEADER => true,
+            CURLOPT_COOKIEFILE => $cookieFile ?: '',
+            CURLOPT_COOKIEJAR => $cookieFile ?: '',
+        ]);
+
+        $rawResponse = curl_exec($handle);
+        if (!is_string($rawResponse) || $rawResponse === '') {
+            curl_close($handle);
+            if (is_string($cookieFile) && $cookieFile !== '' && is_file($cookieFile)) {
+                @unlink($cookieFile);
+            }
+
+            return null;
+        }
+
+        $headerSize = (int) curl_getinfo($handle, CURLINFO_HEADER_SIZE);
+        $contentType = (string) curl_getinfo($handle, CURLINFO_CONTENT_TYPE);
+        $statusCode = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
+        curl_close($handle);
+        if (is_string($cookieFile) && $cookieFile !== '' && is_file($cookieFile)) {
+            @unlink($cookieFile);
+        }
+
+        if ($headerSize <= 0) {
+            return null;
+        }
+
+        return [
+            'status' => $statusCode,
+            'contentType' => $contentType,
+            'content' => substr($rawResponse, $headerSize),
+        ];
+    }
+
+    private function isSslCertificateError(\Throwable $exception): bool
+    {
+        $message = strtolower(trim($exception->getMessage()));
+
+        return $message !== ''
+            && (
+                str_contains($message, 'certificate verify failed')
+                || str_contains($message, 'ssl operation failed')
+                || str_contains($message, 'unable to get local issuer certificate')
+                || str_contains($message, 'peer certificate')
+            );
     }
 
     private function buildApiSourceHttpError(int $statusCode, string $content): string

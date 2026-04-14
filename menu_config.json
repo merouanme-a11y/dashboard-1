@@ -336,6 +336,15 @@
                         "folder": "pages",
                         "parent_page": null,
                         "icon_only": false
+                    },
+                    {
+                        "page": "app_bi",
+                        "url": "/dashboard/bi",
+                        "label": "Business Intelligence",
+                        "icon": "bi-graph-up-arrow",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
                     }
                 ]
             }
