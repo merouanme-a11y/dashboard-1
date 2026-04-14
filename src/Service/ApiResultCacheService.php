@@ -77,6 +77,20 @@ final class ApiResultCacheService
         $this->cachePool->deleteItem($key);
     }
 
+    public function store(string $key, array $payload, int $freshTtl, int $staleTtl): array
+    {
+        $key = $this->normalizeKey($key);
+        $totalTtl = max(1, $freshTtl + max(0, $staleTtl));
+        $envelope = $this->buildEnvelope($payload, $freshTtl, $staleTtl);
+
+        $item = $this->cachePool->getItem($key);
+        $item->set($envelope);
+        $item->expiresAfter($totalTtl);
+        $this->cachePool->save($item);
+
+        return $this->envelopeToPayload($envelope, time());
+    }
+
     private function buildEnvelope(array $payload, int $freshTtl, int $staleTtl): array
     {
         $generatedAt = time();

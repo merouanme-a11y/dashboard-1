@@ -9,12 +9,15 @@ class SharePointDataService
 {
     private const SUPPORTED_EXTENSIONS = ['csv', 'json', 'xls', 'xlsx'];
     private const SAMPLE_ROW_LIMIT = 120;
+    private const DATASET_CACHE_FRESH_TTL = 300;
+    private const DATASET_CACHE_STALE_TTL = 900;
 
     public function __construct(
         private KernelInterface $kernel,
         private HttpClientInterface $httpClient,
         private BIModuleSettingsService $biModuleSettingsService,
         private MicrosoftGraphAuthService $microsoftGraphAuthService,
+        private ApiResultCacheService $apiResultCache,
         private string $dataDirectory,
     ) {}
 
@@ -165,13 +168,82 @@ class SharePointDataService
         return $files;
     }
 
-    public function getDatasetPayload(string $connectionId, string $fileId): array
+    public function peekDatasetPayload(string $connectionId, string $fileId): ?array
+    {
+        $connection = $this->findConnection($connectionId, true);
+        if ($connection === null) {
+            return null;
+        }
+
+        return $this->apiResultCache->peek($this->buildDatasetCacheKey($connection, $fileId));
+    }
+
+    public function getDatasetPayload(string $connectionId, string $fileId, bool $forceRefresh = false): array
     {
         $connection = $this->findConnection($connectionId, true);
         if ($connection === null) {
             return ['_error' => 'Source BI introuvable.'];
         }
 
+        $cacheKey = $this->buildDatasetCacheKey($connection, $fileId);
+        if (!$forceRefresh) {
+            $cachedPayload = $this->apiResultCache->peek($cacheKey);
+            if (is_array($cachedPayload)) {
+                return $cachedPayload;
+            }
+        } else {
+            $this->apiResultCache->delete($cacheKey);
+        }
+
+        $payload = $this->buildDatasetPayload($connection, $fileId);
+        if (($payload['_error'] ?? '') !== '') {
+            return $payload;
+        }
+
+        return $this->apiResultCache->store(
+            $cacheKey,
+            $payload,
+            self::DATASET_CACHE_FRESH_TTL,
+            self::DATASET_CACHE_STALE_TTL,
+        );
+    }
+
+    public function getSuggestedColumns(array $datasetPayload): array
+    {
+        $columns = is_array($datasetPayload['columns'] ?? null) ? $datasetPayload['columns'] : [];
+        $firstNumeric = '';
+        $firstCategory = '';
+        $firstDate = '';
+
+        foreach ($columns as $column) {
+            $key = trim((string) ($column['key'] ?? ''));
+            $type = trim((string) ($column['type'] ?? 'string'));
+            if ($key === '') {
+                continue;
+            }
+
+            if ($firstNumeric === '' && $type === 'number') {
+                $firstNumeric = $key;
+            }
+
+            if ($firstDate === '' && $type === 'date') {
+                $firstDate = $key;
+            }
+
+            if ($firstCategory === '' && in_array($type, ['string', 'boolean'], true)) {
+                $firstCategory = $key;
+            }
+        }
+
+        return [
+            'numeric' => $firstNumeric,
+            'category' => $firstCategory,
+            'date' => $firstDate,
+        ];
+    }
+
+    private function buildDatasetPayload(array $connection, string $fileId): array
+    {
         if (($connection['type'] ?? '') === 'site-upload') {
             return $this->getLocalUploadedDatasetPayload($connection);
         }
@@ -215,40 +287,6 @@ class SharePointDataService
             'rows' => $rows,
             'sampleRows' => array_slice($rows, 0, self::SAMPLE_ROW_LIMIT),
             'rowCount' => count($rows),
-        ];
-    }
-
-    public function getSuggestedColumns(array $datasetPayload): array
-    {
-        $columns = is_array($datasetPayload['columns'] ?? null) ? $datasetPayload['columns'] : [];
-        $firstNumeric = '';
-        $firstCategory = '';
-        $firstDate = '';
-
-        foreach ($columns as $column) {
-            $key = trim((string) ($column['key'] ?? ''));
-            $type = trim((string) ($column['type'] ?? 'string'));
-            if ($key === '') {
-                continue;
-            }
-
-            if ($firstNumeric === '' && $type === 'number') {
-                $firstNumeric = $key;
-            }
-
-            if ($firstDate === '' && $type === 'date') {
-                $firstDate = $key;
-            }
-
-            if ($firstCategory === '' && in_array($type, ['string', 'boolean'], true)) {
-                $firstCategory = $key;
-            }
-        }
-
-        return [
-            'numeric' => $firstNumeric,
-            'category' => $firstCategory,
-            'date' => $firstDate,
         ];
     }
 
@@ -1445,6 +1483,46 @@ class SharePointDataService
             'sampleRows' => array_slice($rows, 0, self::SAMPLE_ROW_LIMIT),
             'rowCount' => count($rows),
         ];
+    }
+
+    private function buildDatasetCacheKey(array $connection, string $fileId): string
+    {
+        $type = (string) ($connection['type'] ?? '');
+        $signature = [
+            'type' => $type,
+            'id' => (string) ($connection['id'] ?? ''),
+            'file' => basename($fileId),
+        ];
+
+        if ($type === 'sharepoint-folder') {
+            $filePath = $this->resolveDataDirectory()
+                . DIRECTORY_SEPARATOR
+                . (string) ($connection['path'] ?? '')
+                . DIRECTORY_SEPARATOR
+                . basename($fileId);
+
+            $signature['path'] = $filePath;
+            $signature['mtime'] = is_file($filePath) ? (int) filemtime($filePath) : 0;
+            $signature['size'] = is_file($filePath) ? (int) filesize($filePath) : 0;
+        } elseif ($type === 'site-upload') {
+            $filePath = $this->biModuleSettingsService->resolveStoragePath((string) ($connection['path'] ?? ''));
+
+            $signature['path'] = $filePath;
+            $signature['mtime'] = ($filePath !== '' && is_file($filePath)) ? (int) filemtime($filePath) : 0;
+            $signature['size'] = ($filePath !== '' && is_file($filePath)) ? (int) filesize($filePath) : 0;
+        } elseif ($type === 'sharepoint-url') {
+            $signature['url'] = (string) ($connection['url'] ?? '');
+            $signature['extension'] = (string) ($connection['extension'] ?? '');
+            $signature['createdAt'] = (string) ($connection['createdAt'] ?? '');
+        } elseif ($type === 'api-webservice') {
+            $signature['url'] = (string) ($connection['url'] ?? '');
+            $signature['token'] = sha1((string) ($connection['token'] ?? ''));
+            $signature['createdAt'] = (string) ($connection['createdAt'] ?? '');
+        }
+
+        $encodedSignature = json_encode($signature, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        return 'bi_dataset_' . md5(is_string($encodedSignature) ? $encodedSignature : serialize($signature));
     }
 
     private function resolveLocalFileSize(string $relativePath): int

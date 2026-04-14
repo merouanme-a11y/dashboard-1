@@ -2,11 +2,13 @@
 
 namespace App\Tests\Service;
 
+use App\Service\ApiResultCacheService;
 use App\Service\BIModuleSettingsService;
 use App\Service\MicrosoftGraphAuthService;
 use App\Service\SharePointDataService;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\HttpKernel\KernelInterface;
@@ -327,6 +329,47 @@ final class SharePointDataServiceTest extends TestCase
         self::assertSame('Bob', $payload['rows'][1]['Nom'] ?? null);
     }
 
+    public function testRemoteDatasetPayloadUsesServerCacheUntilRefreshIsForced(): void
+    {
+        $requestCount = 0;
+        $httpClient = new MockHttpClient(function () use (&$requestCount) {
+            ++$requestCount;
+
+            return new MockResponse("nom;quantite\nAlice;12\nBob;18\n", [
+                'response_headers' => [
+                    'content-type: text/csv; charset=utf-8',
+                ],
+            ]);
+        });
+
+        $service = $this->createService(
+            $httpClient,
+            [
+                'uploadedSources' => [],
+                'remoteSources' => [[
+                    'id' => 'remote-cache',
+                    'label' => 'Cache test',
+                    'url' => 'https://example.test/files/cache.csv',
+                    'extension' => 'csv',
+                    'createdAt' => '2026-04-07T00:00:00+00:00',
+                ]],
+            ],
+        );
+
+        $firstPayload = $service->getDatasetPayload('remote-cache', 'cache.csv');
+        $secondPayload = $service->getDatasetPayload('remote-cache', 'cache.csv');
+
+        self::assertSame(1, $requestCount, 'Le second chargement doit reutiliser le cache serveur.');
+        self::assertSame(2, $firstPayload['rowCount'] ?? null);
+        self::assertSame(2, $secondPayload['rowCount'] ?? null);
+        self::assertSame('server', $secondPayload['_cache']['source'] ?? null);
+
+        $refreshedPayload = $service->getDatasetPayload('remote-cache', 'cache.csv', true);
+
+        self::assertSame(2, $refreshedPayload['rowCount'] ?? null);
+        self::assertSame(2, $requestCount, 'Un refresh force doit invalider le cache serveur.');
+    }
+
     private function createService(mixed $responses, array $settings, ?MicrosoftGraphAuthService $microsoftGraphAuthService = null): SharePointDataService
     {
         $kernel = $this->createMock(KernelInterface::class);
@@ -352,11 +395,14 @@ final class SharePointDataServiceTest extends TestCase
                 ->willReturn(false);
         }
 
+        $cacheAdapter = new ArrayAdapter();
+
         return new SharePointDataService(
             $kernel,
-            new MockHttpClient($responses),
+            $responses instanceof MockHttpClient ? $responses : new MockHttpClient($responses),
             $biModuleSettingsService,
             $microsoftGraphAuthService,
+            new ApiResultCacheService($cacheAdapter, $cacheAdapter),
             $this->createTempDataDirectory(),
         );
     }

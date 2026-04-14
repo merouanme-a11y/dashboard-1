@@ -98,6 +98,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const WIDGET_VALUE_SIZE_MIN = 0;
     const WIDGET_VALUE_SIZE_MAX = 150;
     const WIDGET_VALUE_SIZE_DEFAULT = 48;
+    const datasetBrowserCacheTtlMs = 5 * 60 * 1000;
+    const datasetBrowserCacheMaxBytes = 1500000;
     const defaultWidgetCatalog = [
         { type: "kpi", label: "Indicateur KPI", icon: "bi-speedometer2", defaultTitle: "KPI principal" },
         { type: "counter", label: "Compteur", icon: "bi-123", defaultTitle: "Compteur global" },
@@ -137,6 +139,7 @@ document.addEventListener("DOMContentLoaded", function () {
         saveStatusTimer: 0,
         activeColorPopover: null,
         dataFeedbackMessage: String(cfg.preloadedDataset?._error || ""),
+        dataFeedbackType: cfg.preloadedDataset?._error ? "error" : "",
         editingModuleSourceId: "",
     };
 
@@ -3638,7 +3641,7 @@ document.addEventListener("DOMContentLoaded", function () {
             state.preferences.defaultFile = fileId;
             renderFiles();
             if (fileId) {
-                loadDataset(connectionId, fileId, Boolean(cfg.preloadedDataset && !cfg.preloadedDataset._error && String(cfg.preloadedFileId || "") === fileId));
+                loadDataset(connectionId, fileId, Boolean(cfg.preloadedDataset && !cfg.preloadedDataset._error && String(cfg.preloadedFileId || "") === fileId), forceRefresh);
             } else {
                 state.dataset = null;
                 state.builderOptions = buildBuilderOptionsFromDataset(null);
@@ -3664,7 +3667,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 state.preferences.defaultFile = fileId;
                 renderFiles();
                 if (fileId) {
-                    loadDataset(connectionId, fileId, false);
+                    loadDataset(connectionId, fileId, false, forceRefresh);
                     return;
                 }
                 state.dataset = null;
@@ -3683,7 +3686,7 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 
-    function loadDataset(connectionId, fileId, usePreloaded) {
+    function loadDataset(connectionId, fileId, usePreloaded, forceRefresh) {
         if (!connectionId || !fileId) {
             state.dataset = null;
             state.builderOptions = buildBuilderOptionsFromDataset(null);
@@ -3693,31 +3696,120 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        if (usePreloaded && cfg.preloadedDataset && !cfg.preloadedDataset._error && String(cfg.preloadedConnectionId || "") === connectionId && String(cfg.preloadedFileId || "") === fileId) {
+        if (!forceRefresh && usePreloaded && cfg.preloadedDataset && !cfg.preloadedDataset._error && String(cfg.preloadedConnectionId || "") === connectionId && String(cfg.preloadedFileId || "") === fileId) {
             state.dataset = cfg.preloadedDataset;
             state.builderOptions = buildBuilderOptionsFromDataset(state.dataset);
+            saveDatasetPayloadToCache(connectionId, fileId, state.dataset);
+            clearDataFeedback();
             renderAll();
             return;
+        }
+
+        if (!forceRefresh) {
+            const cachedPayload = getCachedDatasetPayload(connectionId, fileId);
+            if (cachedPayload) {
+                state.dataset = cachedPayload;
+                state.builderOptions = buildBuilderOptionsFromDataset(state.dataset);
+                clearDataFeedback();
+                renderAll();
+                return;
+            }
         }
 
         state.dataset = null;
         state.builderOptions = buildBuilderOptionsFromDataset(null);
         clearDataFeedback();
         setLoading(true, "Chargement du fichier de donnees...");
-        fetchJson(cfg.datasetUrl + "?connection=" + encodeURIComponent(connectionId) + "&file=" + encodeURIComponent(fileId))
+
+        let datasetUrl = cfg.datasetUrl + "?connection=" + encodeURIComponent(connectionId) + "&file=" + encodeURIComponent(fileId);
+        if (forceRefresh) {
+            datasetUrl += "&refresh=1";
+        }
+
+        fetchJson(datasetUrl)
             .then(function (payload) {
                 state.dataset = payload;
                 state.builderOptions = buildBuilderOptionsFromDataset(payload);
+                saveDatasetPayloadToCache(connectionId, fileId, payload);
                 clearDataFeedback();
                 renderAll();
             })
             .catch(function (error) {
+                const cachedFallback = getCachedDatasetPayload(connectionId, fileId);
+                if (cachedFallback) {
+                    state.dataset = cachedFallback;
+                    state.builderOptions = buildBuilderOptionsFromDataset(cachedFallback);
+                    showDataFeedback("Le dernier jeu de donnees local est affiche car le rechargement a echoue.", "info");
+                    renderAll();
+                    handleError(error);
+                    return;
+                }
+
                 state.dataset = null;
                 state.builderOptions = buildBuilderOptionsFromDataset(null);
                 showDataFeedback(error.message || "Impossible de charger les donnees de la source.");
                 renderAll();
                 handleError(error);
             });
+    }
+
+    function getCachedDatasetPayload(connectionId, fileId) {
+        if (typeof window.localStorage === "undefined") {
+            return null;
+        }
+
+        const cacheKey = getDatasetBrowserCacheKey(connectionId, fileId);
+        const raw = window.localStorage.getItem(cacheKey);
+        if (!raw) {
+            return null;
+        }
+
+        try {
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== "object" || !parsed.payload || typeof parsed.payload !== "object") {
+                return null;
+            }
+
+            if (Date.now() - Number(parsed.cachedAt || 0) > datasetBrowserCacheTtlMs) {
+                window.localStorage.removeItem(cacheKey);
+                return null;
+            }
+
+            return parsed.payload;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function saveDatasetPayloadToCache(connectionId, fileId, payload) {
+        if (typeof window.localStorage === "undefined" || !payload || typeof payload !== "object" || payload._error) {
+            return;
+        }
+
+        try {
+            const cacheKey = getDatasetBrowserCacheKey(connectionId, fileId);
+            const envelope = {
+                cachedAt: Date.now(),
+                payload: payload,
+            };
+            const serialized = JSON.stringify(envelope);
+            if (serialized.length > datasetBrowserCacheMaxBytes) {
+                window.localStorage.removeItem(cacheKey);
+                return;
+            }
+
+            window.localStorage.setItem(cacheKey, serialized);
+        } catch (error) {
+            /* no-op */
+        }
+    }
+
+    function getDatasetBrowserCacheKey(connectionId, fileId) {
+        return String(cfg.browserCacheKey || "bi_browser_cache_0_v1")
+            + ":dataset:"
+            + String(connectionId || "")
+            + ":"
+            + String(fileId || "");
     }
 
     function handleUploadSourceSubmit(event) {
@@ -4110,16 +4202,18 @@ document.addEventListener("DOMContentLoaded", function () {
         const message = String(state.dataFeedbackMessage || "");
         dom.dataFeedback.hidden = message === "";
         dom.dataFeedback.textContent = message;
-        dom.dataFeedback.classList.toggle("is-error", message !== "");
+        dom.dataFeedback.classList.toggle("is-error", message !== "" && String(state.dataFeedbackType || "error") === "error");
     }
 
-    function showDataFeedback(message) {
+    function showDataFeedback(message, type) {
         state.dataFeedbackMessage = String(message || "");
+        state.dataFeedbackType = state.dataFeedbackMessage === "" ? "" : String(type || "error");
         renderDataFeedback();
     }
 
     function clearDataFeedback() {
         state.dataFeedbackMessage = "";
+        state.dataFeedbackType = "";
         renderDataFeedback();
     }
 

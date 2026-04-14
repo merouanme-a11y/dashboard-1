@@ -64,35 +64,36 @@ final class BIController extends AbstractController
             $preferences['defaultFile'] ?? ($files[0]['id'] ?? '')
         )));
 
-        $datasetPayload = $selectedConnection !== '' && $selectedFile !== ''
-            ? $this->sharePointDataService->getDatasetPayload($selectedConnection, $selectedFile)
+        $preloadedDataset = $selectedConnection !== '' && $selectedFile !== ''
+            ? $this->sharePointDataService->peekDatasetPayload($selectedConnection, $selectedFile)
             : null;
 
-        $builderOptions = is_array($datasetPayload) && !isset($datasetPayload['_error'])
-            ? $this->biChartBuilderService->getBuilderOptions($datasetPayload)
+        $builderOptions = is_array($preloadedDataset) && !isset($preloadedDataset['_error'])
+            ? $this->biChartBuilderService->getBuilderOptions($preloadedDataset)
             : $this->biChartBuilderService->getBuilderOptions([]);
 
-        $suggestedWidgets = is_array($datasetPayload) && !isset($datasetPayload['_error'])
+        $suggestedWidgets = is_array($preloadedDataset) && !isset($preloadedDataset['_error'])
             ? $this->biChartBuilderService->buildSuggestedWidgets(
-                $datasetPayload,
-                $this->sharePointDataService->getSuggestedColumns($datasetPayload)
+                $preloadedDataset,
+                $this->sharePointDataService->getSuggestedColumns($preloadedDataset)
             )
             : [];
         $settingsFeedback = $this->consumeSettingsFeedback($request);
         $microsoftAuth = $this->microsoftGraphAuthService->getConnectionStatus();
 
-        return $this->render('bi/index.html.twig', [
+        $response = $this->render('bi/index.html.twig', [
             'biConnectionsUrl' => $this->generateUrl('app_bi_connections'),
             'biFilesUrl' => $this->generateUrl('app_bi_files'),
             'biDatasetUrl' => $this->generateUrl('app_bi_dataset'),
             'biPreferencesUrl' => $this->generateUrl('app_bi_preferences'),
+            'biBrowserCacheKey' => $this->buildBrowserCacheKey($user),
             'biSettingsUrl' => $this->generateUrl('app_bi_settings'),
             'biUploadSourceUrl' => $this->generateUrl('app_bi_upload_source'),
             'biPreloadedConnections' => $connections,
             'biPreloadedConnectionId' => $selectedConnection,
             'biPreloadedFiles' => $files,
             'biPreloadedFileId' => $selectedFile,
-            'biPreloadedDataset' => $datasetPayload,
+            'biPreloadedDataset' => $preloadedDataset,
             'biBuilderOptions' => $builderOptions,
             'biSuggestedWidgets' => $suggestedWidgets,
             'biPreferencesPayload' => $preferences,
@@ -104,6 +105,8 @@ final class BIController extends AbstractController
             'biPreloadedSettingsFeedback' => $settingsFeedback,
             'biCanEdit' => $canEdit,
         ]);
+
+        return $this->applyPrivateCacheHeaders($response, 300);
     }
 
     #[Route('/connections', name: 'app_bi_connections', methods: ['GET'], defaults: ['_managed_page_path' => 'app_bi'])]
@@ -134,13 +137,14 @@ final class BIController extends AbstractController
         $payload = $this->sharePointDataService->getDatasetPayload(
             (string) $request->query->get('connection', ''),
             (string) $request->query->get('file', ''),
+            $request->query->getBoolean('refresh'),
         );
 
         if (($payload['_error'] ?? '') !== '') {
-            return new JsonResponse($payload, Response::HTTP_BAD_REQUEST);
+            return $this->applyPrivateCacheHeaders(new JsonResponse($payload, Response::HTTP_BAD_REQUEST), 0);
         }
 
-        return new JsonResponse($payload);
+        return $this->applyPrivateCacheHeaders(new JsonResponse($payload), 300);
     }
 
     #[Route('/preferences', name: 'app_bi_preferences', methods: ['POST'], defaults: ['_managed_page_path' => 'app_bi'])]
@@ -290,6 +294,21 @@ final class BIController extends AbstractController
         }
 
         return strcasecmp($user->getEffectiveProfileType(), 'Admin') === 0;
+    }
+
+    private function buildBrowserCacheKey(Utilisateur $user): string
+    {
+        return 'bi_browser_cache_' . (string) ($user->getId() ?? '0') . '_v1';
+    }
+
+    private function applyPrivateCacheHeaders(Response $response, int $maxAge): Response
+    {
+        $response->setPrivate();
+        $response->setMaxAge(max(0, $maxAge));
+        $response->headers->addCacheControlDirective('must-revalidate', true);
+        $response->setVary(['Cookie', 'X-Requested-With'], false);
+
+        return $response;
     }
 
     private function resolveSelectedFileId(array $files, string $selectedFile): string
