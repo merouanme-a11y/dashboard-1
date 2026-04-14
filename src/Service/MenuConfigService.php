@@ -144,7 +144,8 @@ class MenuConfigService
         $menuStorage = $storage['menus'][$menuType] ?? $this->createEmptyMenuStorageBucket($menuType);
         $defaultMenu = $this->normalizeResolvedMenuItems(
             $menuStorage['default'] !== [] ? $menuStorage['default'] : $this->getDefaultMenuConfigByType($menuType),
-            $menuType
+            $menuType,
+            true,
         );
 
         if ($selectorType === 'user' && $selectorValue !== '') {
@@ -906,10 +907,10 @@ class MenuConfigService
         return $normalized;
     }
 
-    private function normalizeResolvedMenuItems(array $menu, string $menuType): array
+    private function normalizeResolvedMenuItems(array $menu, string $menuType, bool $appendMissingDefaultSidebarItems = false): array
     {
         $menuType = $this->normalizeMenuType($menuType);
-        if ($menuType !== 'sidebar') {
+        if ($menuType !== 'sidebar' || !$appendMissingDefaultSidebarItems) {
             return $this->normalizeMenuHierarchy($menu);
         }
 
