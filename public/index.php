@@ -4,6 +4,7 @@ use App\HttpCache\AppCache;
 use App\Kernel;
 use Symfony\Component\HttpKernel\HttpCache\Store;
 
+require_once dirname(__DIR__).'/config/runtime_environment.php';
 require_once dirname(__DIR__).'/vendor/autoload_runtime.php';
 
 return function (array $context) {
