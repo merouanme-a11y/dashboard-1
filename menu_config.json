@@ -150,96 +150,6 @@
                         "folder": "pages",
                         "parent_page": null,
                         "icon_only": false
-                    },
-                    {
-                        "page": "app_dashboard",
-                        "url": "/dashboard/",
-                        "label": "Accueil",
-                        "icon": "bi-house",
-                        "folder": "pages",
-                        "parent_page": null,
-                        "icon_only": false
-                    },
-                    {
-                        "page": "app_profile",
-                        "url": "/dashboard/profile",
-                        "label": "Mon profil",
-                        "icon": "bi bi-person-circle",
-                        "folder": "pages",
-                        "parent_page": null,
-                        "icon_only": false
-                    },
-                    {
-                        "page": "app_annuaire",
-                        "url": "/dashboard/annuaire",
-                        "label": "Annuaire des contacts",
-                        "icon": "bi bi-person-lines-fill",
-                        "folder": "pages",
-                        "parent_page": null,
-                        "icon_only": false
-                    },
-                    {
-                        "page": "app_tickets",
-                        "url": "/dashboard/tickets",
-                        "label": "Tickets",
-                        "icon": "bi-ticket-perforated",
-                        "folder": "pages",
-                        "parent_page": null,
-                        "icon_only": false
-                    },
-                    {
-                        "page": "app_tickets_patch",
-                        "url": "/dashboard/tickets/formulaire-patch",
-                        "label": "Formulaire Patch",
-                        "icon": "bi-patch-plus",
-                        "folder": "pages",
-                        "parent_page": "app_tickets",
-                        "icon_only": false
-                    },
-                    {
-                        "page": "app_stats",
-                        "url": "/dashboard/stats",
-                        "label": "Statistiques",
-                        "icon": "bi-bar-chart",
-                        "folder": "pages",
-                        "parent_page": null,
-                        "icon_only": false
-                    },
-                    {
-                        "page": "app_livre_de_caisse",
-                        "url": "/dashboard/livre-de-caisse",
-                        "label": "Livre de caisse",
-                        "icon": "bi-cash-stack",
-                        "folder": "pages",
-                        "parent_page": null,
-                        "icon_only": false
-                    },
-                    {
-                        "page": "app_bi",
-                        "url": "/dashboard/bi",
-                        "label": "Business Intelligence",
-                        "icon": "bi-graph-up-arrow",
-                        "folder": "pages",
-                        "parent_page": null,
-                        "icon_only": false
-                    },
-                    {
-                        "page": "app_livre_de_caisse_listing",
-                        "url": "/dashboard/livre-de-caisse/listing",
-                        "label": "Listing livre de caisse agence",
-                        "icon": "bi-cash-stack",
-                        "folder": "pages",
-                        "parent_page": "app_livre_de_caisse",
-                        "icon_only": false
-                    },
-                    {
-                        "page": "app_livre_de_caisse_management",
-                        "url": "/dashboard/livre-de-caisse/gestion",
-                        "label": "Gestion - Livres de caisse",
-                        "icon": "bi-cash-stack",
-                        "folder": "pages",
-                        "parent_page": "app_livre_de_caisse",
-                        "icon_only": false
                     }
                 ]
             },
@@ -425,6 +335,96 @@
                         "icon": "bi-diagram-3",
                         "folder": "pages",
                         "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_dashboard",
+                        "url": "/dashboard/",
+                        "label": "Accueil",
+                        "icon": "bi-house",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_profile",
+                        "url": "/dashboard/profile",
+                        "label": "Mon profil",
+                        "icon": "bi bi-person-circle",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_annuaire",
+                        "url": "/dashboard/annuaire",
+                        "label": "Annuaire des contacts",
+                        "icon": "bi bi-person-lines-fill",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_tickets",
+                        "url": "/dashboard/tickets",
+                        "label": "Tickets",
+                        "icon": "bi-ticket-perforated",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_stats",
+                        "url": "/dashboard/stats",
+                        "label": "Statistiques",
+                        "icon": "bi-bar-chart",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_livre_de_caisse",
+                        "url": "/dashboard/livre-de-caisse",
+                        "label": "Livre de caisse",
+                        "icon": "bi-cash-stack",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_bi",
+                        "url": "/dashboard/bi",
+                        "label": "Business Intelligence",
+                        "icon": "bi-graph-up-arrow",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_quittancement_generator",
+                        "url": "/dashboard/quittancement-generator",
+                        "label": "Generateur de quittancements",
+                        "icon": "bi-calendar2-check",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_livre_de_caisse_listing",
+                        "url": "/dashboard/livre-de-caisse/listing",
+                        "label": "Listing livre de caisse agence",
+                        "icon": "bi-cash-stack",
+                        "folder": "pages",
+                        "parent_page": "app_livre_de_caisse",
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_livre_de_caisse_management",
+                        "url": "/dashboard/livre-de-caisse/gestion",
+                        "label": "Gestion - Livres de caisse",
+                        "icon": "bi-cash-stack",
+                        "folder": "pages",
+                        "parent_page": "app_livre_de_caisse",
                         "icon_only": false
                     }
                 ]
