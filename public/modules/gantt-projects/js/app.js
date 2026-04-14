@@ -24,6 +24,7 @@ const API_ROUTES = {
     importProjects: String(GANTT_ROUTE_CONFIG.importProjects || `${GANTT_BASE_URL}/api/import-projects`),
     exportProjects: String(GANTT_ROUTE_CONFIG.exportProjects || `${GANTT_BASE_URL}/api/export-projects`)
 };
+const LEGACY_STORAGE_KEYS = ["adep-gantt-planner-state-v1", STORAGE_KEY];
 
 const DEFAULT_SETTINGS = {
     timelineStart: "2026-01",
@@ -218,6 +219,20 @@ const apiMemoryCache = {
     revisions: new Map()
 };
 
+function clearLegacyBrowserState() {
+    if (typeof window.localStorage === "undefined") {
+        return;
+    }
+
+    try {
+        for (const storageKey of LEGACY_STORAGE_KEYS) {
+            window.localStorage.removeItem(storageKey);
+        }
+    } catch (error) {
+        console.warn("Impossible de nettoyer l'etat local du Gantt.", error);
+    }
+}
+
 const monthShortFormatter = new Intl.DateTimeFormat("fr-FR", { month: "short" });
 const monthLongFormatter = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
 const fullDateFormatter = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -373,6 +388,7 @@ async function startApplication() {
     }
 
     appStarted = true;
+    clearLegacyBrowserState();
 
     try {
         const [seedProjects, servicesPayload, projectUsersPayload, viewStatePayload] = await Promise.all([
@@ -861,7 +877,6 @@ function hydrateState(seedProjects, sharedSettings = {}) {
     normalizeLanes();
     sanitizeExpandedProjectIds();
     populateServiceFilter();
-    writeSerializableStateToStorage();
 }
 
 function bindStaticEvents() {
@@ -3331,7 +3346,6 @@ function resetPlanning() {
         endExact: null
     }));
 
-    localStorage.removeItem(STORAGE_KEY);
     populateServiceFilter();
     persistState();
     render();
@@ -3516,7 +3530,7 @@ function setTimelineProjectExpanded(projectId, expanded, options = {}) {
     sanitizeExpandedProjectIds();
 
     if (options.persist !== false) {
-        writeSerializableStateToStorage();
+        scheduleViewStateSync();
     }
 
     if (options.render !== false) {
@@ -5616,38 +5630,8 @@ function syncProjectExactDatesWithSchedule(project) {
 }
 
 function persistState() {
-    writeSerializableStateToStorage();
     scheduleProjectsSync();
     scheduleViewStateSync();
-}
-
-function writeSerializableStateToStorage() {
-    const serializable = {
-        settings: state.settings,
-        projects: state.projects.map(({ id, color, customColor, start, duration, lane, startExact, endExact, progression, status }) => ({
-            id,
-            color: customColor || "",
-            customColor: customColor || "",
-            start,
-            duration,
-            lane,
-            startExact,
-            endExact,
-            status: normalizeProjectStoredStatus(status),
-            progression: normalizeProjectProgression(progression)
-        }))
-    };
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
-}
-
-function readSavedState() {
-    try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-    } catch (error) {
-        console.warn("Etat sauvegarde invalide", error);
-        return {};
-    }
 }
 
 function scheduleProjectsSync() {
