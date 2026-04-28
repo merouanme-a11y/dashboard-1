@@ -46,12 +46,17 @@ class BIConfigurationService
         'kpi',
         'percentage',
         'distribution-table',
+        'datatable',
         'table',
         'histogram',
         'counter',
     ];
     private const ALLOWED_AGGREGATIONS = ['count', 'sum', 'avg', 'percentage'];
     private const ALLOWED_ALIGNMENTS = ['left', 'center', 'right'];
+    private const ALLOWED_SORT_DIRECTIONS = ['asc', 'desc'];
+    private const ALLOWED_FILTER_OPERATORS = ['equals', 'contains'];
+    private const ALLOWED_FILTER_INPUT_MODES = ['select', 'input'];
+    private const ALLOWED_FILTER_STYLE_TARGETS = ['none', 'row', 'cell'];
 
     public function __construct(
         private UserPagePreferenceRepository $preferenceRepository,
@@ -517,6 +522,11 @@ class BIConfigurationService
                 $widget['filterColumn'] ?? '',
                 $widget['filterValue'] ?? '',
             ),
+            'tableColumns' => $this->normalizeTableColumns($widget['tableColumns'] ?? []),
+            'tableColumnStyles' => $this->normalizeTableColumnStyles($widget['tableColumnStyles'] ?? []),
+            'tableStyles' => $this->normalizeDatatableStyleConfig($widget['tableStyles'] ?? []),
+            'sortColumn' => $this->normalizeScalar($widget['sortColumn'] ?? '', 120),
+            'sortDir' => $this->normalizeSortDirection($widget['sortDir'] ?? 'asc'),
         ];
     }
 
@@ -819,15 +829,215 @@ class BIConfigurationService
     private function normalizeWidgetFilter(array $filter): ?array
     {
         $column = $this->normalizeScalar($filter['column'] ?? '', 120);
-        $value = $this->normalizeScalar($filter['value'] ?? '', 160);
-        if ($column === '' || $value === '') {
+        $inputMode = $this->normalizeFilterInputMode($filter['inputMode'] ?? 'select');
+        $values = $inputMode === 'select'
+            ? $this->normalizeFilterValues($filter['values'] ?? [], $filter['value'] ?? null)
+            : [];
+        $value = $inputMode === 'input'
+            ? $this->normalizeScalar($filter['value'] ?? '', 160)
+            : '';
+        if ($column === '' || ($inputMode === 'input' ? $value === '' : $values === [])) {
             return null;
         }
 
         return [
             'id' => $this->normalizeScalar($filter['id'] ?? '', 80) ?: 'filter-1',
             'column' => $column,
+            'operator' => $this->normalizeFilterOperator($filter['operator'] ?? 'equals'),
+            'inputMode' => $inputMode,
             'value' => $value,
+            'values' => $values,
+            'valueStyles' => $inputMode === 'select'
+                ? $this->normalizeWidgetFilterValueStyles(
+                    $filter['valueStyles'] ?? [],
+                    $values,
+                    $this->normalizeFilterStyleTarget($filter['styleTarget'] ?? 'none'),
+                    $this->normalizeColor($filter['bgColor'] ?? null),
+                    $this->normalizeColor($filter['textColor'] ?? null),
+                )
+                : [],
+            'styleTarget' => $this->normalizeFilterStyleTarget($filter['styleTarget'] ?? 'none'),
+            'bgColor' => $this->normalizeColor($filter['bgColor'] ?? null),
+            'textColor' => $this->normalizeColor($filter['textColor'] ?? null),
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function normalizeFilterValues(mixed $values, mixed $fallbackValue): array
+    {
+        $normalized = [];
+        $seen = [];
+        $source = is_array($values) ? $values : [$fallbackValue];
+
+        foreach ($source as $value) {
+            $current = $this->normalizeScalar($value, 160);
+            if ($current === '' || isset($seen[$current])) {
+                continue;
+            }
+
+            $normalized[] = $current;
+            $seen[$current] = true;
+
+            if (count($normalized) >= 50) {
+                break;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<int, string> $allowedValues
+     * @return array<int, array{value:string,styleTarget:string,bgColor:?string,textColor:?string}>
+     */
+    private function normalizeWidgetFilterValueStyles(
+        mixed $valueStyles,
+        array $allowedValues,
+        string $legacyStyleTarget,
+        ?string $legacyBgColor,
+        ?string $legacyTextColor,
+    ): array {
+        $normalized = [];
+        $seen = [];
+        $allowedLookup = array_fill_keys($allowedValues, true);
+
+        foreach (is_array($valueStyles) ? $valueStyles : [] as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            $value = $this->normalizeScalar($entry['value'] ?? '', 160);
+            if ($value === '' || !isset($allowedLookup[$value]) || isset($seen[$value])) {
+                continue;
+            }
+
+            $normalized[] = [
+                'value' => $value,
+                'styleTarget' => $this->normalizeFilterStyleTarget($entry['styleTarget'] ?? 'none'),
+                'bgColor' => $this->normalizeColor($entry['bgColor'] ?? null),
+                'textColor' => $this->normalizeColor($entry['textColor'] ?? null),
+            ];
+            $seen[$value] = true;
+        }
+
+        foreach ($allowedValues as $value) {
+            if (isset($seen[$value])) {
+                continue;
+            }
+
+            $normalized[] = [
+                'value' => $value,
+                'styleTarget' => $legacyStyleTarget,
+                'bgColor' => $legacyBgColor,
+                'textColor' => $legacyTextColor,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function normalizeTableColumns(mixed $columns): array
+    {
+        $normalized = [];
+
+        foreach (is_array($columns) ? $columns : [] as $column) {
+            $value = $this->normalizeScalar($column, 120);
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized[$value] = $value;
+            if (count($normalized) >= 24) {
+                break;
+            }
+        }
+
+        return array_values($normalized);
+    }
+
+    /**
+     * @return array<int, array{key:string,bgColor:?string,textColor:?string}>
+     */
+    private function normalizeTableColumnStyles(mixed $styles): array
+    {
+        $normalized = [];
+        $seen = [];
+
+        foreach (is_array($styles) ? $styles : [] as $style) {
+            if (!is_array($style)) {
+                continue;
+            }
+
+            $key = $this->normalizeScalar($style['key'] ?? '', 120);
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+
+            $bgColor = $this->normalizeColor($style['bgColor'] ?? null);
+            $textColor = $this->normalizeColor($style['textColor'] ?? null);
+            if ($bgColor === null && $textColor === null) {
+                continue;
+            }
+
+            $normalized[] = [
+                'key' => $key,
+                'bgColor' => $bgColor,
+                'textColor' => $textColor,
+            ];
+            $seen[$key] = true;
+
+            if (count($normalized) >= 24) {
+                break;
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeDatatableStyleConfig(mixed $styles): array
+    {
+        $safe = is_array($styles) ? $styles : [];
+
+        return [
+            'headerBgColor' => $this->normalizeColor($safe['headerBgColor'] ?? null),
+            'headerTextColor' => $this->normalizeColor($safe['headerTextColor'] ?? null),
+            'rowBgColor' => $this->normalizeColor($safe['rowBgColor'] ?? null),
+            'rowAltBgColor' => $this->normalizeColor($safe['rowAltBgColor'] ?? null),
+            'cellBgColor' => $this->normalizeColor($safe['cellBgColor'] ?? null),
+            'cellTextColor' => $this->normalizeColor($safe['cellTextColor'] ?? null),
+        ];
+    }
+
+    private function normalizeSortDirection(mixed $value): string
+    {
+        $direction = $this->normalizeScalar($value ?? 'asc', 4);
+
+        return in_array($direction, self::ALLOWED_SORT_DIRECTIONS, true) ? $direction : 'asc';
+    }
+
+    private function normalizeFilterOperator(mixed $value): string
+    {
+        $operator = $this->normalizeScalar($value ?? 'equals', 12);
+
+        return in_array($operator, self::ALLOWED_FILTER_OPERATORS, true) ? $operator : 'equals';
+    }
+
+    private function normalizeFilterInputMode(mixed $value): string
+    {
+        $inputMode = $this->normalizeScalar($value ?? 'select', 12);
+
+        return in_array($inputMode, self::ALLOWED_FILTER_INPUT_MODES, true) ? $inputMode : 'select';
+    }
+
+    private function normalizeFilterStyleTarget(mixed $value): string
+    {
+        $target = $this->normalizeScalar($value ?? 'none', 12);
+
+        return in_array($target, self::ALLOWED_FILTER_STYLE_TARGETS, true) ? $target : 'none';
     }
 }

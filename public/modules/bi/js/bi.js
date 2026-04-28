@@ -124,6 +124,7 @@ document.addEventListener("DOMContentLoaded", function () {
         { type: "histogram", label: "Histogramme", icon: "bi-distribute-vertical", defaultTitle: "Distribution numerique" },
         { type: "distribution-table", label: "Tableau de repartition", icon: "bi-list-columns-reverse", defaultTitle: "Repartition detaillee" },
         { type: "table", label: "Tableau de donnees", icon: "bi-table", defaultTitle: "Tableau detaille" },
+        { type: "datatable", label: "Tableau personnalise", icon: "bi-grid-3x3-gap", defaultTitle: "Tableau personnalise" },
     ];
     const state = {
         connections: Array.isArray(cfg.preloadedConnections) ? cfg.preloadedConnections : [],
@@ -421,10 +422,25 @@ document.addEventListener("DOMContentLoaded", function () {
 
         document.addEventListener("click", function (event) {
             if (!(event.target instanceof Element)) return;
+            if (state.activeColorPopover?.popover?.contains(event.target)) {
+                return;
+            }
             if (!event.target.closest(".color-input-wrapper, .bi-modal-color-field")) {
                 closeColorPopover();
             }
         });
+
+        window.addEventListener("resize", function () {
+            if (state.activeColorPopover?.reposition) {
+                state.activeColorPopover.reposition();
+            }
+        });
+
+        window.addEventListener("scroll", function () {
+            if (state.activeColorPopover?.reposition) {
+                state.activeColorPopover.reposition();
+            }
+        }, true);
 
         dom.uploadSourceForm?.addEventListener("submit", handleUploadSourceSubmit);
         dom.remoteSourceForm?.addEventListener("submit", handleRemoteSourceSubmit);
@@ -750,6 +766,10 @@ document.addEventListener("DOMContentLoaded", function () {
             return "Choisissez une ligne et une valeur simple a afficher dans le tableau.";
         }
 
+        if (type === "datatable") {
+            return "Choisissez les colonnes a afficher, ajoutez des filtres par valeur et personnalisez les couleurs du tableau.";
+        }
+
         if (type === "distribution-table") {
             return "Choisissez une colonne pour afficher une repartition simple avec nombre, pourcentage et jauge coloree.";
         }
@@ -807,10 +827,109 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function createFilterEntry(entry) {
+        const inputMode = ["select", "input"].indexOf(String(entry?.inputMode || "")) !== -1 ? String(entry.inputMode) : "select";
+        const normalizedValues = normalizeFilterSelectionValues(entry?.values, entry?.value);
         return {
             id: String(entry?.id || createId("filter")),
             column: String(entry?.column || ""),
-            value: String(entry?.value || ""),
+            operator: ["equals", "contains"].indexOf(String(entry?.operator || "")) !== -1 ? String(entry.operator) : "equals",
+            inputMode: inputMode,
+            value: inputMode === "input" ? String(entry?.value || "") : "",
+            values: inputMode === "select" ? normalizedValues : [],
+            valueStyles: inputMode === "select" ? normalizeFilterValueStyles(entry?.valueStyles, normalizedValues, entry) : [],
+            styleTarget: ["none", "row", "cell"].indexOf(String(entry?.styleTarget || "")) !== -1 ? String(entry.styleTarget) : "none",
+            bgColor: normalizeColorInputValue(entry?.bgColor || ""),
+            textColor: normalizeColorInputValue(entry?.textColor || ""),
+        };
+    }
+
+    function normalizeFilterSelectionValues(values, fallbackValue) {
+        const normalized = [];
+        const seen = {};
+        const source = Array.isArray(values)
+            ? values
+            : (String(fallbackValue || "").trim() !== "" ? [fallbackValue] : []);
+
+        source.forEach(function (value) {
+            const current = String(value || "").trim();
+            if (!current || seen[current]) {
+                return;
+            }
+
+            seen[current] = true;
+            normalized.push(current);
+        });
+
+        return normalized;
+    }
+
+    function createTableColumnStyleEntry(entry) {
+        return {
+            key: String(entry?.key || ""),
+            bgColor: normalizeColorInputValue(entry?.bgColor || ""),
+            textColor: normalizeColorInputValue(entry?.textColor || ""),
+        };
+    }
+
+    function createFilterValueStyleEntry(entry) {
+        return {
+            value: String(entry?.value || "").trim(),
+            styleTarget: ["none", "row", "cell"].indexOf(String(entry?.styleTarget || "")) !== -1 ? String(entry.styleTarget) : "none",
+            bgColor: normalizeColorInputValue(entry?.bgColor || ""),
+            textColor: normalizeColorInputValue(entry?.textColor || ""),
+        };
+    }
+
+    function normalizeFilterValueStyles(valueStyles, allowedValues, legacyStyleSource) {
+        const allowed = normalizeFilterSelectionValues(allowedValues);
+        const allowedSet = {};
+        allowed.forEach(function (value) {
+            allowedSet[value] = true;
+        });
+
+        const normalized = [];
+        const seen = {};
+        (Array.isArray(valueStyles) ? valueStyles : []).forEach(function (entry) {
+            const normalizedEntry = createFilterValueStyleEntry(entry);
+            if (!normalizedEntry.value || !allowedSet[normalizedEntry.value] || seen[normalizedEntry.value]) {
+                return;
+            }
+
+            seen[normalizedEntry.value] = true;
+            normalized.push(normalizedEntry);
+        });
+
+        const legacyStyle = createFilterValueStyleEntry({
+            styleTarget: legacyStyleSource?.styleTarget || "none",
+            bgColor: legacyStyleSource?.bgColor || "",
+            textColor: legacyStyleSource?.textColor || "",
+        });
+
+        allowed.forEach(function (value) {
+            if (seen[value]) {
+                return;
+            }
+
+            normalized.push(createFilterValueStyleEntry({
+                value: value,
+                styleTarget: legacyStyle.styleTarget,
+                bgColor: legacyStyle.bgColor,
+                textColor: legacyStyle.textColor,
+            }));
+        });
+
+        return normalized;
+    }
+
+    function normalizeDatatableStyleConfig(style) {
+        const safe = style && typeof style === "object" ? style : {};
+        return {
+            headerBgColor: normalizeColorInputValue(safe.headerBgColor || ""),
+            headerTextColor: normalizeColorInputValue(safe.headerTextColor || ""),
+            rowBgColor: normalizeColorInputValue(safe.rowBgColor || ""),
+            rowAltBgColor: normalizeColorInputValue(safe.rowAltBgColor || ""),
+            cellBgColor: normalizeColorInputValue(safe.cellBgColor || ""),
+            cellTextColor: normalizeColorInputValue(safe.cellTextColor || ""),
         };
     }
 
@@ -897,6 +1016,23 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!widget.measures.length) {
             widget.measures.push(createMeasureEntry({ aggregation: defaultMeasureAggregationForWidget(widget) }));
         }
+
+        widget.tableColumns = Array.isArray(widget.tableColumns)
+            ? widget.tableColumns.map(function (value) { return String(value || "").trim(); }).filter(Boolean)
+            : [];
+        widget.tableColumnStyles = (Array.isArray(widget.tableColumnStyles) ? widget.tableColumnStyles : []).map(function (entry) {
+            if (entry && typeof entry === "object") {
+                Object.assign(entry, createTableColumnStyleEntry(entry));
+                return entry;
+            }
+
+            return createTableColumnStyleEntry(entry);
+        }).filter(function (entry) {
+            return entry.key !== "";
+        });
+        widget.tableStyles = normalizeDatatableStyleConfig(widget.tableStyles);
+        widget.sortColumn = String(widget.sortColumn || "");
+        widget.sortDir = String(widget.sortDir || "asc") === "desc" ? "desc" : "asc";
     }
 
     function synchronizeLegacyWidgetFields(widget) {
@@ -1016,6 +1152,35 @@ document.addEventListener("DOMContentLoaded", function () {
         return wrapper;
     }
 
+    function createBuilderPaletteColorTrigger(options) {
+        const safeOptions = options && typeof options === "object" ? options : {};
+        const wrapper = document.createElement("div");
+        wrapper.className = "color-input-wrapper bi-builder-palette-trigger";
+        if (safeOptions.tooltip) {
+            wrapper.dataset.tooltip = String(safeOptions.tooltip);
+        }
+
+        const trigger = document.createElement("button");
+        trigger.type = "button";
+        trigger.className = "bi-color-trigger bi-color-trigger-large";
+        trigger.setAttribute("aria-label", String(safeOptions.ariaLabel || safeOptions.tooltip || "Choisir une couleur"));
+        wrapper.appendChild(trigger);
+
+        bindColorTrigger(trigger, {
+            fallback: safeOptions.fallback || "#1f2937",
+            getValue: function () {
+                return safeOptions.getValue?.() || "";
+            },
+            setValue: function (nextValue) {
+                safeOptions.setValue?.(normalizeColorInputValue(nextValue || ""));
+            },
+        });
+
+        syncColorTrigger(trigger, safeOptions.getValue?.() || "");
+
+        return wrapper;
+    }
+
     function createRemoveButton(onClick, title) {
         const button = document.createElement("button");
         button.type = "button";
@@ -1073,6 +1238,83 @@ document.addEventListener("DOMContentLoaded", function () {
             wrapper: wrapper,
             input: input,
             sync: sync,
+        };
+    }
+
+    function createBuilderCheckboxMenu(selectedValues, availableValues, onChange, emptyLabel, renderItemExtra) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "bi-checkbox-menu";
+
+        const summary = document.createElement("div");
+        summary.className = "bi-checkbox-menu-summary";
+        wrapper.appendChild(summary);
+
+        const list = document.createElement("div");
+        list.className = "bi-checkbox-menu-list";
+        wrapper.appendChild(list);
+
+        const render = function (nextSelectedValues, nextAvailableValues) {
+            const selected = normalizeFilterSelectionValues(nextSelectedValues);
+            const selectedSet = {};
+            selected.forEach(function (value) {
+                selectedSet[value] = true;
+            });
+
+            const values = normalizeFilterSelectionValues(nextAvailableValues);
+            summary.textContent = selected.length
+                ? (selected.length + " valeur" + (selected.length > 1 ? "s" : "") + " selectionnee" + (selected.length > 1 ? "s" : ""))
+                : String(emptyLabel || "Toutes les valeurs");
+
+            list.innerHTML = "";
+            if (!values.length) {
+                const empty = document.createElement("div");
+                empty.className = "bi-checkbox-menu-empty";
+                empty.textContent = "Aucune valeur disponible";
+                list.appendChild(empty);
+                return;
+            }
+
+            values.forEach(function (value) {
+                const item = document.createElement("div");
+                item.className = "bi-checkbox-menu-item";
+
+                const row = document.createElement("label");
+                row.className = "bi-checkbox-menu-item-row";
+
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.checked = Boolean(selectedSet[value]);
+                checkbox.addEventListener("change", function () {
+                    const nextValues = values.filter(function (candidate) {
+                        return candidate === value ? checkbox.checked : Boolean(selectedSet[candidate]);
+                    });
+                    onChange(normalizeFilterSelectionValues(nextValues));
+                });
+
+                const text = document.createElement("span");
+                text.textContent = value;
+
+                row.appendChild(checkbox);
+                row.appendChild(text);
+                item.appendChild(row);
+
+                if (checkbox.checked && typeof renderItemExtra === "function") {
+                    const extra = renderItemExtra(value);
+                    if (extra) {
+                        extra.classList.add("bi-checkbox-menu-item-extra");
+                        item.appendChild(extra);
+                    }
+                }
+
+                list.appendChild(item);
+            });
+        };
+
+        render(selectedValues, availableValues);
+
+        return {
+            wrapper: wrapper,
+            sync: render,
         };
     }
 
@@ -1296,17 +1538,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
         filters.forEach(function (filter, index) {
             const row = document.createElement("div");
-            row.className = "bi-data-row";
+            row.className = "bi-data-row bi-datatable-filter-grid";
+            const getSelectedValue = function () {
+                return String((Array.isArray(filter.values) && filter.values.length ? filter.values[0] : filter.value) || "");
+            };
 
             const valueSelect = createBuilderSelect([], "", function (nextValue) {
-                filter.value = nextValue;
+                filter.values = nextValue ? [String(nextValue)] : [];
+                filter.value = "";
                 triggerWidgetDataRefresh(widget, false);
             });
 
             const syncValueSelect = function (nextColumn) {
                 const selectedColumn = String(nextColumn || "");
+                const selectedValue = getSelectedValue();
                 const options = selectedColumn
-                    ? buildDistinctValueOptions(selectedColumn, filter.value, getWidgetScopedRows(widget, filter.id))
+                    ? buildDistinctValueOptions(selectedColumn, selectedValue, getWidgetScopedRows(widget, filter.id))
                     : [];
                 const allowedValues = options.map(function (option) {
                     return String(option.value ?? option.key ?? "");
@@ -1314,17 +1561,19 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 if (selectedColumn === "") {
                     filter.value = "";
+                    filter.values = [];
                     valueSelect.disabled = true;
                     setBuilderSelectOptions(valueSelect, [], "", "Selectionnez d abord une colonne");
                     return;
                 }
 
-                if (allowedValues.indexOf(String(filter.value || "")) === -1) {
+                if (allowedValues.indexOf(selectedValue) === -1) {
                     filter.value = "";
+                    filter.values = [];
                 }
 
                 valueSelect.disabled = false;
-                setBuilderSelectOptions(valueSelect, options, filter.value, "Toutes les valeurs");
+                setBuilderSelectOptions(valueSelect, options, getSelectedValue(), "Toutes les valeurs");
             };
 
             const columnSelect = createBuilderSelect(columns.map(function (column) {
@@ -1332,6 +1581,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }), filter.column, function (nextValue) {
                 filter.column = nextValue;
                 filter.value = "";
+                filter.values = [];
                 syncValueSelect(nextValue);
                 triggerWidgetDataRefresh(widget, false);
             }, "Selectionner une colonne");
@@ -1536,6 +1786,401 @@ document.addEventListener("DOMContentLoaded", function () {
         );
     }
 
+    function renderDatatableColumnsZone(widget, columns) {
+        const section = createBuilderZone("Colonnes", "Choisissez les colonnes visibles dans le tableau personnalise.", "", null, false);
+        const actions = document.createElement("div");
+        actions.className = "bi-datatable-col-actions";
+        const summary = document.createElement("div");
+        summary.className = "bi-datatable-col-summary";
+
+        const btnAll = document.createElement("button");
+        btnAll.type = "button";
+        btnAll.className = "stats-edit-button";
+        btnAll.textContent = "Tout selectionner";
+
+        const btnNone = document.createElement("button");
+        btnNone.type = "button";
+        btnNone.className = "stats-edit-button";
+        btnNone.textContent = "Vider";
+
+        actions.appendChild(summary);
+
+        const actionButtons = document.createElement("div");
+        actionButtons.className = "bi-datatable-col-action-buttons";
+        actionButtons.appendChild(btnAll);
+        actionButtons.appendChild(btnNone);
+        actions.appendChild(actionButtons);
+        section.appendChild(actions);
+
+        const grid = document.createElement("div");
+        grid.className = "bi-datatable-col-grid";
+        const head = document.createElement("div");
+        head.className = "bi-datatable-col-head";
+        head.innerHTML = '<span>Titre</span><span>Couleurs</span><span>Affichage</span>';
+        grid.appendChild(head);
+
+        const selectedColumns = Array.isArray(widget.tableColumns) ? widget.tableColumns : [];
+        const getColumnStyleEntry = function (columnKey, createIfMissing) {
+            const normalizedKey = String(columnKey || "");
+            widget.tableColumnStyles = Array.isArray(widget.tableColumnStyles) ? widget.tableColumnStyles : [];
+            let entry = widget.tableColumnStyles.find(function (candidate) {
+                return String(candidate?.key || "") === normalizedKey;
+            }) || null;
+            if (!entry && createIfMissing) {
+                entry = createTableColumnStyleEntry({ key: normalizedKey });
+                widget.tableColumnStyles.push(entry);
+            }
+            return entry;
+        };
+        const setColumnStyleValue = function (columnKey, field, nextValue) {
+            const entry = getColumnStyleEntry(columnKey, true);
+            if (!entry) {
+                return;
+            }
+
+            entry[field] = normalizeColorInputValue(nextValue || "");
+            triggerWidgetDataRefresh(widget, false);
+        };
+        const refreshSelectionState = function () {
+            const checked = Array.from(grid.querySelectorAll(".bi-datatable-col-checkbox:checked")).map(function (item) {
+                return String(item.value || "");
+            }).filter(Boolean);
+            widget.tableColumns = checked;
+            if (widget.sortColumn && checked.indexOf(widget.sortColumn) === -1) {
+                widget.sortColumn = "";
+            }
+            summary.textContent = checked.length + " / " + columns.length + " colonne" + (columns.length > 1 ? "s" : "") + " affichee" + (checked.length > 1 ? "s" : "");
+        };
+
+        columns.forEach(function (column) {
+            const row = document.createElement("div");
+            row.className = "bi-datatable-col-row";
+
+            const name = document.createElement("div");
+            name.className = "bi-datatable-col-name";
+            name.textContent = String(column.label || column.key || "");
+
+            const colors = document.createElement("div");
+            colors.className = "bi-datatable-col-colors";
+            colors.appendChild(createBuilderPaletteColorTrigger({
+                tooltip: "Fond",
+                ariaLabel: "Couleur de fond pour " + String(column.label || column.key || ""),
+                fallback: "#1f2937",
+                getValue: function () {
+                    return getColumnStyleEntry(column.key, false)?.bgColor || "";
+                },
+                setValue: function (nextValue) {
+                    setColumnStyleValue(column.key, "bgColor", nextValue);
+                },
+            }));
+            colors.appendChild(createBuilderPaletteColorTrigger({
+                tooltip: "Texte",
+                ariaLabel: "Couleur du texte pour " + String(column.label || column.key || ""),
+                fallback: "#f8fafc",
+                getValue: function () {
+                    return getColumnStyleEntry(column.key, false)?.textColor || "";
+                },
+                setValue: function (nextValue) {
+                    setColumnStyleValue(column.key, "textColor", nextValue);
+                },
+            }));
+
+            const visibility = document.createElement("label");
+            visibility.className = "bi-datatable-col-visibility";
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.className = "bi-datatable-col-checkbox";
+            checkbox.value = column.key;
+            checkbox.checked = selectedColumns.indexOf(column.key) !== -1;
+            const stateLabel = document.createElement("span");
+            stateLabel.className = "bi-datatable-col-state";
+            stateLabel.textContent = checkbox.checked ? "Afficher" : "Ne pas afficher";
+            checkbox.addEventListener("change", function () {
+                stateLabel.textContent = checkbox.checked ? "Afficher" : "Ne pas afficher";
+                refreshSelectionState();
+                triggerWidgetDataRefresh(widget, false);
+            });
+
+            visibility.appendChild(checkbox);
+            visibility.appendChild(stateLabel);
+            row.appendChild(name);
+            row.appendChild(colors);
+            row.appendChild(visibility);
+            grid.appendChild(row);
+        });
+
+        btnAll.addEventListener("click", function () {
+            grid.querySelectorAll(".bi-datatable-col-checkbox").forEach(function (item) {
+                item.checked = true;
+                const stateLabel = item.parentElement?.querySelector(".bi-datatable-col-state");
+                if (stateLabel) {
+                    stateLabel.textContent = "Afficher";
+                }
+            });
+            refreshSelectionState();
+            triggerWidgetDataRefresh(widget, false);
+        });
+
+        btnNone.addEventListener("click", function () {
+            grid.querySelectorAll(".bi-datatable-col-checkbox").forEach(function (item) {
+                item.checked = false;
+                const stateLabel = item.parentElement?.querySelector(".bi-datatable-col-state");
+                if (stateLabel) {
+                    stateLabel.textContent = "Ne pas afficher";
+                }
+            });
+            refreshSelectionState();
+            triggerWidgetDataRefresh(widget, false);
+        });
+
+        refreshSelectionState();
+        section.appendChild(grid);
+        return section;
+    }
+
+    function renderDatatableFilterZone(widget, columns) {
+        const filters = getWidgetBuilderFilters(widget);
+        const section = createBuilderZone(
+            "Filtres du tableau",
+            "Filtrez sur une valeur exacte ou sur un texte partiel, avec liste dynamique ou saisie libre.",
+            filters.length < 5 ? "+ Ajouter" : "",
+            function () {
+                if (widget.widgetFilters.length < 5) {
+                    widget.widgetFilters.push(createFilterEntry({}));
+                    triggerWidgetDataRefresh(widget, true);
+                }
+            },
+            filters.length < 5
+        );
+        const list = document.createElement("div");
+        list.className = "bi-data-list";
+
+        if (!filters.length) {
+            const empty = document.createElement("div");
+            empty.className = "bi-data-empty";
+            empty.textContent = "Aucun filtre configure.";
+            list.appendChild(empty);
+        }
+
+        filters.forEach(function (filter, index) {
+            const row = document.createElement("div");
+            row.className = "bi-data-row";
+
+            const valueField = createBuilderField("Valeur", document.createElement("div"), true);
+            let valueChecklist = null;
+            const getValueStyleEntry = function (targetValue, createIfMissing) {
+                const normalizedValue = String(targetValue || "").trim();
+                filter.valueStyles = normalizeFilterValueStyles(filter.valueStyles, filter.values, filter);
+                let entry = filter.valueStyles.find(function (candidate) {
+                    return String(candidate?.value || "") === normalizedValue;
+                }) || null;
+                if (!entry && createIfMissing) {
+                    entry = createFilterValueStyleEntry({ value: normalizedValue });
+                    filter.valueStyles.push(entry);
+                }
+                return entry;
+            };
+            const pruneValueStyles = function () {
+                filter.valueStyles = normalizeFilterValueStyles(filter.valueStyles, filter.values, filter);
+            };
+
+            const syncValueControl = function () {
+                const selectedColumn = String(filter.column || "");
+                valueField.innerHTML = "";
+                valueField.appendChild((function () {
+                    const label = document.createElement("label");
+                    label.textContent = "Valeur";
+                    return label;
+                })());
+
+                if (filter.inputMode === "input") {
+                    valueField.appendChild(createBuilderInput(
+                        filter.value,
+                        function (nextValue) {
+                            filter.value = nextValue;
+                            triggerWidgetDataRefresh(widget, false);
+                        },
+                        selectedColumn ? "Saisir une valeur" : "Selectionnez d abord une colonne",
+                        selectedColumn ? getDistinctColumnValues(selectedColumn, getWidgetScopedRows(widget, filter.id)) : [],
+                        function (nextValue) {
+                            filter.value = nextValue;
+                            triggerWidgetDataRefresh(widget, false);
+                        }
+                    ));
+                    return;
+                }
+
+                if (!selectedColumn) {
+                    valueChecklist = createBuilderCheckboxMenu([], [], function () {
+                        return null;
+                    }, "Selectionnez d abord une colonne");
+                    valueField.appendChild(valueChecklist.wrapper);
+                } else {
+                    const values = getDistinctColumnValues(selectedColumn, getWidgetScopedRows(widget, filter.id));
+                    const nextSelectedValues = normalizeFilterSelectionValues(filter.values, filter.value).filter(function (value) {
+                        return values.indexOf(value) !== -1;
+                    });
+                    filter.values = nextSelectedValues;
+                    filter.value = "";
+                    pruneValueStyles();
+                    valueChecklist = createBuilderCheckboxMenu(nextSelectedValues, values, function (nextValues) {
+                        filter.values = normalizeFilterSelectionValues(nextValues);
+                        filter.value = "";
+                        pruneValueStyles();
+                        triggerWidgetDataRefresh(widget, true);
+                    }, "Toutes les valeurs", function (selectedValue) {
+                        const styleEntry = getValueStyleEntry(selectedValue, true);
+                        const tools = document.createElement("div");
+                        tools.className = "bi-checkbox-menu-item-tools";
+
+                        const targetWrap = document.createElement("div");
+                        const targetLabel = document.createElement("div");
+                        targetLabel.className = "bi-checkbox-menu-item-tools-label";
+                        targetLabel.textContent = "Cible";
+                        targetWrap.appendChild(targetLabel);
+                        targetWrap.appendChild(createBuilderSelect([
+                            { value: "none", label: "Aucune" },
+                            { value: "row", label: "Ligne" },
+                            { value: "cell", label: "Cellule" },
+                        ], styleEntry?.styleTarget || "none", function (nextValue) {
+                            const current = getValueStyleEntry(selectedValue, true);
+                            current.styleTarget = ["none", "row", "cell"].indexOf(String(nextValue || "")) !== -1 ? String(nextValue) : "none";
+                            triggerWidgetDataRefresh(widget, false);
+                        }));
+
+                        const bgWrap = document.createElement("div");
+                        const bgLabel = document.createElement("div");
+                        bgLabel.className = "bi-checkbox-menu-item-tools-label";
+                        bgLabel.textContent = "Fond";
+                        bgWrap.appendChild(bgLabel);
+                        bgWrap.appendChild(createBuilderPaletteColorTrigger({
+                            tooltip: "Fond",
+                            ariaLabel: "Couleur de fond pour " + selectedValue,
+                            fallback: "#1f2937",
+                            getValue: function () {
+                                return getValueStyleEntry(selectedValue, true)?.bgColor || "";
+                            },
+                            setValue: function (nextValue) {
+                                const current = getValueStyleEntry(selectedValue, true);
+                                current.bgColor = normalizeColorInputValue(nextValue || "");
+                                triggerWidgetDataRefresh(widget, false);
+                            },
+                        }));
+
+                        const textWrap = document.createElement("div");
+                        const textLabel = document.createElement("div");
+                        textLabel.className = "bi-checkbox-menu-item-tools-label";
+                        textLabel.textContent = "Texte";
+                        textWrap.appendChild(textLabel);
+                        textWrap.appendChild(createBuilderPaletteColorTrigger({
+                            tooltip: "Texte",
+                            ariaLabel: "Couleur du texte pour " + selectedValue,
+                            fallback: "#f8fafc",
+                            getValue: function () {
+                                return getValueStyleEntry(selectedValue, true)?.textColor || "";
+                            },
+                            setValue: function (nextValue) {
+                                const current = getValueStyleEntry(selectedValue, true);
+                                current.textColor = normalizeColorInputValue(nextValue || "");
+                                triggerWidgetDataRefresh(widget, false);
+                            },
+                        }));
+
+                        tools.appendChild(targetWrap);
+                        tools.appendChild(bgWrap);
+                        tools.appendChild(textWrap);
+                        return tools;
+                    });
+                    valueField.appendChild(valueChecklist.wrapper);
+                }
+            };
+
+            row.appendChild(createBuilderField("Colonne", createBuilderSelect(columns.map(function (column) {
+                return { value: column.key, label: column.label };
+            }), filter.column, function (nextValue) {
+                filter.column = nextValue;
+                filter.value = "";
+                filter.values = [];
+                filter.valueStyles = [];
+                syncValueControl();
+                triggerWidgetDataRefresh(widget, true);
+            }, "Selectionner une colonne")));
+
+            row.appendChild(createBuilderField("Recherche", createBuilderSelect([
+                { value: "equals", label: "Valeur exacte" },
+                { value: "contains", label: "Contient" },
+            ], filter.operator || "equals", function (nextValue) {
+                filter.operator = nextValue || "equals";
+                triggerWidgetDataRefresh(widget, false);
+            })));
+
+            row.appendChild(createBuilderField("Saisie", createBuilderSelect([
+                { value: "select", label: "Menu dynamique" },
+                { value: "input", label: "Champ libre" },
+            ], filter.inputMode || "select", function (nextValue) {
+                filter.inputMode = nextValue || "select";
+                filter.value = "";
+                filter.values = [];
+                filter.valueStyles = [];
+                syncValueControl();
+                triggerWidgetDataRefresh(widget, true);
+            })));
+
+            syncValueControl();
+            row.appendChild(valueField);
+            row.appendChild(createRemoveButton(function () {
+                widget.widgetFilters.splice(index, 1);
+                triggerWidgetDataRefresh(widget, true);
+            }, "Supprimer ce filtre"));
+
+            const filterCard = document.createElement("div");
+            filterCard.className = "bi-datatable-filter-card";
+            filterCard.appendChild(row);
+            if (filter.inputMode === "input") {
+                const styleRow = document.createElement("div");
+                styleRow.className = "bi-data-row bi-datatable-filter-style-row";
+                styleRow.appendChild(createBuilderField("Cible couleur", createBuilderSelect([
+                    { value: "none", label: "Aucune" },
+                    { value: "row", label: "Ligne" },
+                    { value: "cell", label: "Cellule" },
+                ], filter.styleTarget || "none", function (nextValue) {
+                    filter.styleTarget = ["none", "row", "cell"].indexOf(String(nextValue || "")) !== -1 ? String(nextValue) : "none";
+                    triggerWidgetDataRefresh(widget, false);
+                })));
+                styleRow.appendChild(createBuilderField("Fond", createBuilderPaletteColorTrigger({
+                    tooltip: "Fond",
+                    ariaLabel: "Couleur de fond du filtre",
+                    fallback: "#1f2937",
+                    getValue: function () {
+                        return filter.bgColor || "";
+                    },
+                    setValue: function (nextValue) {
+                        filter.bgColor = normalizeColorInputValue(nextValue || "");
+                        triggerWidgetDataRefresh(widget, false);
+                    },
+                })));
+                styleRow.appendChild(createBuilderField("Texte", createBuilderPaletteColorTrigger({
+                    tooltip: "Texte",
+                    ariaLabel: "Couleur du texte du filtre",
+                    fallback: "#f8fafc",
+                    getValue: function () {
+                        return filter.textColor || "";
+                    },
+                    setValue: function (nextValue) {
+                        filter.textColor = normalizeColorInputValue(nextValue || "");
+                        triggerWidgetDataRefresh(widget, false);
+                    },
+                })));
+                filterCard.appendChild(styleRow);
+            }
+            list.appendChild(filterCard);
+        });
+
+        section.appendChild(list);
+        return section;
+    }
+
     function renderWidgetDataBuilder(widget, columns) {
         if (!dom.widgetDataBuilder) {
             return;
@@ -1567,6 +2212,42 @@ document.addEventListener("DOMContentLoaded", function () {
                 "Ajoutez jusqu a 5 filtres simples du type colonne = valeur pour limiter les lignes prises en compte."
             ));
         };
+
+        if (type === "datatable") {
+            builder.appendChild(renderDatatableColumnsZone(widget, columns));
+            builder.appendChild(renderDatatableFilterZone(widget, columns));
+
+            const displaySection = createBuilderZone("Affichage", "Reglez le volume et le tri initial du tableau.", "", null, false);
+            const displayRow = document.createElement("div");
+            displayRow.className = "bi-data-row";
+            displayRow.appendChild(createBuilderField("Lignes max", createBuilderSelect([
+                { value: "10", label: "10" },
+                { value: "20", label: "20" },
+                { value: "50", label: "50" },
+                { value: "100", label: "100" },
+            ], String(widget.maxItems || 20), function (nextValue) {
+                widget.maxItems = clamp(parseInt(nextValue, 10) || 20, 5, 100);
+                triggerWidgetDataRefresh(widget, false);
+            })));
+            displayRow.appendChild(createBuilderField("Tri initial", createBuilderSelect([
+                { value: "", label: "Aucun tri" },
+            ].concat(columns.map(function (column) {
+                return { value: column.key, label: column.label };
+            })), String(widget.sortColumn || ""), function (nextValue) {
+                widget.sortColumn = nextValue;
+                triggerWidgetDataRefresh(widget, false);
+            })));
+            displayRow.appendChild(createBuilderField("Sens", createBuilderSelect([
+                { value: "asc", label: "Croissant" },
+                { value: "desc", label: "Decroissant" },
+            ], String(widget.sortDir || "asc"), function (nextValue) {
+                widget.sortDir = nextValue === "desc" ? "desc" : "asc";
+                triggerWidgetDataRefresh(widget, false);
+            })));
+            displaySection.appendChild(displayRow);
+            builder.appendChild(displaySection);
+            return;
+        }
 
         if (type === "table") {
             const section = createBuilderZone("Tableau", "Choisissez une ligne et une valeur simple a resumer.", "", null, false);
@@ -2034,6 +2715,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         hexInput.addEventListener("input", function () {
             const value = String(hexInput.value || "").trim();
+            if (value === "") {
+                applyValue("");
+                return;
+            }
             if (/^#([0-9a-f]{6})$/i.test(value)) {
                 applyValue(value);
             }
@@ -2071,14 +2756,24 @@ document.addEventListener("DOMContentLoaded", function () {
         const currentColor = normalizeColorInputValue(options.getValue?.() || options.fallback || "");
         const popover = document.createElement("div");
         popover.className = "bi-color-popover";
+        const simpleOnly = Boolean(options.simpleOnly);
         popover.innerHTML = '<div class="bi-color-section"><div class="bi-color-section-title">Palette</div><div class="bi-color-swatch-grid">' + palette.map(function (color) {
             const activeClass = currentColor === color ? " is-active" : "";
             return '<button type="button" class="bi-color-swatch' + activeClass + '" data-color-value="' + escapeHtml(color) + '" style="--bi-swatch-color:' + escapeHtml(color) + ';" aria-label="Choisir ' + escapeHtml(color) + '"></button>';
-        }).join("") + '</div></div><input type="color" class="bi-color-native-input" value="' + escapeHtml(currentColor || options.fallback || "#1f2937") + '" aria-label="Choisir une couleur"><input type="text" class="bi-color-hex-input" value="' + escapeHtml(currentColor || "") + '" placeholder="#FFFFFF" maxlength="7"><button type="button" class="bi-color-reset">Reinitialiser</button>';
-        wrapper.appendChild(popover);
+        }).join("") + '</div></div>' +
+            (simpleOnly ? "" : '<input type="color" class="bi-color-native-input" value="' + escapeHtml(currentColor || options.fallback || "#1f2937") + '" aria-label="Choisir une couleur"><input type="text" class="bi-color-hex-input" value="' + escapeHtml(currentColor || "") + '" placeholder="#FFFFFF" maxlength="7">') +
+            '<button type="button" class="bi-color-reset">Reinitialiser</button>';
+        document.body.appendChild(popover);
 
         const hexInput = popover.querySelector(".bi-color-hex-input");
         const nativeInput = popover.querySelector(".bi-color-native-input");
+        const positionPopover = function () {
+            const triggerRect = trigger.getBoundingClientRect();
+            const top = Math.min(window.innerHeight - popover.offsetHeight - 12, triggerRect.bottom + 8);
+            const left = Math.min(window.innerWidth - popover.offsetWidth - 12, Math.max(12, triggerRect.left));
+            popover.style.left = Math.max(12, left) + "px";
+            popover.style.top = Math.max(12, top) + "px";
+        };
         const applyColor = function (value) {
             const normalized = normalizeColorInputValue(value || "");
             syncColorTrigger(trigger, normalized || "");
@@ -2086,11 +2781,11 @@ document.addEventListener("DOMContentLoaded", function () {
             popover.querySelectorAll(".bi-color-swatch").forEach(function (swatch) {
                 swatch.classList.toggle("is-active", String(swatch.getAttribute("data-color-value") || "").toLowerCase() === normalized.toLowerCase());
             });
-            if (hexInput && normalized) {
-                hexInput.value = normalized.toUpperCase();
+            if (hexInput) {
+                hexInput.value = normalized ? normalized.toUpperCase() : "";
             }
-            if (nativeInput && normalized) {
-                nativeInput.value = normalized;
+            if (nativeInput) {
+                nativeInput.value = normalized || options.fallback || "#1f2937";
             }
         };
 
@@ -2103,6 +2798,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         hexInput?.addEventListener("input", function () {
             const value = String(hexInput.value || "").trim();
+            if (value === "") {
+                applyColor("");
+                return;
+            }
             if (/^#([0-9a-f]{6})$/i.test(value)) {
                 applyColor(value);
             }
@@ -2127,7 +2826,8 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         });
 
-        state.activeColorPopover = { trigger: trigger, popover: popover };
+        positionPopover();
+        state.activeColorPopover = { trigger: trigger, popover: popover, reposition: positionPopover };
     }
 
     function closeColorPopover() {
@@ -2176,16 +2876,14 @@ document.addEventListener("DOMContentLoaded", function () {
         const isEditMode = canEditCurrentPage() && state.editMode;
         dom.filtersBar.hidden = false;
         dom.filtersBar.innerHTML = page.filters.map(function (filter, index) {
-            const values = getDistinctColumnValues(filter.column);
+            const valueOptions = buildDistinctValueOptions(filter.column, filter.value, getPageScopedRows(index));
             const selectedColumn = columnOptions.find(function (column) {
                 return column.key === filter.column;
             });
             const columnSelect = buildSelectOptions(columnOptions.map(function (column) {
                 return { value: column.key, label: column.label };
             }), filter.column);
-            const valueSelect = buildSelectOptions(values.map(function (value) {
-                return { value: value, label: value };
-            }), filter.value);
+            const valueSelect = buildSelectOptions(valueOptions, filter.value);
             const readonlyClass = isEditMode ? "" : " is-readonly";
             const columnField = isEditMode
                 ? '<select class="stats-select" data-filter-column>' + columnSelect + '</select>'
@@ -2204,7 +2902,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const filter = page?.filters[index];
                 if (!filter) return;
                 filter.column = String(select.value || "");
-                filter.value = getDistinctColumnValues(filter.column)[0] || "";
+                filter.value = getDistinctColumnValues(filter.column, getPageScopedRows(index))[0] || "";
                 renderAll();
                 scheduleSavePreferences();
             });
@@ -2217,7 +2915,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const filter = page?.filters[index];
                 if (!filter) return;
                 filter.value = String(select.value || "");
-                renderWidgets();
+                renderAll();
                 scheduleSavePreferences();
             });
         });
@@ -2229,6 +2927,30 @@ document.addEventListener("DOMContentLoaded", function () {
                 page.filters.splice(index, 1);
                 renderAll();
                 scheduleSavePreferences();
+            });
+        });
+    }
+
+    function getPageScopedRows(excludedFilterIndex) {
+        const page = getCurrentPage();
+        const rows = Array.isArray(state.dataset?.rows) ? state.dataset.rows : [];
+        if (!page || !Array.isArray(page.filters) || !page.filters.length) {
+            return rows;
+        }
+
+        return rows.filter(function (row) {
+            return page.filters.every(function (filter, index) {
+                if (index === excludedFilterIndex) {
+                    return true;
+                }
+
+                const column = String(filter?.column || "").trim();
+                const value = String(filter?.value || "").trim();
+                if (!column || !value) {
+                    return true;
+                }
+
+                return normalizeFilterComparableValue(row?.[column]) === normalizeFilterComparableValue(value);
             });
         });
     }
@@ -2706,6 +3428,10 @@ document.addEventListener("DOMContentLoaded", function () {
             return buildPreviewDistributionTableHtml(result, widget);
         }
 
+        if (result.tableVariant === "datatable") {
+            return buildDatatableHtml(result, widget, { preview: true, maxRows: 4, maxColumns: 4 });
+        }
+
         const headers = result.columns.slice(0, 4).map(function (column) {
             return "<th>" + escapeHtml(column.label) + "</th>";
         }).join("");
@@ -2738,14 +3464,36 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function bindWidgetCardEvents(card, widget, index) {
         card.addEventListener("click", function (event) {
-            if (event.target.closest && event.target.closest(".stats-resize-button, .card-visibility-toggle, .card-color-picker, .color-input-wrapper, .bi-color-popover, .bi-color-trigger, .bi-color-swatch, .bi-color-native-input, .bi-color-hex-input, .bi-color-reset, input, label, button")) {
+            const actionButton = event.target.closest("[data-action]");
+            if (actionButton) {
+                const page = getCurrentPage();
+                const realIndex = page ? page.widgets.findIndex(function (candidate) { return candidate.id === widget.id; }) : -1;
+                if (realIndex >= 0) {
+                    handleWidgetAction(String(actionButton.getAttribute("data-action") || ""), realIndex);
+                }
                 event.stopPropagation();
                 return;
             }
 
-            const actionButton = event.target.closest("[data-action]");
-            if (actionButton) {
-                handleWidgetAction(String(actionButton.getAttribute("data-action") || ""), index);
+            const sortTh = event.target.closest("[data-sort-col]");
+            if (sortTh && widget.type === "datatable") {
+                const columnKey = String(sortTh.getAttribute("data-sort-col") || "");
+                if (!columnKey) {
+                    return;
+                }
+                if (widget.sortColumn === columnKey) {
+                    widget.sortDir = widget.sortDir === "asc" ? "desc" : "asc";
+                } else {
+                    widget.sortColumn = columnKey;
+                    widget.sortDir = "asc";
+                }
+                rerenderWidgetCard(card, widget);
+                scheduleSavePreferences();
+                event.stopPropagation();
+                return;
+            }
+
+            if (event.target.closest && event.target.closest(".stats-resize-button, .card-visibility-toggle, .card-color-picker, .color-input-wrapper, .bi-color-popover, .bi-color-trigger, .bi-color-swatch, .bi-color-native-input, .bi-color-hex-input, .bi-color-reset, input, label, button")) {
                 event.stopPropagation();
                 return;
             }
@@ -2891,8 +3639,16 @@ document.addEventListener("DOMContentLoaded", function () {
         const page = getCurrentPage();
         if (!page) return;
         const widgets = page.widgets;
+        syncRenderedWidgetLayoutsFromDom(widgets);
         const widget = widgets[index];
         if (!widget) return;
+        let duplicateRenderState = null;
+        const viewportState = {
+            scrollX: window.scrollX,
+            scrollY: window.scrollY,
+            gridScrollTop: dom.widgetsGrid ? dom.widgetsGrid.scrollTop : 0,
+            gridScrollLeft: dom.widgetsGrid ? dom.widgetsGrid.scrollLeft : 0,
+        };
 
         if (action === "edit") {
             state.selectedWidgetId = widget.id;
@@ -2915,13 +3671,22 @@ document.addEventListener("DOMContentLoaded", function () {
         if (action === "duplicate") {
             const duplicate = deepClone(widget);
             const sourceCard = dom.widgetsGrid?.querySelector('[data-widget-id="' + escapeAttribute(widget.id) + '"]');
+            const layout = String(widget.layout || sourceCard?.getAttribute("data-card-fraction") || "");
             duplicate.id = createId("widget");
             duplicate.title = String(widget.title || getWidgetDefinition(widget.type).defaultTitle || "Bloc BI");
-            duplicate.layout = String(sourceCard?.getAttribute("data-card-fraction") || widget.layout || defaultLayoutForType(widget.type));
+            duplicate.layout = fractions.indexOf(layout) !== -1 ? layout : defaultLayoutForType(widget.type);
             duplicate.cardHeight = clamp(parseInt(widget.cardHeight, 10) || 75, 75, 520);
             duplicate.alignment = String(widget.alignment || "left");
             duplicate.textSize = normalizeWidgetTextSize(widget.textSize);
             duplicate.valueSize = normalizeWidgetValueSize(widget.valueSize);
+            duplicateRenderState = {
+                id: duplicate.id,
+                layout: duplicate.layout,
+                flex: String(sourceCard?.style.flex || ""),
+                flexBasis: String(sourceCard?.style.flexBasis || ""),
+                minWidth: String(sourceCard?.style.minWidth || ""),
+                maxWidth: String(sourceCard?.style.maxWidth || ""),
+            };
             widgets.splice(index + 1, 0, duplicate);
             state.selectedWidgetId = duplicate.id;
         }
@@ -2934,7 +3699,55 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         renderAll();
+        requestAnimationFrame(function () {
+            if (dom.widgetsGrid) {
+                dom.widgetsGrid.scrollTop = viewportState.gridScrollTop;
+                dom.widgetsGrid.scrollLeft = viewportState.gridScrollLeft;
+            }
+            if (duplicateRenderState && dom.widgetsGrid) {
+                const duplicateCard = dom.widgetsGrid.querySelector('[data-widget-id="' + escapeAttribute(duplicateRenderState.id) + '"]');
+                if (duplicateCard) {
+                    duplicateCard.setAttribute("data-layout", duplicateRenderState.layout);
+                    duplicateCard.setAttribute("data-card-fraction", duplicateRenderState.layout);
+                    if (duplicateRenderState.flex) {
+                        duplicateCard.style.flex = duplicateRenderState.flex;
+                    }
+                    if (duplicateRenderState.flexBasis) {
+                        duplicateCard.style.flexBasis = duplicateRenderState.flexBasis;
+                    }
+                    if (duplicateRenderState.minWidth) {
+                        duplicateCard.style.minWidth = duplicateRenderState.minWidth;
+                    }
+                    if (duplicateRenderState.maxWidth) {
+                        duplicateCard.style.maxWidth = duplicateRenderState.maxWidth;
+                    }
+                }
+            }
+            window.scrollTo(viewportState.scrollX, viewportState.scrollY);
+        });
         scheduleSavePreferences();
+    }
+
+    function syncRenderedWidgetLayoutsFromDom(widgets) {
+        if (!dom.widgetsGrid || !Array.isArray(widgets) || !widgets.length) {
+            return;
+        }
+
+        const layoutsById = {};
+        dom.widgetsGrid.querySelectorAll(".card[data-widget-id][data-card-fraction]").forEach(function (card) {
+            const widgetId = String(card.getAttribute("data-widget-id") || "");
+            const fraction = String(card.getAttribute("data-card-fraction") || "");
+            if (widgetId && fractions.indexOf(fraction) !== -1) {
+                layoutsById[widgetId] = fraction;
+            }
+        });
+
+        widgets.forEach(function (widget) {
+            const widgetId = String(widget?.id || "");
+            if (widgetId && layoutsById[widgetId]) {
+                widget.layout = layoutsById[widgetId];
+            }
+        });
     }
 
     function reorderWidgetsFromDrop() {
@@ -2996,11 +3809,16 @@ document.addEventListener("DOMContentLoaded", function () {
             alignment: "left",
             textSize: 15,
             valueSize: type === "kpi" || type === "counter" || type === "percentage" ? 48 : 42,
-            cardHeight: type === "table" || type === "distribution-table" ? 320 : (type === "kpi" || type === "counter" || type === "percentage" ? 240 : 300),
+            cardHeight: type === "table" || type === "distribution-table" ? 320 : (type === "datatable" ? 380 : (type === "kpi" || type === "counter" || type === "percentage" ? 240 : 300)),
             hideTitle: false,
             hideText: false,
             hidden: false,
-            maxItems: type === "table" || type === "distribution-table" ? 10 : 8,
+            maxItems: type === "table" || type === "distribution-table" ? 10 : (type === "datatable" ? 20 : 8),
+            tableColumns: [],
+            tableColumnStyles: [],
+            tableStyles: normalizeDatatableStyleConfig({}),
+            sortColumn: "",
+            sortDir: "asc",
         };
         applyWidgetDefaults(widget, false);
         page.widgets.push(widget);
@@ -3051,6 +3869,14 @@ document.addEventListener("DOMContentLoaded", function () {
             widget.valueColumn = "";
             widget.aggregation = "count";
             widget.format = "";
+        } else if (widget.type === "datatable") {
+            widget.dimensionColumn = "";
+            widget.valueColumn = "";
+            widget.aggregation = "count";
+            widget.format = "";
+            widget.tableColumns = Array.isArray(widget.tableColumns) && widget.tableColumns.length
+                ? widget.tableColumns
+                : columns.slice(0, Math.min(columns.length, 6)).map(function (column) { return column.key; });
         } else if (widget.type === "percentage") {
             widget.dimensionColumn = widget.dimensionColumn || primaryDimension;
             widget.valueColumn = widget.valueColumn || "";
@@ -3114,6 +3940,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (type === "table") {
             return !rowSelected;
+        }
+
+        if (type === "datatable") {
+            return !(Array.isArray(widget.tableColumns) && widget.tableColumns.length);
         }
 
         if (type === "distribution-table") {
@@ -3227,6 +4057,10 @@ document.addEventListener("DOMContentLoaded", function () {
             return buildDistributionTableResult(sourceRows, widget, filterDescription, maxItems, color);
         }
 
+        if (widget.type === "datatable") {
+            return buildDatatableResult(sourceRows, widget, filterDescription);
+        }
+
         if (widget.type === "table") {
             return buildPivotTableResult(sourceRows, widget, filterDescription, maxItems);
         }
@@ -3287,7 +4121,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function getActiveFilters(filters) {
         return (Array.isArray(filters) ? filters : []).filter(function (filter) {
-            return String(filter?.column || "").trim() !== "" && String(filter?.value || "").trim() !== "";
+            const hasInputValue = String(filter?.inputMode || "select") === "input"
+                ? String(filter?.value || "").trim() !== ""
+                : normalizeFilterSelectionValues(filter?.values, filter?.value).length > 0;
+            return String(filter?.column || "").trim() !== "" && hasInputValue;
         });
     }
 
@@ -3299,7 +4136,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
         return rows.filter(function (row) {
             return activeFilters.every(function (filter) {
-                return normalizeFilterComparableValue(row[filter.column]) === normalizeFilterComparableValue(filter.value);
+                const leftValue = normalizeFilterComparableValue(row[filter.column]);
+                const selectedValues = String(filter?.inputMode || "select") === "input"
+                    ? [String(filter.value || "")]
+                    : normalizeFilterSelectionValues(filter.values, filter.value);
+
+                return selectedValues.some(function (selectedValue) {
+                    const rightValue = normalizeFilterComparableValue(selectedValue);
+                    if (String(filter.operator || "equals") === "contains") {
+                        return leftValue.indexOf(rightValue) !== -1;
+                    }
+                    return leftValue === rightValue;
+                });
             });
         });
     }
@@ -3311,7 +4159,12 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         return activeFilters.map(function (filter) {
-            return humanizeKey(filter.column) + " = " + String(filter.value || "");
+            const values = String(filter?.inputMode || "select") === "input"
+                ? [String(filter.value || "")]
+                : normalizeFilterSelectionValues(filter.values, filter.value);
+            return humanizeKey(filter.column)
+                + (String(filter.operator || "equals") === "contains" ? " contient " : " = ")
+                + values.join(", ");
         }).join(" | ");
     }
 
@@ -3643,6 +4496,173 @@ document.addEventListener("DOMContentLoaded", function () {
         };
     }
 
+    function getVisibleDatatableColumns(widget, rows) {
+        const datasetColumns = Array.isArray(state.builderOptions?.columns) ? state.builderOptions.columns : [];
+        const configuredKeys = Array.isArray(widget.tableColumns) ? widget.tableColumns : [];
+        const visibleColumns = configuredKeys.map(function (key) {
+            return datasetColumns.find(function (column) {
+                return String(column.key || "") === String(key || "");
+            }) || { key: String(key || ""), label: getColumnLabel(key) };
+        }).filter(function (column) {
+            return String(column?.key || "").trim() !== "";
+        });
+
+        if (visibleColumns.length) {
+            return visibleColumns;
+        }
+
+        if (configuredKeys.length === 0) {
+            return [];
+        }
+
+        const firstRow = rows[0] && typeof rows[0] === "object" ? rows[0] : null;
+        return firstRow
+            ? Object.keys(firstRow).map(function (key) {
+                return { key: key, label: humanizeKey(key) };
+            })
+            : [];
+    }
+
+    function buildDatatableResult(rows, widget, filterDescription) {
+        const visibleColumns = getVisibleDatatableColumns(widget, rows);
+        if (!visibleColumns.length) {
+            return { kind: "empty", message: "Selectionnez au moins une colonne a afficher dans le tableau personnalise." };
+        }
+
+        const sortColumn = String(widget.sortColumn || "");
+        const sortDir = String(widget.sortDir || "asc") === "desc" ? "desc" : "asc";
+        const maxItems = clamp(parseInt(widget.maxItems, 10) || 20, 5, 100);
+        const sortedRows = rows.slice();
+
+        if (sortColumn) {
+            sortedRows.sort(function (left, right) {
+                const leftValue = String(left?.[sortColumn] ?? "");
+                const rightValue = String(right?.[sortColumn] ?? "");
+                const numericLeft = toNumber(leftValue);
+                const numericRight = toNumber(rightValue);
+                let comparison = 0;
+
+                if (numericLeft !== null && numericRight !== null) {
+                    comparison = numericLeft - numericRight;
+                } else {
+                    comparison = localeSort(leftValue, rightValue);
+                }
+
+                return sortDir === "desc" ? comparison * -1 : comparison;
+            });
+        }
+
+        const resultRows = sortedRows.slice(0, maxItems).map(function (row) {
+            const rowData = {};
+            visibleColumns.forEach(function (column) {
+                rowData[column.key] = row?.[column.key] ?? "";
+            });
+            return rowData;
+        });
+
+        return {
+            kind: "table",
+            tableVariant: "datatable",
+            columns: visibleColumns.map(function (column) {
+                return { key: String(column.key || ""), label: String(column.label || humanizeKey(column.key)) };
+            }),
+            rows: resultRows,
+            sourceRows: sortedRows.slice(0, maxItems),
+            sortColumn: sortColumn,
+            sortDir: sortDir,
+            subtitle: appendFilterDescription(rows.length + " lignes disponibles", filterDescription),
+        };
+    }
+
+    function doesRowMatchFilter(row, filter) {
+        const column = String(filter?.column || "");
+        const selectedValues = String(filter?.inputMode || "select") === "input"
+            ? [String(filter?.value || "")]
+            : normalizeFilterSelectionValues(filter?.values, filter?.value);
+        if (!column || !selectedValues.length) {
+            return false;
+        }
+
+        const leftValue = normalizeFilterComparableValue(row?.[column]);
+        return selectedValues.some(function (value) {
+            const rightValue = normalizeFilterComparableValue(value);
+            if (String(filter?.operator || "equals") === "contains") {
+                return leftValue.indexOf(rightValue) !== -1;
+            }
+
+            return leftValue === rightValue;
+        });
+    }
+
+    function getMatchingFilterValueStyles(filter, row) {
+        if (String(filter?.inputMode || "select") === "input") {
+            return [createFilterValueStyleEntry({
+                value: String(filter?.value || ""),
+                styleTarget: filter?.styleTarget || "none",
+                bgColor: filter?.bgColor || "",
+                textColor: filter?.textColor || "",
+            })];
+        }
+
+        const entries = normalizeFilterValueStyles(filter?.valueStyles, filter?.values, filter);
+        const leftValue = normalizeFilterComparableValue(row?.[filter?.column]);
+        return entries.filter(function (entry) {
+            const rightValue = normalizeFilterComparableValue(entry.value);
+            if (!rightValue) {
+                return false;
+            }
+
+            if (String(filter?.operator || "equals") === "contains") {
+                return leftValue.indexOf(rightValue) !== -1;
+            }
+
+            return leftValue === rightValue;
+        });
+    }
+
+    function buildInlineStyle(styleMap) {
+        return Object.keys(styleMap || {}).map(function (key) {
+            return styleMap[key] ? key + ":" + styleMap[key] : "";
+        }).filter(Boolean).join(";");
+    }
+
+    function getDatatableConditionalStyles(widget, row, columnKey) {
+        const rowStyle = {};
+        const cellStyle = {};
+        const filters = getWidgetBuilderFilters(widget);
+
+        filters.forEach(function (filter) {
+            if (!doesRowMatchFilter(row, filter)) {
+                return;
+            }
+
+            getMatchingFilterValueStyles(filter, row).forEach(function (styleEntry) {
+                if (String(styleEntry.styleTarget || "none") === "row") {
+                    if (styleEntry.bgColor) {
+                        rowStyle.background = styleEntry.bgColor;
+                    }
+                    if (styleEntry.textColor) {
+                        rowStyle.color = styleEntry.textColor;
+                    }
+                }
+
+                if (String(styleEntry.styleTarget || "none") === "cell" && String(filter.column || "") === String(columnKey || "")) {
+                    if (styleEntry.bgColor) {
+                        cellStyle.background = styleEntry.bgColor;
+                    }
+                    if (styleEntry.textColor) {
+                        cellStyle.color = styleEntry.textColor;
+                    }
+                }
+            });
+        });
+
+        return {
+            row: buildInlineStyle(rowStyle),
+            cell: buildInlineStyle(cellStyle),
+        };
+    }
+
     function buildDimensionKey(row, dimensions) {
         return (dimensions || []).map(function (dimension) {
             return String(row[dimension] ?? "Non renseigne").trim() || "Non renseigne";
@@ -3686,6 +4706,10 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         }
 
+        if (result.tableVariant === "datatable") {
+            return buildDatatableHtml(result, widget);
+        }
+
         const headers = result.columns.map(function (column) {
             return "<th>" + escapeHtml(column.label) + "</th>";
         }).join("");
@@ -3695,6 +4719,78 @@ document.addEventListener("DOMContentLoaded", function () {
             }).join("") + "</tr>";
         }).join("");
         return '<div class="bi-widget-table-wrap"><table class="bi-widget-table">' + (!widget.hideText ? '<thead><tr>' + headers + '</tr></thead>' : '') + "<tbody>" + rows + "</tbody></table></div>";
+    }
+
+    function getDatatableInlineStyles(widget) {
+        const styles = normalizeDatatableStyleConfig(widget.tableStyles);
+        return {
+            headerBg: styles.headerBgColor || "",
+            headerText: styles.headerTextColor || "",
+            rowBg: styles.rowBgColor || "",
+            rowAltBg: styles.rowAltBgColor || "",
+            cellBg: styles.cellBgColor || "",
+            cellText: styles.cellTextColor || widget.valueColor || "",
+        };
+    }
+
+    function getTableColumnStyle(widget, columnKey) {
+        const entries = Array.isArray(widget?.tableColumnStyles) ? widget.tableColumnStyles : [];
+        const match = entries.find(function (entry) {
+            return String(entry?.key || "") === String(columnKey || "");
+        });
+
+        return match ? createTableColumnStyleEntry(match) : createTableColumnStyleEntry({ key: columnKey });
+    }
+
+    function buildDatatableHtml(result, widget, options) {
+        const safeOptions = options && typeof options === "object" ? options : {};
+        const preview = Boolean(safeOptions.preview);
+        const columns = result.columns.slice(0, Math.max(1, Number(safeOptions.maxColumns || result.columns.length)));
+        const rows = result.rows.slice(0, Math.max(1, Number(safeOptions.maxRows || result.rows.length)));
+        const sourceRows = Array.isArray(result.sourceRows) ? result.sourceRows.slice(0, rows.length) : rows;
+        const sortColumn = String(result.sortColumn || "");
+        const sortDir = result.sortDir === "desc" ? "desc" : "asc";
+        const styleConfig = getDatatableInlineStyles(widget);
+        const wrapClass = preview ? "bi-preview-table-wrap bi-widget-datatable-wrap" : "bi-widget-table-wrap bi-widget-datatable-wrap";
+        const tableClass = preview ? "bi-preview-table-real bi-widget-table bi-widget-datatable" : "bi-widget-table bi-widget-datatable";
+
+        const headers = columns.map(function (column) {
+            const isSorted = column.key === sortColumn;
+            const indicator = isSorted ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+            const classes = "bi-datatable-th" + (isSorted ? " bi-datatable-th--sorted bi-datatable-th--" + sortDir : "");
+            const style = [
+                styleConfig.headerBg ? "background:" + styleConfig.headerBg : "",
+                styleConfig.headerText ? "color:" + styleConfig.headerText : "",
+            ].filter(Boolean).join(";");
+            return '<th class="' + escapeHtml(classes) + '" data-sort-col="' + escapeHtml(column.key) + '"' + (style ? ' style="' + escapeHtml(style) + '"' : "") + '>' + escapeHtml(column.label) + escapeHtml(indicator) + "</th>";
+        }).join("");
+
+        const body = rows.map(function (row, rowIndex) {
+            const sourceRow = sourceRows[rowIndex] && typeof sourceRows[rowIndex] === "object" ? sourceRows[rowIndex] : row;
+            const conditionalRowStyles = getDatatableConditionalStyles(widget, sourceRow, "");
+            const rowStyle = [
+                rowIndex % 2 === 0
+                    ? (styleConfig.rowBg ? "background:" + styleConfig.rowBg : "")
+                    : (styleConfig.rowAltBg ? "background:" + styleConfig.rowAltBg : (styleConfig.rowBg ? "background:" + styleConfig.rowBg : "")),
+                conditionalRowStyles.row,
+            ].filter(Boolean).join(";");
+            return "<tr" + (rowStyle ? ' style="' + escapeHtml(rowStyle) + '"' : "") + ">" + columns.map(function (column) {
+                const conditionalCellStyles = getDatatableConditionalStyles(widget, sourceRow, column.key);
+                const columnStyle = getTableColumnStyle(widget, column.key);
+                const cellStyle = [
+                    columnStyle.bgColor ? "--bi-datatable-col-bg:" + columnStyle.bgColor : "",
+                    columnStyle.textColor ? "--bi-datatable-col-text:" + columnStyle.textColor : "",
+                    columnStyle.bgColor ? "background-color:var(--bi-datatable-col-bg)" : (styleConfig.cellBg ? "background:" + styleConfig.cellBg : ""),
+                    columnStyle.textColor ? "color:var(--bi-datatable-col-text)" : (styleConfig.cellText ? "color:" + styleConfig.cellText : ""),
+                    conditionalCellStyles.cell,
+                ].filter(Boolean).join(";");
+                return "<td" + (cellStyle ? ' style="' + escapeHtml(cellStyle) + '"' : "") + ">" + escapeHtml(String(row[column.key] ?? "")) + "</td>";
+            }).join("") + "</tr>";
+        }).join("");
+
+        return '<div class="' + escapeHtml(wrapClass) + '"><table class="' + escapeHtml(tableClass) + '">' +
+            (!widget.hideText ? '<thead><tr>' + headers + '</tr></thead>' : '') +
+            "<tbody>" + body + "</tbody></table></div>";
     }
 
     function buildDistributionTableMarkup(result, widget, options) {
@@ -4500,7 +5596,7 @@ document.addEventListener("DOMContentLoaded", function () {
             })
             .then(function (payload) {
                 if (requestRevision === Number(state.preferencesRevision || 0)) {
-                    const nextPreferences = normalizePreferences(payload.preferences || requestPreferences);
+                    const nextPreferences = mergeSavedPreferences(requestPreferences, normalizePreferences(payload.preferences || requestPreferences));
                     if (!isWidgetModalOpen()) {
                         state.preferences = nextPreferences;
                         state.canCreatePages = Boolean(nextPreferences.canCreatePages);
@@ -4520,6 +5616,34 @@ document.addEventListener("DOMContentLoaded", function () {
                     savePreferences();
                 }
             });
+    }
+
+    function mergeSavedPreferences(requestPreferences, responsePreferences) {
+        const requested = normalizePreferences(requestPreferences);
+        const returned = normalizePreferences(responsePreferences);
+        const requestPagesById = new Map((Array.isArray(requested.pages) ? requested.pages : []).map(function (page) {
+            return [String(page.id || ""), page];
+        }));
+
+        returned.pages = (Array.isArray(returned.pages) ? returned.pages : []).map(function (page) {
+            const requestPage = requestPagesById.get(String(page.id || ""));
+            if (!requestPage) {
+                return page;
+            }
+
+            if ((!Array.isArray(page.filters) || page.filters.length === 0) && Array.isArray(requestPage.filters) && requestPage.filters.length) {
+                page.filters = requestPage.filters.map(function (filter) {
+                    return {
+                        column: String(filter.column || ""),
+                        value: String(filter.value || ""),
+                    };
+                });
+            }
+
+            return page;
+        });
+
+        return returned;
     }
 
     function syncToolbarWithPage() {
@@ -4572,8 +5696,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         return rows.filter(function (row) {
             return page.filters.every(function (filter) {
-                if (!filter.column || !filter.value) return true;
-                return String(row[filter.column] ?? "") === String(filter.value);
+                const column = String(filter?.column || "").trim();
+                const value = String(filter?.value || "").trim();
+                if (!column || !value) return true;
+                return normalizeFilterComparableValue(row?.[column]) === normalizeFilterComparableValue(value);
             });
         });
     }
@@ -4871,6 +5997,15 @@ document.addEventListener("DOMContentLoaded", function () {
                     : []
             ),
             counterItems: [],
+            tableColumns: Array.isArray(widget.tableColumns) ? widget.tableColumns.map(function (value) { return String(value || ""); }).filter(Boolean) : [],
+            tableColumnStyles: Array.isArray(widget.tableColumnStyles) ? widget.tableColumnStyles.map(function (entry) {
+                return createTableColumnStyleEntry(entry);
+            }).filter(function (entry) {
+                return entry.key !== "";
+            }) : [],
+            tableStyles: normalizeDatatableStyleConfig(widget.tableStyles),
+            sortColumn: String(widget.sortColumn || ""),
+            sortDir: String(widget.sortDir || "asc") === "desc" ? "desc" : "asc",
         };
 
         ensureWidgetDataModel(normalizedWidget);
@@ -5004,7 +6139,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function defaultLayoutForType(type) {
         if (type === "kpi" || type === "counter" || type === "percentage") return "2/8";
-        if (type === "table" || type === "distribution-table" || type === "line") return "8/8";
+        if (type === "table" || type === "datatable" || type === "distribution-table" || type === "line") return "8/8";
         return "4/8";
     }
 
