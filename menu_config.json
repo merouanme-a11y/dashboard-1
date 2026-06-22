@@ -4,7 +4,7 @@
             "default": [
                 {
                     "page": "app_dashboard",
-                    "url": "/dashboard/",
+                    "url": "/",
                     "label": "Accueil",
                     "icon": "bi-house",
                     "folder": "pages",
@@ -13,7 +13,7 @@
                 },
                 {
                     "page": "app_annuaire",
-                    "url": "/dashboard/annuaire",
+                    "url": "/annuaire",
                     "label": "Annuaire des contacts",
                     "icon": "bi bi-person-lines-fill",
                     "folder": "pages",
@@ -22,7 +22,7 @@
                 },
                 {
                     "page": "app_profile",
-                    "url": "/dashboard/profile",
+                    "url": "/profile",
                     "label": "Mon profil",
                     "icon": "bi bi-person-circle",
                     "folder": "pages",
@@ -31,7 +31,7 @@
                 },
                 {
                     "page": "app_stats",
-                    "url": "/dashboard/stats",
+                    "url": "/stats",
                     "label": "Statistiques",
                     "icon": "bi-bar-chart",
                     "folder": "pages",
@@ -40,7 +40,7 @@
                 },
                 {
                     "page": "app_gantt_projects",
-                    "url": "/dashboard/projets/gantt",
+                    "url": "/projets/gantt",
                     "label": "Planning projets",
                     "icon": "bi-diagram-3",
                     "folder": "pages",
@@ -49,7 +49,7 @@
                 },
                 {
                     "page": "app_livre_de_caisse",
-                    "url": "/dashboard/livre-de-caisse",
+                    "url": "/livre-de-caisse",
                     "label": "Livre de caisse",
                     "icon": "bi-cash-stack",
                     "folder": "pages",
@@ -58,7 +58,7 @@
                 },
                 {
                     "page": "app_livre_de_caisse_listing",
-                    "url": "/dashboard/livre-de-caisse/listing",
+                    "url": "/livre-de-caisse/listing",
                     "label": "Listing livre de caisse",
                     "icon": "bi-journal-text",
                     "folder": "pages",
@@ -70,7 +70,7 @@
                 "Admin": [
                     {
                         "page": "app_dashboard",
-                        "url": "/dashboard/",
+                        "url": "/",
                         "label": "Accueil",
                         "icon": "bi-house",
                         "folder": "pages",
@@ -79,7 +79,7 @@
                     },
                     {
                         "page": "app_annuaire",
-                        "url": "/dashboard/annuaire",
+                        "url": "/annuaire",
                         "label": "Annuaire des contacts",
                         "icon": "bi bi-person-lines-fill",
                         "folder": "pages",
@@ -88,7 +88,7 @@
                     },
                     {
                         "page": "app_profile",
-                        "url": "/dashboard/profile",
+                        "url": "/profile",
                         "label": "Mon profil",
                         "icon": "bi bi-person-circle",
                         "folder": "pages",
@@ -97,7 +97,7 @@
                     },
                     {
                         "page": "app_stats",
-                        "url": "/dashboard/stats",
+                        "url": "/stats",
                         "label": "Statistiques",
                         "icon": "bi-bar-chart",
                         "folder": "pages",
@@ -106,7 +106,7 @@
                     },
                     {
                         "page": "app_gantt_projects",
-                        "url": "/dashboard/projets/gantt",
+                        "url": "/projets/gantt",
                         "label": "Planning projets",
                         "icon": "bi-diagram-3",
                         "folder": "pages",
@@ -115,7 +115,7 @@
                     },
                     {
                         "page": "app_livre_de_caisse",
-                        "url": "/dashboard/livre-de-caisse",
+                        "url": "/livre-de-caisse",
                         "label": "Livre de caisse",
                         "icon": "bi-cash-stack",
                         "folder": "pages",
@@ -124,7 +124,7 @@
                     },
                     {
                         "page": "app_livre_de_caisse_listing",
-                        "url": "/dashboard/livre-de-caisse/listing",
+                        "url": "/livre-de-caisse/listing",
                         "label": "Listing livre de caisse",
                         "icon": "bi-journal-text",
                         "folder": "pages",
@@ -133,7 +133,7 @@
                     },
                     {
                         "page": "admin_menus",
-                        "url": "/dashboard/admin/menus",
+                        "url": "/admin/menus",
                         "label": "Gestion du menu",
                         "icon": "bi-folder",
                         "folder": "admin",
@@ -144,7 +144,7 @@
                 "Responsable": [
                     {
                         "page": "app_gantt_projects",
-                        "url": "/dashboard/projets/gantt",
+                        "url": "/projets/gantt",
                         "label": "Planning projets",
                         "icon": "bi-diagram-3",
                         "folder": "pages",
@@ -157,7 +157,7 @@
                 "1": [
                     {
                         "page": "app_dashboard",
-                        "url": "/dashboard/",
+                        "url": "/",
                         "label": "Accueil",
                         "icon": "bi-house",
                         "folder": "pages",
@@ -166,7 +166,7 @@
                     },
                     {
                         "page": "app_annuaire",
-                        "url": "/dashboard/annuaire",
+                        "url": "/annuaire",
                         "label": "Annuaire des contacts",
                         "icon": "bi bi-person-lines-fill",
                         "folder": "pages",
@@ -175,7 +175,7 @@
                     },
                     {
                         "page": "admin_utilisateurs",
-                        "url": "/dashboard/admin/utilisateurs",
+                        "url": "/admin/utilisateurs",
                         "label": "Utilisateurs",
                         "icon": "bi-people",
                         "folder": "admin",
@@ -184,7 +184,7 @@
                     },
                     {
                         "page": "app_profile_create",
-                        "url": "/dashboard/profile/create",
+                        "url": "/profile/create",
                         "label": "Creer un utilisateur",
                         "icon": "bi-people",
                         "folder": "pages",
@@ -193,7 +193,7 @@
                     },
                     {
                         "page": "admin_menus",
-                        "url": "/dashboard/admin/menus",
+                        "url": "/admin/menus",
                         "label": "Gestion du menu",
                         "icon": "bi-folder",
                         "folder": "admin",
@@ -202,7 +202,7 @@
                     },
                     {
                         "page": "admin_theme",
-                        "url": "/dashboard/admin/theme",
+                        "url": "/admin/theme",
                         "label": "Theme du site",
                         "icon": "bi-palette",
                         "folder": "admin",
@@ -211,7 +211,7 @@
                     },
                     {
                         "page": "admin_parametrage",
-                        "url": "/dashboard/admin/parametrage",
+                        "url": "/admin/parametrage",
                         "label": "Parametrage",
                         "icon": "bi-gear",
                         "folder": "admin",
@@ -220,7 +220,7 @@
                     },
                     {
                         "page": "app_profile",
-                        "url": "/dashboard/profile",
+                        "url": "/profile",
                         "label": "Mon profil",
                         "icon": "bi bi-person-circle",
                         "folder": "pages",
@@ -229,7 +229,7 @@
                     },
                     {
                         "page": "app_tickets",
-                        "url": "/dashboard/tickets",
+                        "url": "/tickets",
                         "label": "Tickets",
                         "icon": "bi-ticket-perforated",
                         "folder": "pages",
@@ -238,7 +238,7 @@
                     },
                     {
                         "page": "app_tickets_patch",
-                        "url": "/dashboard/tickets/formulaire-patch",
+                        "url": "/tickets/formulaire-patch",
                         "label": "Tickets formulaire patch",
                         "icon": "bi-file-earmark-text",
                         "folder": "pages",
@@ -247,7 +247,7 @@
                     },
                     {
                         "page": "app_stats",
-                        "url": "/dashboard/stats",
+                        "url": "/stats",
                         "label": "Statistiques",
                         "icon": "bi-bar-chart",
                         "folder": "pages",
@@ -256,7 +256,7 @@
                     },
                     {
                         "page": "admin_pages",
-                        "url": "/dashboard/admin/pages",
+                        "url": "/admin/pages",
                         "label": "Pages",
                         "icon": "bi-window-stack",
                         "folder": "admin",
@@ -265,7 +265,7 @@
                     },
                     {
                         "page": "app_gantt_projects",
-                        "url": "/dashboard/projets/gantt",
+                        "url": "/projets/gantt",
                         "label": "Planning projets",
                         "icon": "bi-diagram-3",
                         "folder": "pages",
@@ -274,7 +274,7 @@
                     },
                     {
                         "page": "app_bi_microsoft_callback",
-                        "url": "/dashboard/bi/microsoft/callback",
+                        "url": "/bi/microsoft/callback",
                         "label": "Bi microsoft callback",
                         "icon": "bi-file-earmark-text",
                         "folder": "pages",
@@ -283,7 +283,7 @@
                     },
                     {
                         "page": "app_bi",
-                        "url": "/dashboard/bi",
+                        "url": "/bi",
                         "label": "Business Intelligence",
                         "icon": "bi-graph-up-arrow",
                         "folder": "pages",
@@ -292,7 +292,7 @@
                     },
                     {
                         "page": "app_livre_de_caisse",
-                        "url": "/dashboard/livre-de-caisse",
+                        "url": "/livre-de-caisse",
                         "label": "Livre de caisse",
                         "icon": "bi-cash-stack",
                         "folder": "pages",
@@ -301,7 +301,7 @@
                     },
                     {
                         "page": "app_livre_de_caisse_listing",
-                        "url": "/dashboard/livre-de-caisse/listing",
+                        "url": "/livre-de-caisse/listing",
                         "label": "Listing livre de caisse agence",
                         "icon": "bi-cash-stack",
                         "folder": "pages",
@@ -310,7 +310,7 @@
                     },
                     {
                         "page": "app_livre_de_caisse_management",
-                        "url": "/dashboard/livre-de-caisse/gestion",
+                        "url": "/livre-de-caisse/gestion",
                         "label": "Gestion - Livres de caisse",
                         "icon": "bi-cash-stack",
                         "folder": "pages",
@@ -319,7 +319,7 @@
                     },
                     {
                         "page": "app_quittancement_generator",
-                        "url": "/dashboard/quittancement-generator",
+                        "url": "/quittancement-generator",
                         "label": "Generateur de quittancements",
                         "icon": "bi-calendar2-check",
                         "folder": "pages",
@@ -330,7 +330,7 @@
                 "2": [
                     {
                         "page": "app_gantt_projects",
-                        "url": "/dashboard/projets/gantt",
+                        "url": "/projets/gantt",
                         "label": "Planning projets",
                         "icon": "bi-diagram-3",
                         "folder": "pages",
@@ -338,22 +338,54 @@
                         "icon_only": false
                     },
                     {
-                        "page": "app_bi",
-                        "url": "/dashboard/bi",
-                        "label": "Business Intelligence",
-                        "icon": "bi-graph-up-arrow",
+                        "page": "app_tickets_patch",
+                        "url": "/tickets/formulaire-patch",
+                        "label": "Tickets formulaire patch",
+                        "icon": "bi-file-earmark-text",
                         "folder": "pages",
                         "parent_page": null,
                         "icon_only": false
                     }
-                ]
+                ],
+                "24": [
+                    {
+                        "page": "app_tickets_patch",
+                        "url": "/tickets/formulaire-patch",
+                        "label": "Tickets formulaire patch",
+                        "icon": "bi-file-earmark-text",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    }
+                ],
+                "25": [
+                    {
+                        "page": "app_tickets_patch",
+                        "url": "/tickets/formulaire-patch",
+                        "label": "Tickets formulaire patch",
+                        "icon": "bi-file-earmark-text",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    },
+                    {
+                        "page": "app_profile",
+                        "url": "/profile",
+                        "label": "Mon profil",
+                        "icon": "bi bi-person-circle",
+                        "folder": "pages",
+                        "parent_page": null,
+                        "icon_only": false
+                    }
+                ],
+                "26": []
             }
         },
         "header_right": {
             "default": [
                 {
                     "page": "admin_parametrage",
-                    "url": "/dashboard/admin/parametrage",
+                    "url": "/admin/parametrage",
                     "label": "Parametrage",
                     "icon": "bi-gear",
                     "folder": "admin",
@@ -365,7 +397,7 @@
                 "Admin": [
                     {
                         "page": "admin_parametrage",
-                        "url": "/dashboard/admin/parametrage",
+                        "url": "/admin/parametrage",
                         "label": "Parametrage",
                         "icon": "bi-gear",
                         "folder": "admin",
@@ -379,7 +411,7 @@
                 "1": [
                     {
                         "page": "admin_parametrage",
-                        "url": "/dashboard/admin/parametrage",
+                        "url": "/admin/parametrage",
                         "label": "Parametrage",
                         "icon": "bi-gear",
                         "folder": "admin",

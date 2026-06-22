@@ -358,10 +358,10 @@ TEXT;
 
     private function getD25Date(int $year, int $month): DateTimeImmutable
     {
-        $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-        $day = max(1, $daysInMonth - 1);
+        $firstDayOfMonth = new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+        $day = max(1, (int) $firstDayOfMonth->modify('last day of this month')->format('d') - 1);
 
-        return new DateTimeImmutable(sprintf('%04d-%02d-%02d', $year, $month, $day));
+        return $firstDayOfMonth->setDate($year, $month, $day);
     }
 
     private function isValidDateInput(mixed $dateString): bool

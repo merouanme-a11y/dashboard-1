@@ -58,7 +58,7 @@ if (PHP_SAPI !== 'cli') {
             if (isset($knownContentTypes[$extension])) {
                 $contentType = $knownContentTypes[$extension];
             } else {
-                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
 
                 if ($finfo !== false) {
                     $detectedContentType = finfo_file($finfo, $candidatePath);
