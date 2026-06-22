@@ -3,9 +3,11 @@
 namespace App\Controller;
 
 use App\Entity\Utilisateur;
+use App\Service\FileUploadService;
 use App\Service\GanttLegacyRuntime;
 use App\Service\GanttViewStateService;
 use App\Service\ModuleService;
+use App\Service\ProjectCdcDocumentService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\File\Exception\FileException;
@@ -25,6 +27,8 @@ final class GanttProjectsApiController extends AbstractController
         private ModuleService $moduleService,
         private GanttLegacyRuntime $ganttLegacyRuntime,
         private GanttViewStateService $ganttViewStateService,
+        private FileUploadService $fileUploadService,
+        private ProjectCdcDocumentService $projectCdcDocumentService,
         private KernelInterface $kernel,
     ) {}
 
@@ -169,7 +173,7 @@ final class GanttProjectsApiController extends AbstractController
         $projectWithSameRef = $projectRef !== '' ? app_fetch_project_by_ref($projectRef) : null;
 
         $resolvedOwnerId = trim((string) (($existingProject['ownerId'] ?? null) ?: ($project['ownerId'] ?? null) ?: ($currentUser['id'] ?? '')));
-        $resolvedOwnerDisplayName = trim((string) (($existingProject['ownerDisplayName'] ?? null) ?: ($project['ownerDisplayName'] ?? null) ?: ($currentUser['displayName'] ?? $currentUser['username'] ?? '')));
+        $resolvedOwnerDisplayName = trim((string) (($project['ownerDisplayName'] ?? null) ?: ($existingProject['ownerDisplayName'] ?? null) ?: ($currentUser['displayName'] ?? $currentUser['username'] ?? '')));
         $resolvedOwnerEmail = trim((string) (($existingProject['ownerEmail'] ?? null) ?: ($project['ownerEmail'] ?? null) ?: ($currentUser['email'] ?? '')));
 
         $project['ownerId'] = $resolvedOwnerId !== '' ? $resolvedOwnerId : null;
@@ -212,10 +216,20 @@ final class GanttProjectsApiController extends AbstractController
                     throw new \RuntimeException('Impossible de mettre a jour le projet.');
                 }
 
+                if (!$this->projectCdcDocumentService->hasCdcContent($savedProject)) {
+                    $this->projectCdcDocumentService->deleteProjectDocuments($savedProject);
+                    $savedProject = app_fetch_project_by_id((string) ($savedProject['id'] ?? '')) ?? $savedProject;
+                }
+
                 return new JsonResponse(['project' => $savedProject], 200);
             }
 
             $createdProject = app_create_project($project);
+
+            if (!$this->projectCdcDocumentService->hasCdcContent($createdProject)) {
+                $this->projectCdcDocumentService->deleteProjectDocuments($createdProject);
+                $createdProject = app_fetch_project_by_id((string) ($createdProject['id'] ?? '')) ?? $createdProject;
+            }
 
             return new JsonResponse(['project' => $createdProject], 201);
         } catch (\InvalidArgumentException $exception) {
@@ -455,6 +469,102 @@ final class GanttProjectsApiController extends AbstractController
         }
     }
 
+    #[Route('/api/import-exported-projects', name: 'app_gantt_projects_api_import_exported_projects', methods: ['POST'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
+    public function importExportedProjects(Request $request): JsonResponse
+    {
+        $this->bootAndGetUser();
+
+        $uploadedFile = $request->files->get('projectFile');
+        if ($uploadedFile === null) {
+            return $this->jsonError('Aucun fichier projet recu', 400);
+        }
+
+        $extension = strtolower((string) $uploadedFile->getClientOriginalExtension());
+        if (!in_array($extension, ['xls', 'xlsx'], true)) {
+            return $this->jsonError('Format non supporte. Utilisez le fichier .xls ou .xlsx de la liste chrono.', 400);
+        }
+
+        try {
+            return new JsonResponse(app_import_projects_from_chronological_workbook($uploadedFile->getPathname()));
+        } catch (\RuntimeException $exception) {
+            return $this->jsonError($exception->getMessage(), 422);
+        } catch (\Throwable $exception) {
+            return $this->jsonError('Import impossible : ' . $exception->getMessage(), 500);
+        }
+    }
+
+    #[Route('/api/project-cdc/upload-asset', name: 'app_gantt_projects_api_upload_project_cdc_asset', methods: ['POST'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
+    public function uploadProjectCdcAsset(Request $request): JsonResponse
+    {
+        $this->bootAndGetUser();
+
+        $file = $request->files->get('file');
+        if ($file === null) {
+            return $this->jsonError('Aucun fichier reçu.', 400);
+        }
+
+        try {
+            $upload = $this->fileUploadService->uploadEditorAsset(
+                $file,
+                (string) $request->request->get('kind', 'file')
+            );
+
+            return new JsonResponse([
+                'success' => true,
+                'url' => rtrim($request->getSchemeAndHttpHost() . $request->getBasePath(), '/') . '/' . ltrim($this->fileUploadService->resolvePublicPath((string) ($upload['path'] ?? '')), '/'),
+                'name' => (string) ($upload['name'] ?? 'fichier'),
+                'mime' => (string) ($upload['mime'] ?? ''),
+                'size' => (int) ($upload['size'] ?? 0),
+            ]);
+        } catch (\Throwable $exception) {
+            return $this->jsonError($exception->getMessage(), 400);
+        }
+    }
+
+    #[Route('/api/project-cdc/import', name: 'app_gantt_projects_api_import_project_cdc', methods: ['POST'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
+    public function importProjectCdc(Request $request): JsonResponse
+    {
+        $this->bootAndGetUser();
+
+        $projectId = trim((string) $request->request->get('projectId', ''));
+        if ($projectId === '') {
+            return $this->jsonError('Identifiant projet manquant.', 400);
+        }
+
+        $file = $request->files->get('cdcFile');
+        if ($file === null) {
+            return $this->jsonError('Aucun fichier Word reçu.', 400);
+        }
+
+        $project = app_fetch_project_by_id($projectId);
+        if ($project === null) {
+            return $this->jsonError('Projet introuvable.', 404);
+        }
+
+        try {
+            $import = $this->projectCdcDocumentService->importProjectDocx($project, $file);
+
+            $updatedProject = array_merge(
+                $project,
+                $this->projectCdcDocumentService->normalizeImportedSections($import['sections'] ?? []),
+                ['cdcUpdatedAt' => date('Y-m-d H:i:s')]
+            );
+
+            $storedProjects = app_store_projects([$updatedProject]);
+            $savedProject = is_array($storedProjects[0] ?? null) ? $storedProjects[0] : null;
+            if ($savedProject === null) {
+                return $this->jsonError('Impossible de mettre à jour le cahier des charges du projet.', 500);
+            }
+
+            return new JsonResponse([
+                'project' => $savedProject,
+                'warning' => $import['warning'] ?? null,
+            ]);
+        } catch (\RuntimeException $exception) {
+            return $this->jsonError($exception->getMessage(), 422);
+        }
+    }
+
     #[Route('/api/export-projects', name: 'app_gantt_projects_api_export_projects', methods: ['POST'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
     public function exportProjects(Request $request): JsonResponse
     {
@@ -467,7 +577,42 @@ final class GanttProjectsApiController extends AbstractController
         }
 
         try {
-            return new JsonResponse(app_export_projects_to_workbook(array_values($projects)));
+            $result = app_export_projects_to_workbook(array_values($projects));
+            $fileName = basename((string) ($result['fileName'] ?? ''));
+
+            if ($fileName !== '') {
+                $result['downloadUrl'] = rtrim($request->getBasePath(), '/') . '/projets/gantt/export/' . rawurlencode($fileName) . '?v=' . rawurlencode((string) time());
+            }
+
+            return new JsonResponse($result);
+        } catch (\RuntimeException $exception) {
+            return $this->jsonError($exception->getMessage(), 422);
+        }
+    }
+
+    #[Route('/api/export-projects-chronological', name: 'app_gantt_projects_api_export_projects_chronological', methods: ['POST'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
+    public function exportProjectsChronological(Request $request): JsonResponse
+    {
+        $this->bootAndGetUser();
+        $payload = $this->readJsonRequest($request);
+        $projects = $payload['projects'] ?? null;
+
+        if (!is_array($projects)) {
+            return $this->jsonError('Aucune liste de projets a exporter', 400);
+        }
+
+        try {
+            $result = app_export_projects_to_chronological_workbook(
+                array_values($projects),
+                rtrim($request->getSchemeAndHttpHost(), '/') . $this->generateUrl('app_gantt_projects')
+            );
+            $fileName = basename((string) ($result['fileName'] ?? ''));
+
+            if ($fileName !== '') {
+                $result['downloadUrl'] = rtrim($request->getBasePath(), '/') . '/projets/gantt/export/' . rawurlencode($fileName) . '?v=' . rawurlencode((string) time());
+            }
+
+            return new JsonResponse($result);
         } catch (\RuntimeException $exception) {
             return $this->jsonError($exception->getMessage(), 422);
         }
@@ -485,10 +630,75 @@ final class GanttProjectsApiController extends AbstractController
             throw $this->createNotFoundException('Fichier export introuvable.');
         }
 
-        $response = new BinaryFileResponse($filePath);
+        $extension = strtolower((string) pathinfo($safeFileName, PATHINFO_EXTENSION));
+        $contentType = match ($extension) {
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'xls' => 'application/vnd.ms-excel',
+            default => 'application/octet-stream',
+        };
+
+        $response = new BinaryFileResponse($filePath, Response::HTTP_OK, [
+            'Content-Type' => $contentType,
+        ]);
         $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $safeFileName);
+        $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
 
         return $response;
+    }
+
+    #[Route('/project-cdc/{projectId}/docx', name: 'app_gantt_projects_project_cdc_docx_download', methods: ['GET'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
+    public function projectCdcDocxDownload(string $projectId): BinaryFileResponse
+    {
+        $this->bootAndGetUser();
+
+        $project = app_fetch_project_by_id($projectId);
+        if ($project === null) {
+            throw $this->createNotFoundException('Projet introuvable.');
+        }
+
+        try {
+            $document = $this->projectCdcDocumentService->ensureProjectDocx($project);
+            try {
+                $this->projectCdcDocumentService->ensureProjectPdf($project);
+            } catch (\RuntimeException) {
+            }
+        } catch (\RuntimeException $exception) {
+            throw $this->createNotFoundException($exception->getMessage());
+        }
+
+        return $this->createProjectCdcDownloadResponse(
+            (string) $document['path'],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            (string) $document['fileName']
+        );
+    }
+
+    #[Route('/project-cdc/{projectId}/pdf', name: 'app_gantt_projects_project_cdc_pdf_download', methods: ['GET'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
+    public function projectCdcPdfDownload(Request $request, string $projectId): BinaryFileResponse
+    {
+        $this->bootAndGetUser();
+
+        $project = app_fetch_project_by_id($projectId);
+        if ($project === null) {
+            throw $this->createNotFoundException('Projet introuvable.');
+        }
+
+        try {
+            $document = $this->projectCdcDocumentService->ensureProjectPdf($project);
+        } catch (\RuntimeException $exception) {
+            throw $this->createNotFoundException($exception->getMessage());
+        }
+
+        return $this->createProjectCdcDownloadResponse(
+            (string) $document['path'],
+            'application/pdf',
+            (string) $document['fileName'],
+            $request->query->getBoolean('inline')
+                ? ResponseHeaderBag::DISPOSITION_INLINE
+                : ResponseHeaderBag::DISPOSITION_ATTACHMENT
+        );
     }
 
     private function bootAndGetUser(): Utilisateur
@@ -535,6 +745,28 @@ final class GanttProjectsApiController extends AbstractController
     private function jsonError(string $message, int $status): JsonResponse
     {
         return new JsonResponse(['message' => $message], $status);
+    }
+
+    private function createProjectCdcDownloadResponse(
+        string $filePath,
+        string $contentType,
+        string $attachmentFileName,
+        string $disposition = ResponseHeaderBag::DISPOSITION_ATTACHMENT
+    ): BinaryFileResponse
+    {
+        if (!is_file($filePath)) {
+            throw $this->createNotFoundException('Document introuvable.');
+        }
+
+        $response = new BinaryFileResponse($filePath, Response::HTTP_OK, [
+            'Content-Type' => $contentType,
+        ]);
+        $response->setContentDisposition($disposition, $attachmentFileName);
+        $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+
+        return $response;
     }
 
     private function readSharedSettings(): array

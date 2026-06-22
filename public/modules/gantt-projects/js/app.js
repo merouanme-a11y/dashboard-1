@@ -22,7 +22,13 @@ const API_ROUTES = {
     deleteYouTrackProjectTask: String(GANTT_ROUTE_CONFIG.deleteYouTrackProjectTask || `${GANTT_BASE_URL}/api/delete-youtrack-project-task`),
     services: String(GANTT_ROUTE_CONFIG.services || `${GANTT_BASE_URL}/api/services`),
     importProjects: String(GANTT_ROUTE_CONFIG.importProjects || `${GANTT_BASE_URL}/api/import-projects`),
-    exportProjects: String(GANTT_ROUTE_CONFIG.exportProjects || `${GANTT_BASE_URL}/api/export-projects`)
+    importExportedProjects: String(GANTT_ROUTE_CONFIG.importExportedProjects || `${GANTT_BASE_URL}/api/import-exported-projects`),
+    exportProjects: String(GANTT_ROUTE_CONFIG.exportProjects || `${GANTT_BASE_URL}/api/export-projects`),
+    exportProjectsChronological: String(GANTT_ROUTE_CONFIG.exportProjectsChronological || `${GANTT_BASE_URL}/api/export-projects-chronological`),
+    uploadProjectCdcAsset: String(GANTT_ROUTE_CONFIG.uploadProjectCdcAsset || `${GANTT_BASE_URL}/api/project-cdc/upload-asset`),
+    importProjectCdc: String(GANTT_ROUTE_CONFIG.importProjectCdc || `${GANTT_BASE_URL}/api/project-cdc/import`),
+    projectCdcDocxDownloadPattern: String(GANTT_ROUTE_CONFIG.projectCdcDocxDownloadPattern || `${GANTT_BASE_URL}/project-cdc/__ID__/docx`),
+    projectCdcPdfDownloadPattern: String(GANTT_ROUTE_CONFIG.projectCdcPdfDownloadPattern || `${GANTT_BASE_URL}/project-cdc/__ID__/pdf`)
 };
 const LEGACY_STORAGE_KEYS = ["adep-gantt-planner-state-v1", STORAGE_KEY];
 
@@ -70,6 +76,22 @@ const PROJECT_TASK_COLUMN_OPTIONS = [
     { key: "dueDate", label: "Date échéance" },
     { key: "state", label: "État" }
 ];
+const PROJECT_CDC_FIELDS = [
+    { key: "cdcPresentation", inputId: "projectCdcPresentationInput", title: "Presentation et contexte du projet" },
+    { key: "cdcObjectives", inputId: "projectCdcObjectivesInput", title: "Objectifs" },
+    { key: "cdcFeatures", inputId: "projectCdcFeaturesInput", title: "Fonctionnalites attendues" },
+    { key: "cdcConstraints", inputId: "projectCdcConstraintsInput", title: "Contraintes et points de vigilance" },
+    { key: "cdcAdditionalInfo", inputId: "projectCdcAdditionalInfoInput", title: "Informations complementaires" }
+];
+const PROJECT_CDC_TITLE_FIELD = { key: "cdcTitle", inputId: "projectCdcTitleInput", type: "text" };
+const PROJECT_CDC_SUMMARY_FIELDS = [
+    { key: "cdcRequester", inputId: "projectCdcRequesterInput", type: "text" },
+    { key: "cdcRequestDate", inputId: "projectCdcRequestDateInput", type: "date" },
+    { key: "cdcDueDate", inputId: "projectCdcDueDateInput", type: "date" },
+    { key: "cdcPriority", inputId: "projectCdcPriorityInput", type: "text" },
+    { key: "cdcService", inputId: "projectCdcServiceInput", type: "text" },
+    { key: "cdcProjectManager", inputId: "projectCdcProjectManagerInput", type: "text" }
+];
 const FRONTEND_CACHE_TTLS = {
     projects: 15_000,
     services: 60_000,
@@ -112,6 +134,16 @@ const dom = {
     projectModalKicker: document.querySelector("#projectModalKicker"),
     projectModalTitle: document.querySelector("#projectModalTitle"),
     projectModalTitleInput: document.querySelector("#projectModalTitleInput"),
+    projectModalYouTrackTicketPill: document.querySelector("#projectModalYouTrackTicketPill"),
+    projectModalYouTrackTicketDisplay: document.querySelector("#projectModalYouTrackTicketDisplay"),
+    projectModalYouTrackTicketOpen: document.querySelector("#projectModalYouTrackTicketOpen"),
+    projectModalYouTrackTicketUrlInput: document.querySelector("#projectModalYouTrackTicketUrlInput"),
+    projectModalRedminePill: document.querySelector("#projectModalRedminePill"),
+    projectModalRedmineDisplay: document.querySelector("#projectModalRedmineDisplay"),
+    projectModalRedmineOpen: document.querySelector("#projectModalRedmineOpen"),
+    projectModalRedmineUrlInput: document.querySelector("#projectModalRedmineUrlInput"),
+    projectModalCdcPill: document.querySelector("#projectModalCdcPill"),
+    projectModalCdcButton: document.querySelector("#projectModalCdcButton"),
     projectModalYouTrackBlock: document.querySelector("#projectModalYouTrackBlock"),
     projectModalCreateInYouTrack: document.querySelector("#projectModalCreateInYouTrack"),
     projectModalYouTrackNote: document.querySelector("#projectModalYouTrackNote"),
@@ -141,6 +173,8 @@ const dom = {
     projectModalBudgetInput: document.querySelector("#projectModalBudgetInput"),
     projectModalPrioritizationDisplay: document.querySelector("#projectModalPrioritizationDisplay"),
     projectModalPrioritizationInput: document.querySelector("#projectModalPrioritizationInput"),
+    projectModalProjectManagerDisplay: document.querySelector("#projectModalProjectManagerDisplay"),
+    projectModalProjectManagerInput: document.querySelector("#projectModalProjectManagerInput"),
     projectModalStatusDisplay: document.querySelector("#projectModalStatusDisplay"),
     projectModalStatusInput: document.querySelector("#projectModalStatusInput"),
     projectModalProgressDisplay: document.querySelector("#projectModalProgressDisplay"),
@@ -157,6 +191,37 @@ const dom = {
     projectModalSubmitButton: document.querySelector("#projectModalSubmitButton"),
     projectModalDescription: document.querySelector("#projectModalDescription"),
     projectModalDescriptionInput: document.querySelector("#projectModalDescriptionInput"),
+    projectCdcModal: document.querySelector("#projectCdcModal"),
+    projectCdcModalClose: document.querySelector("#projectCdcModalClose"),
+    projectCdcModalTitle: document.querySelector("#projectCdcModalTitle"),
+    projectCdcModalSubtitle: document.querySelector("#projectCdcModalSubtitle"),
+    projectCdcViewTools: document.querySelector("#projectCdcViewTools"),
+    projectCdcEditTools: document.querySelector("#projectCdcEditTools"),
+    projectCdcModifyButton: document.querySelector("#projectCdcModifyButton"),
+    projectCdcReadView: document.querySelector("#projectCdcReadView"),
+    projectCdcReadDocument: document.querySelector("#projectCdcReadDocument"),
+    projectCdcForm: document.querySelector("#projectCdcForm"),
+    projectCdcFileInput: document.querySelector("#projectCdcFileInput"),
+    projectCdcImageInput: document.querySelector("#projectCdcImageInput"),
+    projectCdcAttachmentInput: document.querySelector("#projectCdcAttachmentInput"),
+    projectCdcImportButton: document.querySelector("#projectCdcImportButton"),
+    projectCdcDownloadDocxButton: document.querySelector("#projectCdcDownloadDocxButton"),
+    projectCdcDownloadPdfButton: document.querySelector("#projectCdcDownloadPdfButton"),
+    projectCdcStatus: document.querySelector("#projectCdcStatus"),
+    projectCdcTopSubmitButton: document.querySelector("#projectCdcTopSubmitButton"),
+    projectCdcSubmitButton: document.querySelector("#projectCdcSubmitButton"),
+    projectCdcTitleInput: document.querySelector("#projectCdcTitleInput"),
+    projectCdcRequesterInput: document.querySelector("#projectCdcRequesterInput"),
+    projectCdcRequestDateInput: document.querySelector("#projectCdcRequestDateInput"),
+    projectCdcDueDateInput: document.querySelector("#projectCdcDueDateInput"),
+    projectCdcPriorityInput: document.querySelector("#projectCdcPriorityInput"),
+    projectCdcServiceInput: document.querySelector("#projectCdcServiceInput"),
+    projectCdcProjectManagerInput: document.querySelector("#projectCdcProjectManagerInput"),
+    projectCdcPresentationInput: document.querySelector("#projectCdcPresentationInput"),
+    projectCdcObjectivesInput: document.querySelector("#projectCdcObjectivesInput"),
+    projectCdcFeaturesInput: document.querySelector("#projectCdcFeaturesInput"),
+    projectCdcConstraintsInput: document.querySelector("#projectCdcConstraintsInput"),
+    projectCdcAdditionalInfoInput: document.querySelector("#projectCdcAdditionalInfoInput"),
     scheduledCount: document.querySelector("#scheduledCount"),
     backlogCount: document.querySelector("#backlogCount"),
     rangeSummary: document.querySelector("#rangeSummary"),
@@ -181,9 +246,12 @@ const dom = {
     toggleBacklogViewButton: document.querySelector("#toggleBacklogViewButton"),
     backlogNote: document.querySelector("#backlogNote"),
     importSourceInput: document.querySelector("#importSourceInput"),
+    importProjectFileInput: document.querySelector("#importProjectFileInput"),
     importSourceButton: document.querySelector("#importSourceButton"),
+    importProjectButton: document.querySelector("#importProjectButton"),
     todayButton: document.querySelector("#todayButton"),
     exportButton: document.querySelector("#exportButton"),
+    exportChronologicalButton: document.querySelector("#exportChronologicalButton"),
     resetButton: document.querySelector("#resetButton"),
     toggleDisplayModeButton: document.querySelector("#toggleDisplayModeButton"),
     togglePlanningSidebarButton: document.querySelector("#togglePlanningSidebarButton"),
@@ -236,12 +304,22 @@ function clearLegacyBrowserState() {
 const monthShortFormatter = new Intl.DateTimeFormat("fr-FR", { month: "short" });
 const monthLongFormatter = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
 const fullDateFormatter = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+const dateTimeFormatter = new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+});
 const TIMELINE_ZOOM_STEP = 0.1;
 const TIMELINE_ZOOM_MIN = 0.7;
 const TIMELINE_ZOOM_MAX = 1.5;
 let interaction = null;
 let timelineRowReorder = null;
 let appStarted = false;
+const startupCdcLinkState = {
+    handled: false
+};
 let projectsSyncTimeout = null;
 let projectsSyncInFlight = false;
 let projectsSyncQueued = false;
@@ -280,6 +358,11 @@ const projectModalTeamState = {
 };
 const projectModalTaskColumnsState = {
     columns: [...DEFAULT_PROJECT_TASK_COLUMNS],
+};
+const projectCdcEditorState = {
+    initPromise: null,
+    lastActiveEditorId: "",
+    pendingTargetInputId: "",
 };
 
 init();
@@ -384,6 +467,7 @@ async function init() {
 async function startApplication() {
     if (appStarted) {
         render();
+        handleStartupCdcDeepLink();
         return;
     }
 
@@ -401,6 +485,7 @@ async function startApplication() {
         state.projectUsers = Array.isArray(projectUsersPayload?.users) ? projectUsersPayload.users : [];
         hydrateState(seedProjects, viewStatePayload?.settings || GANTT_CONFIG.sharedViewState || {});
         render();
+        handleStartupCdcDeepLink();
     } catch (error) {
         console.error(error);
         dom.timelineRows.innerHTML = `<div class="timeline-empty">Impossible de charger les projets. Vérifiez la session utilisateur et les endpoints PHP.</div>`;
@@ -780,10 +865,7 @@ async function onImportSourceFile(event) {
         persistState();
         render();
 
-        const summary = payload.summary || {};
-        window.alert(
-            `Import terminé.\n${summary.updatedCount || 0} projet(s) mis à jour.\n${summary.clearedCount || 0} projet(s) vidés.\n${summary.unmatchedCount || 0} ligne(s) non rapprochées.`
-        );
+        window.alert(buildProjectsImportSummaryMessage(payload.summary || {}));
     } catch (error) {
         console.error(error);
         window.alert(error.message || "L'import du fichier source a échoué.");
@@ -792,6 +874,44 @@ async function onImportSourceFile(event) {
         dom.importSourceButton.disabled = false;
         dom.importSourceButton.textContent = "Importer source Excel";
     }
+}
+
+async function onImportProjectFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+        return;
+    }
+
+    dom.importProjectButton.disabled = true;
+    dom.importProjectButton.textContent = "Import en cours...";
+
+    try {
+        const payload = await uploadProjectFile(file);
+        const servicesPayload = await loadServices().catch(() => ({ services: {} }));
+        applyServiceColors(servicesPayload?.services || {});
+        hydrateState(payload.projects || [], buildSharedViewStatePayload());
+        persistState();
+        render();
+
+        window.alert(buildProjectsImportSummaryMessage(payload.summary || {}));
+    } catch (error) {
+        console.error(error);
+        window.alert(error.message || "L'import du fichier liste chrono a échoué.");
+    } finally {
+        dom.importProjectFileInput.value = "";
+        dom.importProjectButton.disabled = false;
+        dom.importProjectButton.textContent = "Importer Projets";
+    }
+}
+
+function buildProjectsImportSummaryMessage(summary) {
+    return [
+        "Import terminé.",
+        `${summary.updatedCount || 0} projet(s) mis à jour.`,
+        `${summary.createdCount || 0} projet(s) créé(s).`,
+        `${summary.clearedCount || 0} projet(s) vidés.`,
+        `${summary.unmatchedCount || 0} ligne(s) non rapprochée(s).`
+    ].join("\n");
 }
 
 async function apiRequest(url, options = {}) {
@@ -823,10 +943,18 @@ async function apiRequest(url, options = {}) {
 }
 
 async function uploadSourceFile(file) {
-    const formData = new FormData();
-    formData.append("sourceFile", file);
+    return uploadWorkbookFile(file, API_ROUTES.importProjects, "sourceFile");
+}
 
-    const response = await fetch(API_ROUTES.importProjects, {
+async function uploadProjectFile(file) {
+    return uploadWorkbookFile(file, API_ROUTES.importExportedProjects, "projectFile");
+}
+
+async function uploadWorkbookFile(file, url, fieldName) {
+    const formData = new FormData();
+    formData.append(fieldName, file);
+
+    const response = await fetch(url, {
         method: "POST",
         credentials: "same-origin",
         body: formData
@@ -886,6 +1014,10 @@ function bindStaticEvents() {
 
     dom.importSourceButton.addEventListener("click", () => dom.importSourceInput.click());
     dom.importSourceInput.addEventListener("change", onImportSourceFile);
+    if (dom.importProjectButton && dom.importProjectFileInput) {
+        dom.importProjectButton.addEventListener("click", () => dom.importProjectFileInput.click());
+        dom.importProjectFileInput.addEventListener("change", onImportProjectFile);
+    }
 
     dom.timelineStart.addEventListener("change", () => {
         state.settings.timelineStart = dom.timelineStart.value || DEFAULT_SETTINGS.timelineStart;
@@ -951,6 +1083,9 @@ function bindStaticEvents() {
     });
 
     dom.exportButton.addEventListener("click", exportPlanning);
+    if (dom.exportChronologicalButton) {
+        dom.exportChronologicalButton.addEventListener("click", exportChronologicalPlanning);
+    }
     dom.resetButton.addEventListener("click", resetPlanning);
     if (dom.toggleDisplayModeButton) {
         dom.toggleDisplayModeButton.addEventListener("click", toggleDisplayMode);
@@ -973,6 +1108,8 @@ function bindStaticEvents() {
     dom.projectModalStartInput.addEventListener("input", syncProjectModalDateBounds);
     dom.projectModalEndInput.addEventListener("input", syncProjectModalDateBounds);
     dom.projectModalTitleInput.addEventListener("input", syncProjectModalDisplays);
+    dom.projectModalYouTrackTicketUrlInput.addEventListener("input", syncProjectModalDisplays);
+    dom.projectModalRedmineUrlInput.addEventListener("input", syncProjectModalDisplays);
     dom.projectModalRefInput.addEventListener("input", syncProjectModalDisplays);
     dom.projectModalServiceInput.addEventListener("input", syncProjectModalDisplays);
     dom.projectModalTypeInput.addEventListener("change", syncProjectModalDisplays);
@@ -985,6 +1122,24 @@ function bindStaticEvents() {
     dom.projectModalStatusInput.addEventListener("change", syncProjectModalDisplays);
     dom.projectModalProgressInput.addEventListener("input", syncProjectModalDisplays);
     dom.projectModalDescriptionInput.addEventListener("input", syncProjectModalDisplays);
+    if (dom.projectModalCdcButton) {
+        dom.projectModalCdcButton.addEventListener("click", () => {
+            const currentProject = getProjectModalCurrentProject();
+            openProjectCdcModal(currentProject, {
+                mode: projectHasCdcContent(currentProject) ? "view" : "edit"
+            });
+        });
+    }
+    if (dom.projectModalCdcPill) {
+        dom.projectModalCdcPill.addEventListener("click", () => {
+            const currentProject = getProjectModalCurrentProject();
+            if (!currentProject?.id || !projectHasCdcContent(currentProject)) {
+                return;
+            }
+
+            openProjectCdcModal(currentProject, { mode: "view" });
+        });
+    }
     if (dom.projectModalCreateInYouTrack) {
         dom.projectModalCreateInYouTrack.addEventListener("change", onProjectModalYouTrackToggleChange);
     }
@@ -1010,6 +1165,52 @@ function bindStaticEvents() {
             closeProjectModal();
         }
     });
+    if (dom.projectCdcModalClose) {
+        dom.projectCdcModalClose.addEventListener("click", () => {
+            closeProjectCdcModal();
+        });
+    }
+    if (dom.projectCdcModal) {
+        dom.projectCdcModal.addEventListener("click", (event) => {
+            if (event.target.hasAttribute("data-close-project-cdc-modal")) {
+                closeProjectCdcModal();
+            }
+        });
+    }
+    if (dom.projectCdcReadView) {
+        dom.projectCdcReadView.addEventListener("click", onProjectCdcReadViewClick);
+    }
+    if (dom.projectCdcForm) {
+        dom.projectCdcForm.addEventListener("submit", onProjectCdcSubmit);
+        dom.projectCdcForm.addEventListener("click", onProjectCdcFormClick);
+    }
+    if (dom.projectCdcModifyButton) {
+        dom.projectCdcModifyButton.addEventListener("click", () => {
+            openProjectCdcModal(getProjectCdcCurrentProject() || getProjectModalCurrentProject(), { mode: "edit" });
+        });
+    }
+    if (dom.projectCdcImportButton && dom.projectCdcFileInput) {
+        dom.projectCdcImportButton.addEventListener("click", () => {
+            dom.projectCdcFileInput.click();
+        });
+        dom.projectCdcFileInput.addEventListener("change", onProjectCdcFileChange);
+    }
+    if (dom.projectCdcImageInput) {
+        dom.projectCdcImageInput.addEventListener("change", onProjectCdcImageFileChange);
+    }
+    if (dom.projectCdcAttachmentInput) {
+        dom.projectCdcAttachmentInput.addEventListener("change", onProjectCdcAttachmentFileChange);
+    }
+    if (dom.projectCdcDownloadDocxButton) {
+        dom.projectCdcDownloadDocxButton.addEventListener("click", () => {
+            downloadProjectCdc("docx");
+        });
+    }
+    if (dom.projectCdcDownloadPdfButton) {
+        dom.projectCdcDownloadPdfButton.addEventListener("click", () => {
+            downloadProjectCdc("pdf");
+        });
+    }
 
     dom.projectPool.addEventListener("dragstart", onBacklogDragStart);
     dom.projectPool.addEventListener("dragend", onBacklogDragEnd);
@@ -1030,6 +1231,11 @@ function bindStaticEvents() {
     document.addEventListener("pointerup", onPointerUp);
     document.addEventListener("fullscreenchange", onPlanningFullscreenChange);
     document.addEventListener("keydown", (event) => {
+        if (!dom.projectCdcModal.hidden && event.key === "Escape") {
+            closeProjectCdcModal();
+            return;
+        }
+
         if (!dom.projectModal.hidden && event.key === "Escape") {
             closeProjectModal();
             return;
@@ -1317,7 +1523,10 @@ function renderBacklogCards(backlogProjects) {
             data-project-scheduled="${scheduled ? "true" : "false"}"
         >
             <div class="card-topline">
-                <span class="ref-badge">${escapeHtml(project.ref)}</span>
+                <div class="project-card-ref-actions">
+                    <span class="ref-badge">${escapeHtml(project.ref)}</span>
+                    ${renderProjectExternalLinks(project, { compact: true })}
+                </div>
                 <input
                     class="card-color"
                     type="color"
@@ -1343,6 +1552,9 @@ function renderBacklogTable(backlogProjects) {
             <table class="project-table">
                 <colgroup>
                     <col class="project-table-col-ref">
+                    <col class="project-table-col-link">
+                    <col class="project-table-col-link">
+                    <col class="project-table-col-link">
                     <col class="project-table-col-project">
                     <col class="project-table-col-service">
                     <col class="project-table-col-color">
@@ -1351,6 +1563,9 @@ function renderBacklogTable(backlogProjects) {
                 <thead>
                     <tr>
                         <th scope="col">Réf.</th>
+                        <th scope="col">YouTrack</th>
+                        <th scope="col">RM</th>
+                        <th scope="col">CDC</th>
                         <th scope="col">Projet</th>
                         <th scope="col">Service</th>
                         <th scope="col">Couleur</th>
@@ -1380,6 +1595,15 @@ function renderBacklogTableRow(project) {
                 <div class="project-table-ref">
                     <span class="ref-badge">${escapeHtml(project.ref)}</span>
                 </div>
+            </td>
+            <td class="project-table-link-cell" data-label="YouTrack">
+                ${renderProjectExternalLinkCell(project.youtrackTicketUrl, "youtrack", project)}
+            </td>
+            <td class="project-table-link-cell" data-label="RM">
+                ${renderProjectExternalLinkCell(project.redmineUrl, "redmine", project)}
+            </td>
+            <td class="project-table-link-cell" data-label="CDC">
+                ${renderProjectCdcCell(project)}
             </td>
             <td data-label="Projet">
                 <strong class="project-table-title">${escapeHtml(project.title)}</strong>
@@ -1424,6 +1648,49 @@ function renderProjectStatusControl(project) {
             <select class="project-status-select" data-project-status-select="${escapeHtml(project.id)}" draggable="false" aria-label="Changer l'état du projet ${escapeHtml(project.ref)}">
                 ${renderProjectStatusOptions(normalizedStatus)}
             </select>
+        </div>
+    `;
+}
+
+function renderProjectExternalLinks(project, options = {}) {
+    const youtrackLink = renderProjectExternalLinkButton(project?.youtrackTicketUrl, "youtrack", project, options);
+    const redmineLink = renderProjectExternalLinkButton(project?.redmineUrl, "redmine", project, options);
+    const linksMarkup = [youtrackLink, redmineLink].filter(Boolean).join("");
+
+    if (!linksMarkup) {
+        return "";
+    }
+
+    return `<div class="project-external-links">${linksMarkup}</div>`;
+}
+
+function renderProjectExternalLinkCell(value, type, project) {
+    const buttonMarkup = renderProjectExternalLinkButton(value, type, project);
+
+    return `
+        <div class="project-table-link-slot">
+            ${buttonMarkup || `<span class="project-table-link-empty">-</span>`}
+        </div>
+    `;
+}
+
+function renderProjectCdcCell(project) {
+    const hasContent = projectHasCdcContent(project);
+
+    return `
+        <div class="project-table-link-slot">
+            ${hasContent ? `
+                <button
+                    class="project-external-link project-external-link-cdc"
+                    type="button"
+                    title="Ouvrir le cahier des charges"
+                    aria-label="Ouvrir le cahier des charges du projet ${escapeHtml(project?.ref || "")}"
+                    data-project-cdc-button="${escapeHtml(project.id)}"
+                    draggable="false"
+                >
+                    CDC
+                </button>
+            ` : `<span class="project-table-link-empty">-</span>`}
         </div>
     `;
 }
@@ -1479,6 +1746,10 @@ function populateStatusFilter() {
 }
 
 function onBacklogDragStart(event) {
+    if (event.target.closest("[data-project-external-link]")) {
+        return;
+    }
+
     const card = event.target.closest("[data-project-card]");
     if (!card || card.dataset.projectScheduled === "true") {
         return;
@@ -1500,6 +1771,19 @@ function onBacklogDragEnd(event) {
 
 function onProjectPoolClick(event) {
     if (event.target.closest("[data-project-color]")) {
+        return;
+    }
+
+    if (event.target.closest("[data-project-external-link]")) {
+        return;
+    }
+
+    const cdcButton = event.target.closest("[data-project-cdc-button]");
+    if (cdcButton) {
+        const project = findProject(cdcButton.dataset.projectCdcButton);
+        if (project && projectHasCdcContent(project)) {
+            openProjectCdcModal(project, { mode: "view" });
+        }
         return;
     }
 
@@ -1934,10 +2218,6 @@ function onTimelineRowReorderDragEnd(event) {
 }
 
 function scheduleProject(project, slotIndex, options = {}) {
-    if (normalizeProjectStoredStatus(project.status, project) === "A planifier") {
-        project.status = "Planifié";
-    }
-
     if (options.clearParent) {
         project.parentProjectId = null;
     }
@@ -1956,6 +2236,31 @@ function previewBar(element, startIndex, duration) {
     element.style.width = `${Math.max(26, duration * getHalfMonthWidth() - 12)}px`;
 }
 
+function buildPlanningExportProjectsPayload() {
+    return state.projects.map((project) => {
+        const editableDates = getProjectEditableDates(project);
+        return {
+            id: project.id,
+            ref: project.ref,
+            youtrackTicketUrl: project.youtrackTicketUrl ?? null,
+            redmineUrl: project.redmineUrl ?? null,
+            hasCdcContent: projectHasCdcContent(project),
+            title: project.title,
+            service: project.service,
+            projectManager: project.projectManager ?? null,
+            parentProjectId: project.parentProjectId ?? null,
+            color: project.color,
+            start: project.start,
+            duration: project.duration,
+            lane: project.lane,
+            status: normalizeProjectStoredStatus(project.status, project),
+            progression: normalizeProjectProgression(project.progression),
+            startExact: editableDates.start || null,
+            endExact: editableDates.end || null
+        };
+    });
+}
+
 async function exportPlanning() {
     const originalLabel = dom.exportButton.textContent;
     dom.exportButton.disabled = true;
@@ -1965,26 +2270,12 @@ async function exportPlanning() {
         const payload = await apiRequest(API_ROUTES.exportProjects, {
             method: "POST",
             body: JSON.stringify({
-                projects: state.projects.map((project) => {
-                    const editableDates = getProjectEditableDates(project);
-                    return {
-                        id: project.id,
-                        ref: project.ref,
-                        title: project.title,
-                        service: project.service,
-                        color: project.color,
-                        start: project.start,
-                        duration: project.duration,
-                        lane: project.lane,
-                        startExact: editableDates.start || null,
-                        endExact: editableDates.end || null
-                    };
-                })
+                projects: buildPlanningExportProjectsPayload()
             })
         });
 
-        triggerExportDownload(payload.downloadUrl, payload.fileName);
-        window.alert(`Export Excel enregistré dans /export/${payload.fileName}\nLe téléchargement du fichier a aussi été lancé.`);
+        await triggerExportDownload(payload.downloadUrl, payload.fileName);
+        window.alert(`Export Excel prêt : ${payload.fileName}\nLe téléchargement du fichier a été lancé.`);
     } catch (error) {
         console.error(error);
         window.alert(error.message || "L'export Excel a échoué.");
@@ -1994,18 +2285,54 @@ async function exportPlanning() {
     }
 }
 
-function triggerExportDownload(downloadUrl, fileName) {
+async function exportChronologicalPlanning() {
+    const originalLabel = dom.exportChronologicalButton.textContent;
+    dom.exportChronologicalButton.disabled = true;
+    dom.exportChronologicalButton.textContent = "Export chrono...";
+
+    try {
+        const payload = await apiRequest(API_ROUTES.exportProjectsChronological, {
+            method: "POST",
+            body: JSON.stringify({
+                projects: buildPlanningExportProjectsPayload()
+            })
+        });
+
+        await triggerExportDownload(payload.downloadUrl, payload.fileName);
+        window.alert(`Export chronologique prêt : ${payload.fileName}\nLe téléchargement du fichier a été lancé.`);
+    } catch (error) {
+        console.error(error);
+        window.alert(error.message || "L'export chronologique a échoué.");
+    } finally {
+        dom.exportChronologicalButton.disabled = false;
+        dom.exportChronologicalButton.textContent = originalLabel;
+    }
+}
+
+async function triggerExportDownload(downloadUrl, fileName) {
     if (!downloadUrl) {
         return;
     }
 
+    const response = await fetch(downloadUrl, {
+        credentials: "same-origin",
+        cache: "no-store"
+    });
+
+    if (!response.ok) {
+        throw new Error("Le téléchargement du fichier exporté a échoué.");
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = downloadUrl;
+    link.href = objectUrl;
     link.download = fileName || "";
     link.rel = "noopener";
     document.body.appendChild(link);
     link.click();
     link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
 async function enterPlanningFocus() {
@@ -2201,6 +2528,9 @@ function openProjectModal(project) {
     dom.projectModalRiskGainInput.value = project.riskGain || "";
     dom.projectModalBudgetInput.value = project.budgetEstimate || "";
     dom.projectModalPrioritizationInput.value = project.prioritization || "";
+    dom.projectModalProjectManagerInput.value = project.projectManager || "";
+    dom.projectModalYouTrackTicketUrlInput.value = project.youtrackTicketUrl || "";
+    dom.projectModalRedmineUrlInput.value = project.redmineUrl || "";
     dom.projectModalStatusInput.value = normalizeProjectStoredStatus(project.status, project);
     dom.projectModalProgressInput.value = String(normalizeProjectProgression(project.progression));
     dom.projectModalClearButton.hidden = !isScheduled(project);
@@ -2223,6 +2553,7 @@ function openProjectModal(project) {
     syncProjectModalYouTrackBadge(project);
     syncProjectModalYouTrackTeam(project);
     syncProjectModalYouTrackTasks(project);
+    syncProjectModalCdcControls(project);
     setProjectModalDescriptionExpanded(false);
     closeProjectModalEditors();
     dom.projectModal.hidden = false;
@@ -2247,6 +2578,9 @@ function openCreateProjectModal() {
     dom.projectModalRiskGainInput.value = "";
     dom.projectModalBudgetInput.value = "";
     dom.projectModalPrioritizationInput.value = "";
+    dom.projectModalProjectManagerInput.value = "";
+    dom.projectModalYouTrackTicketUrlInput.value = "";
+    dom.projectModalRedmineUrlInput.value = "";
     dom.projectModalStatusInput.value = "A planifier";
     dom.projectModalProgressInput.value = "0";
     dom.projectModalDescriptionInput.value = "";
@@ -2265,6 +2599,7 @@ function openCreateProjectModal() {
     resetProjectModalYouTrackTasks();
     syncProjectModalDateBounds();
     syncProjectModalDisplays();
+    syncProjectModalCdcControls(null);
     setProjectModalDescriptionExpanded(false);
     closeProjectModalEditors();
     dom.projectModal.hidden = false;
@@ -2279,6 +2614,7 @@ function openCreateProjectModal() {
 function closeProjectModal() {
     projectModalTasksRequestToken += 1;
     projectModalTeamRequestToken += 1;
+    closeProjectCdcModal({ preserveProjectModal: true });
     dom.projectModal.hidden = true;
     delete dom.projectModal.dataset.projectId;
     delete dom.projectModal.dataset.youtrackProjectKey;
@@ -2304,6 +2640,1077 @@ function closeProjectModal() {
 
 function getProjectModalMode() {
     return dom.projectModal.dataset.mode === "create" ? "create" : "edit";
+}
+
+function isProjectCdcModalOpen() {
+    return Boolean(dom.projectCdcModal && !dom.projectCdcModal.hidden);
+}
+
+function getProjectCdcFieldElement(inputId) {
+    return document.getElementById(inputId);
+}
+
+function normalizeProjectCdcHtmlValue(value) {
+    const normalized = String(value || "").trim();
+    if (!normalized) {
+        return null;
+    }
+
+    if (typeof DOMParser === "undefined") {
+        return normalized;
+    }
+
+    try {
+        const documentFragment = new DOMParser().parseFromString(normalized, "text/html");
+        const textContent = String(documentFragment.body?.textContent || "")
+            .replace(/\u00a0/g, " ")
+            .trim();
+        const hasEmbeddedContent = Boolean(
+            documentFragment.body?.querySelector("img, table, iframe, video, object, embed, svg, canvas")
+        );
+
+        return textContent || hasEmbeddedContent ? normalized : null;
+    } catch (error) {
+        return normalized;
+    }
+}
+
+function normalizeProjectCdcRenderedHtmlValue(value) {
+    let currentValue = String(value || "").trim();
+    if (!currentValue) {
+        return "";
+    }
+
+    if (typeof DOMParser === "undefined") {
+        return currentValue;
+    }
+
+    try {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            const documentFragment = new DOMParser().parseFromString(currentValue, "text/html");
+            const body = documentFragment.body;
+            if (!body) {
+                return currentValue;
+            }
+
+            body.querySelectorAll("script, style, textarea").forEach((node) => node.remove());
+
+            const hasHtmlElements = body.children.length > 0
+                || Boolean(body.querySelector("img, table, iframe, video, object, embed, svg, canvas, br"));
+
+            if (hasHtmlElements) {
+                return body.innerHTML.trim();
+            }
+
+            const decodedText = String(body.textContent || "").trim();
+            if (!decodedText || decodedText === currentValue) {
+                return body.innerHTML.trim() || currentValue;
+            }
+
+            currentValue = decodedText;
+        }
+    } catch (error) {
+        return currentValue;
+    }
+
+    return currentValue;
+}
+
+function projectHasCdcContent(project) {
+    return Boolean(String(project?.cdcTitle || "").trim())
+        || projectHasCdcSummaryContent(project)
+        || PROJECT_CDC_FIELDS.some(({ key }) => Boolean(normalizeProjectCdcHtmlValue(project?.[key])));
+}
+
+function projectHasCdcSummaryContent(project) {
+    return PROJECT_CDC_SUMMARY_FIELDS.some(({ key }) => Boolean(String(project?.[key] || "").trim()));
+}
+
+function getProjectCdcEditableTitle(project) {
+    if (!projectHasCdcContent(project)) {
+        return "";
+    }
+
+    return Boolean(String(project?.cdcTitle || "").trim())
+        ? String(project?.cdcTitle || "").trim()
+        : getProjectCdcDocumentTitle(project);
+}
+
+function projectHasGeneratedCdcDocument(project) {
+    return Boolean(project?.cdcPdfAvailable);
+}
+
+function normalizeProjectRefValue(value) {
+    return String(value || "").trim().toUpperCase();
+}
+
+function readStartupCdcLinkRequest() {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("cdc") !== "1") {
+        return null;
+    }
+
+    const projectId = String(searchParams.get("projectId") || "").trim();
+    const projectRef = String(searchParams.get("projectRef") || "").trim();
+    if (!projectId && !projectRef) {
+        return null;
+    }
+
+    return { projectId, projectRef };
+}
+
+function findProjectByRef(projectRef) {
+    const normalizedProjectRef = normalizeProjectRefValue(projectRef);
+    if (!normalizedProjectRef) {
+        return null;
+    }
+
+    return state.projects.find((project) => normalizeProjectRefValue(project?.ref) === normalizedProjectRef) || null;
+}
+
+function buildProjectCdcModalUrl(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject()) {
+    if (!project?.id) {
+        return null;
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("cdc", "1");
+    url.searchParams.set("projectId", String(project.id));
+
+    const projectRef = String(project.ref || "").trim();
+    if (projectRef) {
+        url.searchParams.set("projectRef", projectRef);
+    } else {
+        url.searchParams.delete("projectRef");
+    }
+
+    return url.toString();
+}
+
+function syncProjectCdcModalUrl(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject()) {
+    const nextUrl = buildProjectCdcModalUrl(project);
+    if (!nextUrl) {
+        return;
+    }
+
+    window.history.replaceState(window.history.state, "", nextUrl);
+}
+
+function clearProjectCdcModalUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("cdc");
+    url.searchParams.delete("projectId");
+    url.searchParams.delete("projectRef");
+    window.history.replaceState(window.history.state, "", url.toString());
+}
+
+function handleStartupCdcDeepLink() {
+    if (startupCdcLinkState.handled) {
+        return;
+    }
+
+    const request = readStartupCdcLinkRequest();
+    if (!request) {
+        startupCdcLinkState.handled = true;
+        return;
+    }
+
+    const project = (request.projectId ? findProject(request.projectId) : null)
+        || findProjectByRef(request.projectRef);
+    if (!project) {
+        startupCdcLinkState.handled = true;
+        return;
+    }
+
+    startupCdcLinkState.handled = true;
+    openProjectCdcModal(project, { mode: "view" });
+}
+
+function getProjectCdcDocumentTitle(project) {
+    const explicitTitle = String(project?.cdcTitle || "").trim();
+    if (explicitTitle) {
+        return explicitTitle;
+    }
+
+    const projectTitle = String(project?.title || "").trim();
+    if (projectTitle) {
+        return projectTitle;
+    }
+
+    const projectReference = String(project?.ref || "").trim();
+    return projectReference || "Projet";
+}
+
+function normalizeProjectCdcDateInputValue(value) {
+    const normalized = String(value || "").trim();
+    if (!normalized) {
+        return "";
+    }
+
+    const parsedDate = new Date(normalized.replace(" ", "T"));
+    if (Number.isNaN(parsedDate.getTime())) {
+        return "";
+    }
+
+    const year = parsedDate.getFullYear();
+    const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
+    const day = String(parsedDate.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+function buildProjectCdcDateTimeValue(inputValue, fallbackValue = "") {
+    const normalizedInputValue = String(inputValue || "").trim();
+    if (!normalizedInputValue) {
+        return null;
+    }
+
+    const fallback = String(fallbackValue || "").trim();
+    const fallbackTimeMatch = fallback.match(/\b(\d{2}:\d{2}:\d{2})\b/);
+    const timeValue = fallbackTimeMatch ? fallbackTimeMatch[1] : "00:00:00";
+    return `${normalizedInputValue} ${timeValue}`;
+}
+
+function formatProjectCdcSummaryDate(value) {
+    const normalizedInputValue = normalizeProjectCdcDateInputValue(value);
+    if (!normalizedInputValue) {
+        return "-";
+    }
+
+    const [year, month, day] = normalizedInputValue.split("-");
+    return `${day}/${month}/${year}`;
+}
+
+function setProjectCdcModalMode(mode = "view") {
+    const normalizedMode = mode === "edit" ? "edit" : "view";
+    const isEditMode = normalizedMode === "edit";
+
+    if (dom.projectCdcModal) {
+        dom.projectCdcModal.dataset.mode = normalizedMode;
+    }
+    const modalDialog = dom.projectCdcModal?.querySelector(".project-cdc-modal-dialog");
+    if (modalDialog) {
+        modalDialog.dataset.mode = normalizedMode;
+    }
+    if (dom.projectCdcViewTools) {
+        dom.projectCdcViewTools.hidden = isEditMode;
+    }
+    if (dom.projectCdcEditTools) {
+        dom.projectCdcEditTools.hidden = !isEditMode;
+    }
+    if (dom.projectCdcReadView) {
+        dom.projectCdcReadView.hidden = isEditMode;
+    }
+    if (dom.projectCdcForm) {
+        dom.projectCdcForm.hidden = !isEditMode;
+    }
+}
+
+function parseProjectCdcUpdatedAt(value) {
+    const normalized = String(value || "").trim();
+    if (!normalized) {
+        return null;
+    }
+
+    const parsedDate = new Date(normalized.replace(" ", "T"));
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+}
+
+function formatProjectCdcUpdatedAt(value) {
+    const parsedDate = parseProjectCdcUpdatedAt(value);
+    return parsedDate ? dateTimeFormatter.format(parsedDate) : "";
+}
+
+function buildProjectCdcDocxDownloadUrl(projectId) {
+    return API_ROUTES.projectCdcDocxDownloadPattern.replace("__ID__", encodeURIComponent(String(projectId || "")));
+}
+
+function buildProjectCdcPdfDownloadUrl(projectId, options = {}) {
+    const baseUrl = API_ROUTES.projectCdcPdfDownloadPattern.replace("__ID__", encodeURIComponent(String(projectId || "")));
+    if (!options.inline) {
+        return baseUrl;
+    }
+
+    return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}inline=1`;
+}
+
+function setProjectCdcStatus(message, tone = "info") {
+    if (!dom.projectCdcStatus) {
+        return;
+    }
+
+    const normalizedMessage = String(message || "").trim();
+    if (!normalizedMessage) {
+        dom.projectCdcStatus.hidden = true;
+        dom.projectCdcStatus.textContent = "";
+        dom.projectCdcStatus.dataset.tone = "info";
+        return;
+    }
+
+    dom.projectCdcStatus.textContent = normalizedMessage;
+    dom.projectCdcStatus.dataset.tone = tone;
+    dom.projectCdcStatus.hidden = false;
+}
+
+function clearProjectCdcStatus() {
+    setProjectCdcStatus("");
+}
+
+function setProjectCdcBusy(isBusy) {
+    if (dom.projectCdcTopSubmitButton) {
+        dom.projectCdcTopSubmitButton.disabled = isBusy;
+    }
+    if (dom.projectCdcSubmitButton) {
+        dom.projectCdcSubmitButton.disabled = isBusy;
+    }
+    if (dom.projectCdcModifyButton) {
+        dom.projectCdcModifyButton.disabled = isBusy;
+    }
+    if (dom.projectCdcImportButton) {
+        dom.projectCdcImportButton.disabled = isBusy;
+    }
+    if (dom.projectCdcDownloadDocxButton) {
+        dom.projectCdcDownloadDocxButton.disabled = isBusy || dom.projectCdcDownloadDocxButton.disabled;
+    }
+    if (dom.projectCdcDownloadPdfButton) {
+        dom.projectCdcDownloadPdfButton.disabled = isBusy || dom.projectCdcDownloadPdfButton.disabled;
+    }
+    document.querySelectorAll("[data-cdc-action='add-image'], [data-cdc-action='add-file']").forEach((button) => {
+        button.disabled = isBusy;
+    });
+
+    if (!isBusy) {
+        syncProjectCdcDownloadButtons();
+    }
+}
+
+function syncProjectCdcDownloadButtons(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject()) {
+    const hasProject = Boolean(project?.id);
+    const hasContent = hasProject && projectHasCdcContent(project);
+
+    if (dom.projectCdcDownloadDocxButton) {
+        dom.projectCdcDownloadDocxButton.disabled = !hasProject || !hasContent;
+    }
+    if (dom.projectCdcDownloadPdfButton) {
+        dom.projectCdcDownloadPdfButton.disabled = !hasProject || !hasContent;
+    }
+}
+
+function syncProjectCdcModalHeading(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject()) {
+    if (!dom.projectCdcModalTitle || !dom.projectCdcModalSubtitle) {
+        return;
+    }
+
+    const modalMode = dom.projectCdcModal?.dataset.mode === "edit" ? "edit" : "view";
+
+    if (!project) {
+        dom.projectCdcModalTitle.textContent = "Cahier des charges";
+        dom.projectCdcModalSubtitle.textContent = modalMode === "edit"
+            ? "Completez le document de cadrage du projet."
+            : "Consultez le document de cadrage du projet.";
+        syncProjectCdcViewControls(null);
+        syncProjectCdcDownloadButtons(null);
+        return;
+    }
+
+    const heading = [project.ref || "", project.title || "Projet"].filter(Boolean).join(" - ");
+    const updatedAtLabel = formatProjectCdcUpdatedAt(project.cdcUpdatedAt);
+
+    dom.projectCdcModalTitle.textContent = heading || "Cahier des charges";
+    dom.projectCdcModalSubtitle.textContent = updatedAtLabel
+        ? `Derniere mise a jour : ${updatedAtLabel}`
+        : (modalMode === "edit"
+            ? "Completez le document de cadrage du projet."
+            : "Consultez le document de cadrage du projet.");
+
+    syncProjectCdcViewControls(project);
+    syncProjectCdcDownloadButtons(project);
+}
+
+function syncProjectModalCdcControls(project = getProjectModalCurrentProject()) {
+    const hasProject = Boolean(project?.id);
+    const hasContent = hasProject && projectHasCdcContent(project);
+
+    if (dom.projectModalCdcButton) {
+        dom.projectModalCdcButton.hidden = !hasProject;
+        dom.projectModalCdcButton.disabled = !hasProject;
+        dom.projectModalCdcButton.textContent = hasContent
+            ? "Cahier des charges"
+            : "Ajouter un cahier des charges";
+        dom.projectModalCdcButton.title = hasProject
+            ? (hasContent ? "Ouvrir le cahier des charges" : "Creer le cahier des charges")
+            : "Enregistrez d abord le projet pour activer le cahier des charges";
+    }
+
+    if (dom.projectModalCdcPill) {
+        dom.projectModalCdcPill.hidden = !hasProject;
+        dom.projectModalCdcPill.disabled = !hasContent;
+        dom.projectModalCdcPill.setAttribute("aria-disabled", hasContent ? "false" : "true");
+        dom.projectModalCdcPill.classList.toggle("is-empty", !hasContent);
+        dom.projectModalCdcPill.title = hasContent
+            ? "Ouvrir le cahier des charges"
+            : "Aucun cahier des charges saisi";
+    }
+
+    syncProjectCdcModalHeading(project);
+}
+
+function syncProjectCdcViewControls(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject()) {
+    if (!dom.projectCdcModifyButton) {
+        return;
+    }
+
+    const hasContent = Boolean(project?.id) && projectHasCdcContent(project);
+    dom.projectCdcModifyButton.hidden = !hasContent;
+}
+
+async function uploadProjectCdcEditorAsset(file, kind = "file") {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("kind", kind);
+
+    const response = await fetch(API_ROUTES.uploadProjectCdcAsset, {
+        method: "POST",
+        credentials: "same-origin",
+        body: formData
+    });
+
+    let payload = null;
+    try {
+        payload = await response.json();
+    } catch (error) {
+        payload = null;
+    }
+
+    if (!response.ok) {
+        throw new Error(payload?.message || `Televersement impossible (${response.status})`);
+    }
+
+    return payload;
+}
+
+function getActiveProjectCdcEditor(preferredInputId = "") {
+    if (typeof window.tinymce === "undefined") {
+        return null;
+    }
+
+    if (preferredInputId) {
+        const requestedEditor = window.tinymce.get(preferredInputId);
+        if (requestedEditor) {
+            return requestedEditor;
+        }
+    }
+
+    const preferredEditorId = projectCdcEditorState.lastActiveEditorId;
+    if (preferredEditorId) {
+        const preferredEditor = window.tinymce.get(preferredEditorId);
+        if (preferredEditor) {
+            return preferredEditor;
+        }
+    }
+
+    const activeEditor = window.tinymce.activeEditor;
+    if (activeEditor && PROJECT_CDC_FIELDS.some(({ inputId }) => inputId === activeEditor.id)) {
+        return activeEditor;
+    }
+
+    for (const { inputId } of PROJECT_CDC_FIELDS) {
+        const editor = window.tinymce.get(inputId);
+        if (editor) {
+            return editor;
+        }
+    }
+
+    return null;
+}
+
+function markProjectCdcAvailability(projectId, options = {}) {
+    const project = findProject(projectId);
+    if (!project) {
+        return;
+    }
+
+    const nextProject = normalizeProjectForState({
+        ...project,
+        cdcDocxAvailable: options.docx ?? project.cdcDocxAvailable ?? false,
+        cdcPdfAvailable: options.pdf ?? project.cdcPdfAvailable ?? false
+    });
+
+    upsertProjectInState(nextProject);
+    render();
+
+    if (getProjectModalCurrentProject()?.id === nextProject.id) {
+        syncProjectModalCdcControls(nextProject);
+    }
+
+    if (getProjectCdcCurrentProject()?.id === nextProject.id) {
+        syncProjectCdcModalHeading(nextProject);
+        renderProjectCdcReadView(nextProject);
+        populateProjectCdcForm(nextProject);
+    }
+}
+
+function isDarkEditorTheme() {
+    if (!dom.root) {
+        return document.documentElement.classList.contains("dark");
+    }
+
+    return dom.root.classList.contains("theme-dark")
+        || (document.documentElement.classList.contains("dark") && !dom.root.classList.contains("theme-light"));
+}
+
+async function ensureProjectCdcEditors() {
+    if (!dom.projectCdcForm || typeof window.tinymce === "undefined" || typeof window.tinymce.init !== "function") {
+        return;
+    }
+
+    if (projectCdcEditorState.initPromise) {
+        await projectCdcEditorState.initPromise;
+        return;
+    }
+
+    const editorThemeIsDark = isDarkEditorTheme();
+    projectCdcEditorState.initPromise = window.tinymce.init({
+        selector: ".project-cdc-editor",
+        menubar: false,
+        branding: false,
+        min_height: 220,
+        max_height: 420,
+        convert_urls: false,
+        relative_urls: false,
+        skin: editorThemeIsDark ? "oxide-dark" : "oxide",
+        content_css: editorThemeIsDark ? "dark" : "default",
+        plugins: "link lists table code image charmap autoresize",
+        toolbar: "undo redo | blocks | bold italic underline | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link image table | charmap code",
+        image_uploadtab: false,
+        autoresize_bottom_margin: 18,
+        content_style: "body { font-family: Inter, Segoe UI, sans-serif; font-size: 14px; line-height: 1.6; }",
+        setup(editor) {
+            editor.on("focus", () => {
+                projectCdcEditorState.lastActiveEditorId = editor.id;
+            });
+            editor.on("init", () => {
+                if (!projectCdcEditorState.lastActiveEditorId) {
+                    projectCdcEditorState.lastActiveEditorId = editor.id;
+                }
+            });
+        },
+        images_upload_handler(blobInfo, progress) {
+            progress(20);
+
+            return uploadProjectCdcEditorAsset(blobInfo.blob(), "image").then((payload) => {
+                progress(100);
+                return payload.url;
+            });
+        }
+    });
+
+    try {
+        await projectCdcEditorState.initPromise;
+    } catch (error) {
+        projectCdcEditorState.initPromise = null;
+        throw error;
+    }
+}
+
+function setProjectCdcEditorValue(inputId, value) {
+    const normalizedValue = normalizeProjectCdcRenderedHtmlValue(value);
+    const textarea = getProjectCdcFieldElement(inputId);
+    if (textarea) {
+        textarea.value = normalizedValue;
+    }
+
+    if (typeof window.tinymce === "undefined") {
+        return;
+    }
+
+    const editor = window.tinymce.get(inputId);
+    if (editor && editor.getContent() !== normalizedValue) {
+        editor.setContent(normalizedValue || "");
+    }
+}
+
+function populateProjectCdcForm(project) {
+    const hasContent = projectHasCdcContent(project);
+    const titleInput = getProjectCdcFieldElement(PROJECT_CDC_TITLE_FIELD.inputId);
+    if (titleInput) {
+        titleInput.value = getProjectCdcEditableTitle(project);
+    }
+
+    PROJECT_CDC_SUMMARY_FIELDS.forEach(({ key, inputId, type }) => {
+        const input = getProjectCdcFieldElement(inputId);
+        if (!input) {
+            return;
+        }
+
+        if (type === "date") {
+            input.value = hasContent ? normalizeProjectCdcDateInputValue(project?.[key]) : "";
+            return;
+        }
+
+        input.value = hasContent ? String(project?.[key] || "") : "";
+    });
+
+    PROJECT_CDC_FIELDS.forEach(({ key, inputId }) => {
+        setProjectCdcEditorValue(inputId, project?.[key] || "");
+    });
+}
+
+function buildProjectCdcReadDocumentMarkup(project) {
+    if (!projectHasCdcContent(project)) {
+        return `
+            <article class="project-cdc-document-sheet project-cdc-document-empty-state">
+                <button
+                    class="ghost-button project-cdc-empty-action"
+                    type="button"
+                    data-project-cdc-read-action="edit"
+                >Ajouter un cahier des charges</button>
+            </article>
+        `;
+    }
+
+    const requestDate = project?.cdcRequestDate ? formatProjectCdcSummaryDate(project.cdcRequestDate) : "";
+    const dueDate = project?.cdcDueDate ? formatProjectCdcSummaryDate(project.cdcDueDate) : "";
+    const summaryColumns = [
+        { label: "Demandeur", value: String(project?.cdcRequester || "").trim() || "" },
+        { label: "Date de la demande", value: requestDate },
+        { label: "Echeance souhaitee", value: dueDate },
+        { label: "Priorite", value: String(project?.cdcPriority || "").trim() || "" },
+        { label: "Service", value: String(project?.cdcService || "").trim() || "" },
+        { label: "Chef de projet", value: String(project?.cdcProjectManager || "").trim() || "" },
+    ];
+    const title = getProjectCdcDocumentTitle(project);
+    const headerMarkup = summaryColumns.map(({ label }) => `<th scope="col">${escapeHtml(label)}</th>`).join("");
+    const valueMarkup = summaryColumns.map(({ value }) => `<td>${escapeHtml(value)}</td>`).join("");
+    const sectionsMarkup = PROJECT_CDC_FIELDS
+        .map(({ key, title: sectionTitle }, index) => {
+            const html = normalizeProjectCdcRenderedHtmlValue(project?.[key]);
+            if (!html) {
+                return "";
+            }
+
+            return `
+                <section class="project-cdc-document-section">
+                    <h4>${index + 1}. ${escapeHtml(sectionTitle)}</h4>
+                    <div class="project-cdc-document-body">${html}</div>
+                </section>
+            `;
+        })
+        .filter(Boolean)
+        .join("");
+
+    return `
+        <article class="project-cdc-document-sheet">
+            <h3 class="project-cdc-document-title">CDC - Projet : <span>${escapeHtml(title)}</span></h3>
+            <table class="project-cdc-document-summary">
+                <thead>
+                    <tr>${headerMarkup}</tr>
+                </thead>
+                <tbody>
+                    <tr>${valueMarkup}</tr>
+                </tbody>
+            </table>
+            ${sectionsMarkup}
+        </article>
+    `;
+}
+
+function renderProjectCdcReadView(project) {
+    if (dom.projectCdcReadDocument) {
+        dom.projectCdcReadDocument.innerHTML = buildProjectCdcReadDocumentMarkup(project);
+    }
+}
+
+function getProjectCdcPayloadFromForm() {
+    if (typeof window.tinymce !== "undefined" && typeof window.tinymce.triggerSave === "function") {
+        window.tinymce.triggerSave();
+    }
+
+    return PROJECT_CDC_FIELDS.reduce((payload, fieldDefinition) => {
+        const input = getProjectCdcFieldElement(fieldDefinition.inputId);
+        payload[fieldDefinition.key] = normalizeProjectCdcHtmlValue(input?.value);
+        return payload;
+    }, {});
+}
+
+function getProjectCdcMetaPayloadFromForm(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject()) {
+    const titleInput = getProjectCdcFieldElement(PROJECT_CDC_TITLE_FIELD.inputId);
+    const normalizedTitle = titleInput ? String(titleInput.value || "").trim() : "";
+    const baseProjectTitle = String(project?.title || "").trim();
+    const payload = {
+        [PROJECT_CDC_TITLE_FIELD.key]: normalizedTitle && normalizedTitle !== baseProjectTitle ? normalizedTitle : null
+    };
+
+    return PROJECT_CDC_SUMMARY_FIELDS.reduce((metaPayload, fieldDefinition) => {
+        const input = getProjectCdcFieldElement(fieldDefinition.inputId);
+        if (!input) {
+            return metaPayload;
+        }
+
+        if (fieldDefinition.type === "date") {
+            metaPayload[fieldDefinition.key] = buildProjectCdcDateTimeValue(input.value, project?.[fieldDefinition.key] || "");
+            return metaPayload;
+        }
+
+        const normalizedValue = String(input.value || "").trim();
+        metaPayload[fieldDefinition.key] = normalizedValue || null;
+        return metaPayload;
+    }, payload);
+}
+
+function buildProjectCdcTimestamp() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    const seconds = String(now.getSeconds()).padStart(2, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+async function saveProjectCdc(options = {}) {
+    const project = getProjectCdcCurrentProject() || getProjectModalCurrentProject();
+    if (!project?.id) {
+        throw new Error("Enregistrez d abord le projet avant de gerer son cahier des charges.");
+    }
+
+    const metaPayload = getProjectCdcMetaPayloadFromForm(project);
+    const cdcPayload = getProjectCdcPayloadFromForm();
+    const hasSummaryContent = PROJECT_CDC_SUMMARY_FIELDS.some(({ key }) => Boolean(String(metaPayload[key] || "").trim()));
+    const hasContent = Boolean(metaPayload.cdcTitle)
+        || hasSummaryContent
+        || Object.values(cdcPayload).some((value) => Boolean(value));
+    const projectDraft = {
+        ...project,
+        ...metaPayload,
+        ...cdcPayload,
+        cdcUpdatedAt: hasContent ? buildProjectCdcTimestamp() : null
+    };
+
+    setProjectCdcBusy(true);
+    clearProjectCdcStatus();
+
+    try {
+        const response = await createProjectRecord(buildProjectPersistencePayload(projectDraft), false, false);
+        const savedProject = normalizeProjectForState(response?.project || projectDraft);
+        upsertProjectInState(savedProject);
+        persistState();
+        render();
+        if ((dom.projectModal?.dataset.projectId || "") === savedProject.id) {
+            openProjectModal(savedProject);
+        }
+        populateProjectCdcForm(savedProject);
+        renderProjectCdcReadView(savedProject);
+        if (options.returnToPreview) {
+            setProjectCdcModalMode("view");
+        }
+        syncProjectModalCdcControls(savedProject);
+        syncProjectCdcModalHeading(savedProject);
+
+        if (!options.quietSuccess) {
+            setProjectCdcStatus(
+                hasContent ? "Cahier des charges enregistre." : "Cahier des charges vide enregistre.",
+                "success"
+            );
+        }
+
+        return savedProject;
+    } catch (error) {
+        setProjectCdcStatus(error.message || "Impossible d enregistrer le cahier des charges.", "error");
+        throw error;
+    } finally {
+        setProjectCdcBusy(false);
+    }
+}
+
+function triggerProjectCdcDownload(downloadUrl) {
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.rel = "noopener";
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
+
+async function downloadProjectCdc(format) {
+    const project = getProjectCdcCurrentProject() || getProjectModalCurrentProject();
+    if (!project?.id) {
+        setProjectCdcStatus("Enregistrez d abord le projet avant de generer un cahier des charges.", "error");
+        return;
+    }
+
+    try {
+        const savedProject = await saveProjectCdc({ quietSuccess: true });
+        if (!projectHasCdcContent(savedProject)) {
+            setProjectCdcStatus("Ajoutez au moins un contenu avant de generer le cahier des charges.", "error");
+            return;
+        }
+
+        const downloadUrl = format === "pdf"
+            ? buildProjectCdcPdfDownloadUrl(savedProject.id)
+            : buildProjectCdcDocxDownloadUrl(savedProject.id);
+
+        triggerProjectCdcDownload(downloadUrl);
+        markProjectCdcAvailability(savedProject.id, {
+            docx: true,
+            pdf: true
+        });
+        setProjectCdcStatus(
+            format === "pdf" ? "Generation du PDF lancee." : "Generation du document Word lancee.",
+            "info"
+        );
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function insertProjectCdcHtml(targetInputId, html, fallbackInputId = PROJECT_CDC_FIELDS[PROJECT_CDC_FIELDS.length - 1]?.inputId || "") {
+    const editor = getActiveProjectCdcEditor(targetInputId);
+    if (editor) {
+        editor.focus();
+        editor.insertContent(html);
+        projectCdcEditorState.lastActiveEditorId = editor.id;
+        return true;
+    }
+
+    const fallbackInput = getProjectCdcFieldElement(targetInputId || fallbackInputId);
+    if (fallbackInput) {
+        const existingValue = String(fallbackInput.value || "");
+        fallbackInput.value = `${existingValue}${existingValue ? "\n" : ""}${html}`;
+        return true;
+    }
+
+    return false;
+}
+
+function onProjectCdcFormClick(event) {
+    const actionButton = event.target instanceof HTMLElement
+        ? event.target.closest("[data-cdc-action]")
+        : null;
+
+    if (!(actionButton instanceof HTMLElement)) {
+        return;
+    }
+
+    const action = String(actionButton.dataset.cdcAction || "").trim();
+    if (action !== "add-image" && action !== "add-file") {
+        return;
+    }
+
+    projectCdcEditorState.pendingTargetInputId = String(actionButton.dataset.cdcTarget || "").trim();
+    if (projectCdcEditorState.pendingTargetInputId) {
+        projectCdcEditorState.lastActiveEditorId = projectCdcEditorState.pendingTargetInputId;
+    }
+
+    if (action === "add-image" && dom.projectCdcImageInput) {
+        dom.projectCdcImageInput.click();
+    }
+
+    if (action === "add-file" && dom.projectCdcAttachmentInput) {
+        dom.projectCdcAttachmentInput.click();
+    }
+}
+
+async function onProjectCdcImageFileChange() {
+    const file = dom.projectCdcImageInput?.files?.[0];
+    if (!file) {
+        return;
+    }
+
+    try {
+        const payload = await uploadProjectCdcEditorAsset(file, "image");
+        insertProjectCdcHtml(
+            projectCdcEditorState.pendingTargetInputId,
+            `<p><img src="${escapeHtml(String(payload.url || ""))}" alt="${escapeHtml(String(payload.name || "image"))}"></p>`,
+            PROJECT_CDC_FIELDS[0]?.inputId || ""
+        );
+
+        setProjectCdcStatus("Image ajoutee dans l editeur.", "success");
+    } catch (error) {
+        console.error(error);
+        setProjectCdcStatus(error.message || "Impossible d ajouter l image.", "error");
+    } finally {
+        projectCdcEditorState.pendingTargetInputId = "";
+        if (dom.projectCdcImageInput) {
+            dom.projectCdcImageInput.value = "";
+        }
+    }
+}
+
+async function onProjectCdcAttachmentFileChange() {
+    const file = dom.projectCdcAttachmentInput?.files?.[0];
+    if (!file) {
+        return;
+    }
+
+    try {
+        const payload = await uploadProjectCdcEditorAsset(file, "file");
+        insertProjectCdcHtml(
+            projectCdcEditorState.pendingTargetInputId,
+            `<p><a href="${escapeHtml(String(payload.url || ""))}" target="_blank" rel="noopener">${escapeHtml(String(payload.name || file.name || "document"))}</a></p>`
+        );
+        setProjectCdcStatus("Fichier ajoute dans le paragraphe actif.", "success");
+    } catch (error) {
+        console.error(error);
+        setProjectCdcStatus(error.message || "Impossible d ajouter le fichier.", "error");
+    } finally {
+        projectCdcEditorState.pendingTargetInputId = "";
+        if (dom.projectCdcAttachmentInput) {
+            dom.projectCdcAttachmentInput.value = "";
+        }
+    }
+}
+
+async function importProjectCdcFile(projectId, file) {
+    const formData = new FormData();
+    formData.append("projectId", projectId);
+    formData.append("cdcFile", file);
+
+    const response = await fetch(API_ROUTES.importProjectCdc, {
+        method: "POST",
+        credentials: "same-origin",
+        body: formData
+    });
+
+    let payload = null;
+    try {
+        payload = await response.json();
+    } catch (error) {
+        payload = null;
+    }
+
+    if (!response.ok) {
+        throw new Error(payload?.message || `Import du document Word impossible (${response.status})`);
+    }
+
+    return payload;
+}
+
+async function onProjectCdcFileChange() {
+    const project = getProjectCdcCurrentProject() || getProjectModalCurrentProject();
+    const file = dom.projectCdcFileInput?.files?.[0];
+
+    if (!project?.id || !file) {
+        return;
+    }
+
+    setProjectCdcBusy(true);
+    clearProjectCdcStatus();
+
+    try {
+        const payload = await importProjectCdcFile(project.id, file);
+        const savedProject = normalizeProjectForState(payload?.project || project);
+        upsertProjectInState(savedProject);
+        persistState();
+        render();
+        if ((dom.projectModal?.dataset.projectId || "") === savedProject.id) {
+            openProjectModal(savedProject);
+        }
+        await ensureProjectCdcEditors();
+        populateProjectCdcForm(savedProject);
+        renderProjectCdcReadView(savedProject);
+        setProjectCdcModalMode("edit");
+        syncProjectModalCdcControls(savedProject);
+        syncProjectCdcModalHeading(savedProject);
+        setProjectCdcStatus(
+            payload?.warning
+                ? `Import termine avec remarque : ${payload.warning}`
+                : "Document Word importe avec succes.",
+            payload?.warning ? "warning" : "success"
+        );
+    } catch (error) {
+        console.error(error);
+        setProjectCdcStatus(error.message || "Impossible d importer le document Word.", "error");
+    } finally {
+        if (dom.projectCdcFileInput) {
+            dom.projectCdcFileInput.value = "";
+        }
+        setProjectCdcBusy(false);
+    }
+}
+
+async function openProjectCdcModal(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject(), options = {}) {
+    const currentProject = project?.id ? (findProject(project.id) || project) : (getProjectCdcCurrentProject() || getProjectModalCurrentProject());
+    if (!currentProject?.id) {
+        window.alert("Enregistrez d abord le projet pour activer le cahier des charges.");
+        return;
+    }
+
+    const requestedMode = options.mode === "edit" ? "edit" : "view";
+    const modalMode = requestedMode;
+
+    dom.projectCdcModal.hidden = false;
+    dom.projectCdcModal.dataset.projectId = String(currentProject.id || "");
+    setProjectCdcModalMode(modalMode);
+    clearProjectCdcStatus();
+    syncProjectCdcModalHeading(currentProject);
+    renderProjectCdcReadView(currentProject);
+    populateProjectCdcForm(currentProject);
+    syncProjectCdcModalUrl(currentProject);
+
+    if (modalMode === "edit") {
+        try {
+            await new Promise((resolve) => window.requestAnimationFrame(resolve));
+            await ensureProjectCdcEditors();
+            populateProjectCdcForm(findProject(currentProject.id) || currentProject);
+        } catch (error) {
+            console.error(error);
+            setProjectCdcStatus(
+                "L editeur enrichi n a pas pu etre charge. Vous pouvez continuer avec les zones de texte simples.",
+                "warning"
+            );
+        }
+    }
+}
+
+function closeProjectCdcModal() {
+    if (!dom.projectCdcModal) {
+        return;
+    }
+
+    dom.projectCdcModal.hidden = true;
+    delete dom.projectCdcModal.dataset.projectId;
+    setProjectCdcModalMode("view");
+    clearProjectCdcStatus();
+    projectCdcEditorState.pendingTargetInputId = "";
+    clearProjectCdcModalUrl();
+
+    if (dom.projectCdcFileInput) {
+        dom.projectCdcFileInput.value = "";
+    }
+    if (dom.projectCdcImageInput) {
+        dom.projectCdcImageInput.value = "";
+    }
+    if (dom.projectCdcAttachmentInput) {
+        dom.projectCdcAttachmentInput.value = "";
+    }
+}
+
+async function onProjectCdcSubmit(event) {
+    event.preventDefault();
+
+    try {
+        await saveProjectCdc({ returnToPreview: true });
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function onProjectCdcReadViewClick(event) {
+    const actionButton = event.target instanceof HTMLElement
+        ? event.target.closest("[data-project-cdc-read-action]")
+        : null;
+
+    if (!(actionButton instanceof HTMLElement)) {
+        return;
+    }
+
+    if (String(actionButton.dataset.projectCdcReadAction || "").trim() !== "edit") {
+        return;
+    }
+
+    openProjectCdcModal(getProjectCdcCurrentProject() || getProjectModalCurrentProject(), { mode: "edit" });
 }
 
 function setProjectModalMode(mode) {
@@ -3039,6 +4446,9 @@ async function onProjectModalSubmit(event) {
     const riskGainValue = normalizeProjectMetaInput(dom.projectModalRiskGainInput.value);
     const budgetValue = normalizeProjectMetaInput(dom.projectModalBudgetInput.value);
     const prioritizationValue = normalizeProjectMetaInput(dom.projectModalPrioritizationInput.value);
+    const projectManagerValue = normalizeProjectMetaInput(dom.projectModalProjectManagerInput.value);
+    const youtrackTicketUrlValue = normalizeProjectExternalLinkValue(dom.projectModalYouTrackTicketUrlInput.value);
+    const redmineUrlValue = normalizeProjectExternalLinkValue(dom.projectModalRedmineUrlInput.value);
     const statusValue = normalizeProjectStoredStatus(dom.projectModalStatusInput.value, project);
     const progressionValue = normalizeProjectProgression(dom.projectModalProgressInput.value);
     const descriptionValue = dom.projectModalDescriptionInput.value.trim();
@@ -3098,6 +4508,9 @@ async function onProjectModalSubmit(event) {
     projectDraft.riskGain = riskGainValue;
     projectDraft.budgetEstimate = budgetValue;
     projectDraft.prioritization = prioritizationValue;
+    projectDraft.projectManager = projectManagerValue;
+    projectDraft.youtrackTicketUrl = youtrackTicketUrlValue;
+    projectDraft.redmineUrl = redmineUrlValue;
     projectDraft.status = statusValue;
     projectDraft.progression = progressionValue;
     projectDraft.teamMembers = getProjectModalTeamMembers();
@@ -3123,10 +4536,6 @@ async function onProjectModalSubmit(event) {
         projectDraft.startExact = startValue;
         projectDraft.endExact = endValue;
         projectDraft.lane = Number.isFinite(projectDraft.lane) ? projectDraft.lane : getNextLane();
-
-        if (normalizeProjectStoredStatus(projectDraft.status, projectDraft) === "A planifier") {
-            projectDraft.status = "Planifié";
-        }
     }
 
     if (projectDraft.parentProjectId) {
@@ -3288,6 +4697,17 @@ function hideProjectModalError() {
 }
 
 function onProjectModalFormClick(event) {
+    const linkOpenButton = event.target.closest("[data-project-link-open]");
+    if (linkOpenButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const linkUrl = String(linkOpenButton.dataset.projectLinkUrl || "").trim();
+        if (linkUrl !== "") {
+            window.open(linkUrl, "_blank", "noopener,noreferrer");
+        }
+        return;
+    }
+
     if (event.target.closest("#projectModalDescriptionToggle")) {
         return;
     }
@@ -3583,7 +5003,6 @@ function buildTimelineHierarchyRows(projects) {
         }
 
         visitedProjectIds.add(project.id);
-
         const childProjects = sortProjects(childrenMap.get(project.id) || []);
         const isExpanded = childProjects.length > 0 ? isTimelineProjectExpanded(project.id) : false;
         rows.push({
@@ -3758,6 +5177,11 @@ function findProject(projectId) {
     return state.projects.find((project) => project.id === projectId);
 }
 
+function getProjectCdcCurrentProject() {
+    const projectId = dom.projectCdcModal?.dataset.projectId || "";
+    return projectId ? findProject(projectId) : null;
+}
+
 function wouldCreateProjectCycle(projectId, candidateParentId) {
     const normalizedProjectId = String(projectId || "").trim();
     let currentParentId = String(candidateParentId || "").trim();
@@ -3810,10 +5234,6 @@ function applyProjectParentSchedule(project, parentProject = getProjectParent(pr
     project.duration = childEndSlot - childStartSlot + 1;
     project.lane = Number.isFinite(project.lane) ? project.lane : getNextLane();
     syncProjectExactDatesWithSchedule(project);
-
-    if (normalizeProjectStoredStatus(project.status, project) === "A planifier") {
-        project.status = "Planifié";
-    }
 }
 
 function syncChildProjectSchedules(projectId) {
@@ -5546,10 +6966,30 @@ function createEmptyProjectDraft() {
         riskGain: null,
         budgetEstimate: null,
         prioritization: null,
+        projectManager: null,
         status: "A planifier",
         progression: 0,
         youtrackId: null,
         youtrackUrl: null,
+        youtrackTicketUrl: null,
+        redmineUrl: null,
+        cdcTitle: null,
+        cdcRequester: null,
+        cdcRequestDate: null,
+        cdcDueDate: null,
+        cdcPriority: null,
+        cdcService: null,
+        cdcProjectManager: null,
+        cdcPresentation: null,
+        cdcObjectives: null,
+        cdcFeatures: null,
+        cdcConstraints: null,
+        cdcAdditionalInfo: null,
+        cdcUpdatedAt: null,
+        cdcDocxAvailable: false,
+        cdcPdfAvailable: false,
+        createdAt: null,
+        updatedAt: null,
         ownerId: null,
         ownerDisplayName: null,
         ownerEmail: null,
@@ -5696,10 +7136,30 @@ function buildProjectPersistencePayload(project) {
         riskGain: project.riskGain ?? null,
         budgetEstimate: project.budgetEstimate ?? null,
         prioritization: project.prioritization ?? null,
+        projectManager: project.projectManager ?? null,
         status: normalizeProjectStoredStatus(project.status, project),
         progression: normalizeProjectProgression(project.progression),
         youtrackId: project.youtrackId ?? null,
         youtrackUrl: project.youtrackUrl ?? null,
+        youtrackTicketUrl: project.youtrackTicketUrl ?? null,
+        redmineUrl: project.redmineUrl ?? null,
+        cdcTitle: project.cdcTitle ?? null,
+        cdcRequester: project.cdcRequester ?? null,
+        cdcRequestDate: project.cdcRequestDate ?? null,
+        cdcDueDate: project.cdcDueDate ?? null,
+        cdcPriority: project.cdcPriority ?? null,
+        cdcService: project.cdcService ?? null,
+        cdcProjectManager: project.cdcProjectManager ?? null,
+        cdcPresentation: normalizeProjectCdcHtmlValue(project.cdcPresentation),
+        cdcObjectives: normalizeProjectCdcHtmlValue(project.cdcObjectives),
+        cdcFeatures: normalizeProjectCdcHtmlValue(project.cdcFeatures),
+        cdcConstraints: normalizeProjectCdcHtmlValue(project.cdcConstraints),
+        cdcAdditionalInfo: normalizeProjectCdcHtmlValue(project.cdcAdditionalInfo),
+        cdcUpdatedAt: project.cdcUpdatedAt ?? null,
+        cdcDocxAvailable: Boolean(project.cdcDocxAvailable),
+        cdcPdfAvailable: Boolean(project.cdcPdfAvailable),
+        createdAt: project.createdAt ?? null,
+        updatedAt: project.updatedAt ?? null,
         ownerId: project.ownerId ?? null,
         ownerDisplayName: project.ownerDisplayName ?? null,
         ownerEmail: project.ownerEmail ?? null,
@@ -5763,9 +7223,29 @@ function normalizeProjectForState(project) {
         endExact: exactDates.end,
         youtrackId: project.youtrackId || null,
         youtrackUrl: project.youtrackUrl || null,
+        youtrackTicketUrl: project.youtrackTicketUrl || null,
+        redmineUrl: project.redmineUrl || null,
+        cdcTitle: project.cdcTitle || null,
+        cdcRequester: project.cdcRequester || null,
+        cdcRequestDate: project.cdcRequestDate || null,
+        cdcDueDate: project.cdcDueDate || null,
+        cdcPriority: project.cdcPriority || null,
+        cdcService: project.cdcService || null,
+        cdcProjectManager: project.cdcProjectManager || null,
+        cdcPresentation: normalizeProjectCdcHtmlValue(project.cdcPresentation),
+        cdcObjectives: normalizeProjectCdcHtmlValue(project.cdcObjectives),
+        cdcFeatures: normalizeProjectCdcHtmlValue(project.cdcFeatures),
+        cdcConstraints: normalizeProjectCdcHtmlValue(project.cdcConstraints),
+        cdcAdditionalInfo: normalizeProjectCdcHtmlValue(project.cdcAdditionalInfo),
+        cdcUpdatedAt: project.cdcUpdatedAt || null,
+        cdcDocxAvailable: Boolean(project.cdcDocxAvailable),
+        cdcPdfAvailable: Boolean(project.cdcPdfAvailable),
+        createdAt: project.createdAt || null,
+        updatedAt: project.updatedAt || null,
         ownerId: project.ownerId || null,
         ownerDisplayName: project.ownerDisplayName || null,
         ownerEmail: project.ownerEmail || null,
+        projectManager: project.projectManager || null,
         teamMembers: getProjectTeamMembers(project),
         taskColumns: getProjectTaskColumns(project)
     };
@@ -5829,6 +7309,113 @@ function normalizeProjectMetaInput(value) {
     return normalized !== "" ? normalized : null;
 }
 
+function normalizeProjectExternalLinkValue(value) {
+    return normalizeProjectMetaInput(value);
+}
+
+function normalizeProjectExternalLinkUrl(value) {
+    const normalized = normalizeProjectExternalLinkValue(value);
+    if (!normalized) {
+        return null;
+    }
+
+    const formatted = /^[a-z][a-z0-9+.-]*:\/\//i.test(normalized) ? normalized : `https://${normalized}`;
+
+    try {
+        return new URL(formatted).toString();
+    } catch (error) {
+        return formatted;
+    }
+}
+
+function formatProjectYouTrackTicketLabel(value) {
+    const normalized = normalizeProjectExternalLinkValue(value);
+    if (!normalized) {
+        return "Lien YouTrack";
+    }
+
+    const match = normalized.match(/([A-Z][A-Z0-9]+-\d+)(?:[/?#]|$)/i);
+    if (match) {
+        return match[1].toUpperCase();
+    }
+
+    const cleanedValue = normalized.replace(/\/+$/, "");
+    const segments = cleanedValue.split(/[/?#]/).filter(Boolean);
+    return segments[segments.length - 1] || "Lien YouTrack";
+}
+
+function formatProjectRedmineLabel(value) {
+    const normalized = normalizeProjectExternalLinkValue(value);
+    if (!normalized) {
+        return "Lien RM";
+    }
+
+    const issueMatch = normalized.match(/\/issues\/(\d+)(?:[/?#]|$)/i);
+    if (issueMatch) {
+        return `RM#${issueMatch[1]}`;
+    }
+
+    const digitsMatch = normalized.match(/(\d+)(?:[/?#]|$)/);
+    if (digitsMatch) {
+        return `RM#${digitsMatch[1]}`;
+    }
+
+    const cleanedValue = normalized.replace(/\/+$/, "");
+    const segments = cleanedValue.split(/[/?#]/).filter(Boolean);
+    return segments[segments.length - 1] || "Lien RM";
+}
+
+function renderProjectExternalLinkButton(value, type, project, options = {}) {
+    const normalizedValue = normalizeProjectExternalLinkValue(value);
+    const normalizedUrl = normalizeProjectExternalLinkUrl(normalizedValue);
+    if (!normalizedValue || !normalizedUrl) {
+        return "";
+    }
+
+    const isYouTrack = type === "youtrack";
+    const label = isYouTrack
+        ? formatProjectYouTrackTicketLabel(normalizedValue)
+        : formatProjectRedmineLabel(normalizedValue);
+    const linkTypeLabel = isYouTrack ? "YouTrack" : "RM";
+    const compactClassName = options.compact ? " is-compact" : "";
+
+    return `
+        <a
+            class="project-external-link project-external-link-${escapeHtml(type)}${compactClassName}"
+            href="${escapeHtml(normalizedUrl)}"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="${escapeHtml(normalizedUrl)}"
+            aria-label="Ouvrir le lien ${escapeHtml(linkTypeLabel)} du projet ${escapeHtml(project?.ref || "")}"
+            data-project-external-link="${escapeHtml(type)}"
+            draggable="false"
+        >
+            ${escapeHtml(label)}
+        </a>
+    `;
+}
+
+function syncProjectModalLinkPreview(pill, label, button, value, options) {
+    if (!pill || !label || !button) {
+        return;
+    }
+
+    const normalizedValue = normalizeProjectExternalLinkValue(value);
+    const normalizedUrl = normalizeProjectExternalLinkUrl(normalizedValue);
+    const displayLabel = normalizedValue ? options.formatLabel(normalizedValue) : options.emptyLabel;
+
+    label.textContent = displayLabel;
+    pill.classList.toggle("is-empty", !normalizedValue);
+    pill.title = normalizedValue || options.emptyLabel;
+    button.hidden = !normalizedUrl;
+
+    if (normalizedUrl) {
+        button.dataset.projectLinkUrl = normalizedUrl;
+    } else {
+        delete button.dataset.projectLinkUrl;
+    }
+}
+
 function normalizeProjectProgression(value) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) {
@@ -5874,16 +7461,7 @@ function isDateWithinProjectRange(project, referenceDate = getProjectStatusRefer
 }
 
 function getProjectEffectiveStatus(project, fallbackStatus = project?.status) {
-    const storedStatus = normalizeProjectStoredStatus(fallbackStatus, project);
-    if (storedStatus === "Terminé" || storedStatus === "Standby") {
-        return storedStatus;
-    }
-
-    if (isDateWithinProjectRange(project)) {
-        return "En cours";
-    }
-
-    return storedStatus;
+    return normalizeProjectStoredStatus(fallbackStatus, project);
 }
 
 function normalizeProjectStatus(value, project = null) {
@@ -6023,6 +7601,9 @@ function syncProjectModalDisplays() {
     const riskGain = normalizeProjectMetaInput(dom.projectModalRiskGainInput.value);
     const budget = normalizeProjectMetaInput(dom.projectModalBudgetInput.value);
     const prioritization = normalizeProjectMetaInput(dom.projectModalPrioritizationInput.value);
+    const projectManager = normalizeProjectMetaInput(dom.projectModalProjectManagerInput.value);
+    const youtrackTicketUrl = normalizeProjectExternalLinkValue(dom.projectModalYouTrackTicketUrlInput.value);
+    const redmineUrl = normalizeProjectExternalLinkValue(dom.projectModalRedmineUrlInput.value);
     const storedStatus = normalizeProjectStoredStatus(dom.projectModalStatusInput.value, project);
     const progression = normalizeProjectProgression(dom.projectModalProgressInput.value);
     const description = dom.projectModalDescriptionInput.value.trim();
@@ -6063,6 +7644,7 @@ function syncProjectModalDisplays() {
     dom.projectModalRiskGainDisplay.textContent = formatProjectMeta(riskGain);
     dom.projectModalBudgetDisplay.textContent = formatProjectMeta(budget);
     dom.projectModalPrioritizationDisplay.textContent = formatProjectMeta(prioritization);
+    dom.projectModalProjectManagerDisplay.textContent = formatProjectMeta(projectManager);
     dom.projectModalStatusDisplay.innerHTML = `
         <span class="project-modal-status-display">
             <span class="project-status-badge ${escapeHtml(getProjectStatusMeta(status).className)}">${escapeHtml(status)}</span>
@@ -6076,6 +7658,32 @@ function syncProjectModalDisplays() {
             <span>${escapeHtml(currentColor)}</span>
         </span>
     `;
+    syncProjectModalLinkPreview(
+        dom.projectModalYouTrackTicketPill,
+        dom.projectModalYouTrackTicketDisplay,
+        dom.projectModalYouTrackTicketOpen,
+        youtrackTicketUrl,
+        {
+            emptyLabel: "Lien YouTrack",
+            formatLabel: formatProjectYouTrackTicketLabel
+        }
+    );
+    syncProjectModalLinkPreview(
+        dom.projectModalRedminePill,
+        dom.projectModalRedmineDisplay,
+        dom.projectModalRedmineOpen,
+        redmineUrl,
+        {
+            emptyLabel: "Lien RM",
+            formatLabel: formatProjectRedmineLabel
+        }
+    );
+
+    syncProjectModalCdcControls(project ? {
+        ...project,
+        title,
+        ref
+    } : null);
 }
 
 function renderProjectProgressMarkup(progression) {

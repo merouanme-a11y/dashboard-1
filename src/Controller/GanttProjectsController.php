@@ -63,7 +63,13 @@ final class GanttProjectsController extends AbstractController
                     'deleteYouTrackProjectTask' => $this->generateUrl('app_gantt_projects_api_delete_youtrack_project_task'),
                     'services' => $this->generateUrl('app_gantt_projects_api_services'),
                     'importProjects' => $this->generateUrl('app_gantt_projects_api_import_projects'),
+                    'importExportedProjects' => $this->generateUrl('app_gantt_projects_api_import_exported_projects'),
                     'exportProjects' => $this->generateUrl('app_gantt_projects_api_export_projects'),
+                    'exportProjectsChronological' => $this->generateUrl('app_gantt_projects_api_export_projects_chronological'),
+                    'uploadProjectCdcAsset' => $this->generateUrl('app_gantt_projects_api_upload_project_cdc_asset'),
+                    'importProjectCdc' => $this->generateUrl('app_gantt_projects_api_import_project_cdc'),
+                    'projectCdcDocxDownloadPattern' => $this->generateUrl('app_gantt_projects_project_cdc_docx_download', ['projectId' => '__ID__']),
+                    'projectCdcPdfDownloadPattern' => $this->generateUrl('app_gantt_projects_project_cdc_pdf_download', ['projectId' => '__ID__']),
                 ],
             ],
         ]);

@@ -20,7 +20,7 @@ function app_fetch_project_by_id(string $projectId): ?array
     }
 
     $statement = app_db()->prepare(
-        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, projectManager, status, progression, youtrackId, youtrackUrl, youtrackTicketUrl, redmineUrl, cdcTitle, cdcRequester, cdcRequestDate, cdcDueDate, cdcPriority, cdcService, cdcProjectManager, cdcPresentation, cdcObjectives, cdcFeatures, cdcConstraints, cdcAdditionalInfo, cdcUpdatedAt, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns, created_at, updated_at
          FROM projets
          WHERE id = :id
          LIMIT 1'
@@ -45,7 +45,7 @@ function app_fetch_project_by_ref(string $projectRef): ?array
     }
 
     $statement = app_db()->prepare(
-        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, projectManager, status, progression, youtrackId, youtrackUrl, youtrackTicketUrl, redmineUrl, cdcTitle, cdcRequester, cdcRequestDate, cdcDueDate, cdcPriority, cdcService, cdcProjectManager, cdcPresentation, cdcObjectives, cdcFeatures, cdcConstraints, cdcAdditionalInfo, cdcUpdatedAt, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns, created_at, updated_at
          FROM projets
          WHERE ref = :ref
          LIMIT 1'
@@ -70,7 +70,7 @@ function app_fetch_project_by_youtrack_id(string $youtrackId): ?array
     }
 
     $statement = app_db()->prepare(
-        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, projectManager, status, progression, youtrackId, youtrackUrl, youtrackTicketUrl, redmineUrl, cdcTitle, cdcRequester, cdcRequestDate, cdcDueDate, cdcPriority, cdcService, cdcProjectManager, cdcPresentation, cdcObjectives, cdcFeatures, cdcConstraints, cdcAdditionalInfo, cdcUpdatedAt, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns, created_at, updated_at
          FROM projets
          WHERE youtrackId = :youtrackId
          LIMIT 1'
@@ -100,7 +100,7 @@ function app_fetch_projects_from_database(bool $seedIfEmpty): array
     }
 
     $statement = $pdo->query(
-        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+        'SELECT id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, projectManager, status, progression, youtrackId, youtrackUrl, youtrackTicketUrl, redmineUrl, cdcTitle, cdcRequester, cdcRequestDate, cdcDueDate, cdcPriority, cdcService, cdcProjectManager, cdcPresentation, cdcObjectives, cdcFeatures, cdcConstraints, cdcAdditionalInfo, cdcUpdatedAt, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns, created_at, updated_at
          FROM projets
          ORDER BY ref ASC, id ASC'
     );
@@ -134,9 +134,9 @@ function app_store_projects(array $projects): array
 
     $statement = $pdo->prepare(
         'INSERT INTO projets (
-            id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, status, progression, youtrackId, youtrackUrl, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns
+            id, ref, title, service, parentProjectId, projectType, description, color, customColor, start, duration, lane, startExact, endExact, riskGain, budgetEstimate, prioritization, projectManager, status, progression, youtrackId, youtrackUrl, youtrackTicketUrl, redmineUrl, cdcTitle, cdcRequester, cdcRequestDate, cdcDueDate, cdcPriority, cdcService, cdcProjectManager, cdcPresentation, cdcObjectives, cdcFeatures, cdcConstraints, cdcAdditionalInfo, cdcUpdatedAt, ownerId, ownerDisplayName, ownerEmail, teamMembers, taskColumns, created_at
         ) VALUES (
-            :id, :ref, :title, :service, :parentProjectId, :projectType, :description, :color, :customColor, :start, :duration, :lane, :startExact, :endExact, :riskGain, :budgetEstimate, :prioritization, :status, :progression, :youtrackId, :youtrackUrl, :ownerId, :ownerDisplayName, :ownerEmail, :teamMembers, :taskColumns
+            :id, :ref, :title, :service, :parentProjectId, :projectType, :description, :color, :customColor, :start, :duration, :lane, :startExact, :endExact, :riskGain, :budgetEstimate, :prioritization, :projectManager, :status, :progression, :youtrackId, :youtrackUrl, :youtrackTicketUrl, :redmineUrl, :cdcTitle, :cdcRequester, :cdcRequestDate, :cdcDueDate, :cdcPriority, :cdcService, :cdcProjectManager, :cdcPresentation, :cdcObjectives, :cdcFeatures, :cdcConstraints, :cdcAdditionalInfo, :cdcUpdatedAt, :ownerId, :ownerDisplayName, :ownerEmail, :teamMembers, :taskColumns, :createdAt
         )
         ON DUPLICATE KEY UPDATE
             ref = VALUES(ref),
@@ -155,15 +155,32 @@ function app_store_projects(array $projects): array
             riskGain = VALUES(riskGain),
             budgetEstimate = VALUES(budgetEstimate),
             prioritization = VALUES(prioritization),
+            projectManager = VALUES(projectManager),
             status = VALUES(status),
             progression = VALUES(progression),
             youtrackId = VALUES(youtrackId),
             youtrackUrl = VALUES(youtrackUrl),
+            youtrackTicketUrl = VALUES(youtrackTicketUrl),
+            redmineUrl = VALUES(redmineUrl),
+            cdcTitle = VALUES(cdcTitle),
+            cdcRequester = VALUES(cdcRequester),
+            cdcRequestDate = VALUES(cdcRequestDate),
+            cdcDueDate = VALUES(cdcDueDate),
+            cdcPriority = VALUES(cdcPriority),
+            cdcService = VALUES(cdcService),
+            cdcProjectManager = VALUES(cdcProjectManager),
+            cdcPresentation = VALUES(cdcPresentation),
+            cdcObjectives = VALUES(cdcObjectives),
+            cdcFeatures = VALUES(cdcFeatures),
+            cdcConstraints = VALUES(cdcConstraints),
+            cdcAdditionalInfo = VALUES(cdcAdditionalInfo),
+            cdcUpdatedAt = VALUES(cdcUpdatedAt),
             ownerId = VALUES(ownerId),
             ownerDisplayName = VALUES(ownerDisplayName),
             ownerEmail = VALUES(ownerEmail),
             teamMembers = VALUES(teamMembers),
             taskColumns = VALUES(taskColumns),
+            created_at = COALESCE(VALUES(created_at), created_at),
             updated_at = CURRENT_TIMESTAMP'
     );
 
@@ -188,15 +205,32 @@ function app_store_projects(array $projects): array
                 'riskGain' => $project['riskGain'],
                 'budgetEstimate' => $project['budgetEstimate'],
                 'prioritization' => $project['prioritization'],
+                'projectManager' => $project['projectManager'],
                 'status' => $project['status'],
                 'progression' => $project['progression'],
                 'youtrackId' => $project['youtrackId'],
                 'youtrackUrl' => $project['youtrackUrl'],
+                'youtrackTicketUrl' => $project['youtrackTicketUrl'],
+                'redmineUrl' => $project['redmineUrl'],
+                'cdcTitle' => $project['cdcTitle'],
+                'cdcRequester' => $project['cdcRequester'],
+                'cdcRequestDate' => $project['cdcRequestDate'],
+                'cdcDueDate' => $project['cdcDueDate'],
+                'cdcPriority' => $project['cdcPriority'],
+                'cdcService' => $project['cdcService'],
+                'cdcProjectManager' => $project['cdcProjectManager'],
+                'cdcPresentation' => $project['cdcPresentation'],
+                'cdcObjectives' => $project['cdcObjectives'],
+                'cdcFeatures' => $project['cdcFeatures'],
+                'cdcConstraints' => $project['cdcConstraints'],
+                'cdcAdditionalInfo' => $project['cdcAdditionalInfo'],
+                'cdcUpdatedAt' => $project['cdcUpdatedAt'],
                 'ownerId' => $project['ownerId'],
                 'ownerDisplayName' => $project['ownerDisplayName'],
                 'ownerEmail' => $project['ownerEmail'],
                 'teamMembers' => json_encode($project['teamMembers'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'taskColumns' => json_encode($project['taskColumns'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'createdAt' => $project['createdAt'] ?? date('Y-m-d H:i:s'),
             ]);
         }
 
@@ -292,6 +326,7 @@ function app_ensure_projects_schema(): void
     }
 
     $pdo = app_db();
+    $shouldBackfillCdcSummary = false;
     app_merge_legacy_gantt_services_into_dashboard();
 
     $pdo->exec(
@@ -313,10 +348,26 @@ function app_ensure_projects_schema(): void
             riskGain TEXT DEFAULT NULL,
             budgetEstimate TEXT DEFAULT NULL,
             prioritization TEXT DEFAULT NULL,
+            projectManager VARCHAR(255) DEFAULT NULL,
             status VARCHAR(50) NOT NULL DEFAULT 'A planifier',
             progression TINYINT UNSIGNED NOT NULL DEFAULT 0,
             youtrackId VARCHAR(64) DEFAULT NULL,
             youtrackUrl VARCHAR(255) DEFAULT NULL,
+            youtrackTicketUrl VARCHAR(255) DEFAULT NULL,
+            redmineUrl VARCHAR(255) DEFAULT NULL,
+            cdcTitle VARCHAR(255) DEFAULT NULL,
+            cdcRequester VARCHAR(255) DEFAULT NULL,
+            cdcRequestDate DATETIME DEFAULT NULL,
+            cdcDueDate DATETIME DEFAULT NULL,
+            cdcPriority TEXT DEFAULT NULL,
+            cdcService VARCHAR(255) DEFAULT NULL,
+            cdcProjectManager VARCHAR(255) DEFAULT NULL,
+            cdcPresentation LONGTEXT DEFAULT NULL,
+            cdcObjectives LONGTEXT DEFAULT NULL,
+            cdcFeatures LONGTEXT DEFAULT NULL,
+            cdcConstraints LONGTEXT DEFAULT NULL,
+            cdcAdditionalInfo LONGTEXT DEFAULT NULL,
+            cdcUpdatedAt DATETIME DEFAULT NULL,
             ownerId VARCHAR(64) DEFAULT NULL,
             ownerDisplayName VARCHAR(255) DEFAULT NULL,
             ownerEmail VARCHAR(255) DEFAULT NULL,
@@ -384,6 +435,14 @@ function app_ensure_projects_schema(): void
         );
     }
 
+    if (!app_projects_column_exists('projectManager')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN projectManager VARCHAR(255) DEFAULT NULL
+             AFTER prioritization"
+        );
+    }
+
     if (!app_projects_column_exists('youtrackId')) {
         $pdo->exec(
             "ALTER TABLE projets
@@ -397,6 +456,132 @@ function app_ensure_projects_schema(): void
             "ALTER TABLE projets
              ADD COLUMN youtrackUrl VARCHAR(255) DEFAULT NULL
              AFTER youtrackId"
+        );
+    }
+
+    if (!app_projects_column_exists('youtrackTicketUrl')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN youtrackTicketUrl VARCHAR(255) DEFAULT NULL
+             AFTER youtrackUrl"
+        );
+    }
+
+    if (!app_projects_column_exists('redmineUrl')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN redmineUrl VARCHAR(255) DEFAULT NULL
+             AFTER youtrackTicketUrl"
+        );
+    }
+
+    if (!app_projects_column_exists('cdcTitle')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcTitle VARCHAR(255) DEFAULT NULL
+             AFTER redmineUrl"
+        );
+    }
+
+    if (!app_projects_column_exists('cdcPresentation')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcPresentation LONGTEXT DEFAULT NULL
+             AFTER cdcTitle"
+        );
+    }
+
+    if (!app_projects_column_exists('cdcRequester')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcRequester VARCHAR(255) DEFAULT NULL
+             AFTER cdcTitle"
+        );
+        $shouldBackfillCdcSummary = true;
+    }
+
+    if (!app_projects_column_exists('cdcRequestDate')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcRequestDate DATETIME DEFAULT NULL
+             AFTER cdcRequester"
+        );
+        $shouldBackfillCdcSummary = true;
+    }
+
+    if (!app_projects_column_exists('cdcDueDate')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcDueDate DATETIME DEFAULT NULL
+             AFTER cdcRequestDate"
+        );
+        $shouldBackfillCdcSummary = true;
+    }
+
+    if (!app_projects_column_exists('cdcPriority')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcPriority TEXT DEFAULT NULL
+             AFTER cdcDueDate"
+        );
+        $shouldBackfillCdcSummary = true;
+    }
+
+    if (!app_projects_column_exists('cdcService')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcService VARCHAR(255) DEFAULT NULL
+             AFTER cdcPriority"
+        );
+        $shouldBackfillCdcSummary = true;
+    }
+
+    if (!app_projects_column_exists('cdcProjectManager')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcProjectManager VARCHAR(255) DEFAULT NULL
+             AFTER cdcService"
+        );
+        $shouldBackfillCdcSummary = true;
+    }
+
+    if (!app_projects_column_exists('cdcObjectives')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcObjectives LONGTEXT DEFAULT NULL
+             AFTER cdcPresentation"
+        );
+    }
+
+    if (!app_projects_column_exists('cdcFeatures')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcFeatures LONGTEXT DEFAULT NULL
+             AFTER cdcObjectives"
+        );
+    }
+
+    if (!app_projects_column_exists('cdcConstraints')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcConstraints LONGTEXT DEFAULT NULL
+             AFTER cdcFeatures"
+        );
+    }
+
+    if (!app_projects_column_exists('cdcAdditionalInfo')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcAdditionalInfo LONGTEXT DEFAULT NULL
+             AFTER cdcConstraints"
+        );
+    }
+
+    if (!app_projects_column_exists('cdcUpdatedAt')) {
+        $pdo->exec(
+            "ALTER TABLE projets
+             ADD COLUMN cdcUpdatedAt DATETIME DEFAULT NULL
+             AFTER cdcAdditionalInfo"
         );
     }
 
@@ -438,6 +623,10 @@ function app_ensure_projects_schema(): void
              ADD COLUMN taskColumns LONGTEXT DEFAULT NULL
              AFTER teamMembers"
         );
+    }
+
+    if ($shouldBackfillCdcSummary) {
+        app_backfill_project_cdc_summary_metadata();
     }
 
     app_merge_duplicate_services();
@@ -488,6 +677,39 @@ function app_project_id_exists(string $projectId): bool
     return (int) $statement->fetchColumn() > 0;
 }
 
+function app_backfill_project_cdc_summary_metadata(): void
+{
+    app_db()->exec(
+        "UPDATE projets
+         SET
+            cdcRequester = CASE
+                WHEN cdcRequester IS NULL OR TRIM(cdcRequester) = '' THEN ownerDisplayName
+                ELSE cdcRequester
+            END,
+            cdcRequestDate = COALESCE(cdcRequestDate, created_at),
+            cdcDueDate = COALESCE(cdcDueDate, endExact),
+            cdcPriority = CASE
+                WHEN cdcPriority IS NULL OR TRIM(cdcPriority) = '' THEN prioritization
+                ELSE cdcPriority
+            END,
+            cdcService = CASE
+                WHEN cdcService IS NULL OR TRIM(cdcService) = '' THEN service
+                ELSE cdcService
+            END,
+            cdcProjectManager = CASE
+                WHEN cdcProjectManager IS NULL OR TRIM(cdcProjectManager) = '' THEN projectManager
+                ELSE cdcProjectManager
+            END
+         WHERE cdcUpdatedAt IS NOT NULL
+            OR TRIM(COALESCE(cdcTitle, '')) <> ''
+            OR TRIM(COALESCE(cdcPresentation, '')) <> ''
+            OR TRIM(COALESCE(cdcObjectives, '')) <> ''
+            OR TRIM(COALESCE(cdcFeatures, '')) <> ''
+            OR TRIM(COALESCE(cdcConstraints, '')) <> ''
+            OR TRIM(COALESCE(cdcAdditionalInfo, '')) <> ''"
+    );
+}
+
 function app_generate_project_id(): string
 {
     do {
@@ -504,6 +726,12 @@ function app_normalize_project_record(array $project): array
     $ownerId = app_normalize_project_nullable_string($project['ownerId'] ?? null);
     $ownerDisplayName = app_normalize_project_nullable_string($project['ownerDisplayName'] ?? null);
     $ownerEmail = app_normalize_project_nullable_string($project['ownerEmail'] ?? null);
+    $projectManager = app_normalize_project_nullable_string($project['projectManager'] ?? null);
+    $cdcRequester = app_normalize_project_nullable_string($project['cdcRequester'] ?? null);
+    $cdcPriority = app_normalize_project_nullable_string($project['cdcPriority'] ?? null);
+    $cdcService = app_normalize_project_nullable_string($project['cdcService'] ?? null);
+    $cdcProjectManager = app_normalize_project_nullable_string($project['cdcProjectManager'] ?? null);
+    $documentFlags = app_project_cdc_document_flags($normalizedProjectId);
 
     $normalized = [
         'id' => $normalizedProjectId,
@@ -523,15 +751,35 @@ function app_normalize_project_record(array $project): array
         'riskGain' => app_normalize_project_nullable_string($project['riskGain'] ?? null),
         'budgetEstimate' => app_normalize_project_nullable_string($project['budgetEstimate'] ?? null),
         'prioritization' => app_normalize_project_nullable_string($project['prioritization'] ?? null),
+        'projectManager' => $projectManager,
         'status' => app_normalize_project_status_value($project['status'] ?? null, $project),
         'progression' => app_normalize_project_progression_value($project['progression'] ?? 0),
         'youtrackId' => app_normalize_project_nullable_string($project['youtrackId'] ?? null),
         'youtrackUrl' => app_normalize_project_nullable_string($project['youtrackUrl'] ?? null),
+        'youtrackTicketUrl' => app_normalize_project_nullable_string($project['youtrackTicketUrl'] ?? null),
+        'redmineUrl' => app_normalize_project_nullable_string($project['redmineUrl'] ?? null),
+        'cdcTitle' => app_normalize_project_nullable_string($project['cdcTitle'] ?? null),
+        'cdcRequester' => $cdcRequester,
+        'cdcRequestDate' => app_normalize_project_datetime_value($project['cdcRequestDate'] ?? null),
+        'cdcDueDate' => app_normalize_project_datetime_value($project['cdcDueDate'] ?? null),
+        'cdcPriority' => $cdcPriority,
+        'cdcService' => $cdcService,
+        'cdcProjectManager' => $cdcProjectManager,
+        'cdcPresentation' => app_normalize_project_html_value($project['cdcPresentation'] ?? null),
+        'cdcObjectives' => app_normalize_project_html_value($project['cdcObjectives'] ?? null),
+        'cdcFeatures' => app_normalize_project_html_value($project['cdcFeatures'] ?? null),
+        'cdcConstraints' => app_normalize_project_html_value($project['cdcConstraints'] ?? null),
+        'cdcAdditionalInfo' => app_normalize_project_html_value($project['cdcAdditionalInfo'] ?? null),
+        'cdcUpdatedAt' => app_normalize_project_datetime_value($project['cdcUpdatedAt'] ?? null),
+        'cdcDocxAvailable' => $documentFlags['docx'],
+        'cdcPdfAvailable' => $documentFlags['pdf'],
         'ownerId' => $ownerId,
         'ownerDisplayName' => $ownerDisplayName,
         'ownerEmail' => $ownerEmail,
         'teamMembers' => app_normalize_project_team_members($project['teamMembers'] ?? []),
         'taskColumns' => app_normalize_project_task_columns($project['taskColumns'] ?? []),
+        'createdAt' => app_normalize_project_datetime_value($project['created_at'] ?? $project['createdAt'] ?? null),
+        'updatedAt' => app_normalize_project_datetime_value($project['updated_at'] ?? $project['updatedAt'] ?? null),
     ];
 
     if ($normalized['id'] === '') {
@@ -574,6 +822,49 @@ function app_normalize_project_nullable_string($value): ?string
 
     $normalized = trim((string) $value);
     return $normalized !== '' ? $normalized : null;
+}
+
+function app_normalize_project_html_value($value): ?string
+{
+    if ($value === null) {
+        return null;
+    }
+
+    $normalized = trim((string) $value);
+    return $normalized !== '' ? $normalized : null;
+}
+
+function app_normalize_project_datetime_value($value): ?string
+{
+    $normalized = app_normalize_project_nullable_string($value);
+    if ($normalized === null) {
+        return null;
+    }
+
+    $timestamp = strtotime($normalized);
+    if ($timestamp === false) {
+        return null;
+    }
+
+    return date('Y-m-d H:i:s', $timestamp);
+}
+
+function app_project_cdc_document_flags(string $projectId): array
+{
+    $normalizedProjectId = trim($projectId);
+    if ($normalizedProjectId === '') {
+        return [
+            'docx' => false,
+            'pdf' => false,
+        ];
+    }
+
+    $baseDirectory = dirname(__DIR__, 3) . '/var/gantt/cdc/' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $normalizedProjectId);
+
+    return [
+        'docx' => is_file($baseDirectory . '/current.docx'),
+        'pdf' => is_file($baseDirectory . '/current.pdf'),
+    ];
 }
 
 function app_normalize_project_parent_id($value, string $projectId): ?string

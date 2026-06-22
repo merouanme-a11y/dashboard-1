@@ -1419,6 +1419,10 @@ body.gantt-planning-layout-hidden .app-content > .gantt-dashboard-page{
     width: 132px;
 }
 
+.gantt-dashboard-page .project-table-col-link{
+    width: 128px;
+}
+
 .gantt-dashboard-page .project-table-col-project{
     width: auto;
 }
@@ -1440,18 +1444,27 @@ body.gantt-planning-layout-hidden .app-content > .gantt-dashboard-page{
     width: 132px;
 }
 
+.gantt-dashboard-page .project-table th:nth-child(2),
+.gantt-dashboard-page .project-table td:nth-child(2),
 .gantt-dashboard-page .project-table th:nth-child(3),
-.gantt-dashboard-page .project-table td:nth-child(3){
+.gantt-dashboard-page .project-table td:nth-child(3),
+.gantt-dashboard-page .project-table th:nth-child(4),
+.gantt-dashboard-page .project-table td:nth-child(4){
+    width: 128px;
+}
+
+.gantt-dashboard-page .project-table th:nth-child(6),
+.gantt-dashboard-page .project-table td:nth-child(6){
     width: 220px;
 }
 
-.gantt-dashboard-page .project-table th:nth-child(4),
-.gantt-dashboard-page .project-table td:nth-child(4){
+.gantt-dashboard-page .project-table th:nth-child(7),
+.gantt-dashboard-page .project-table td:nth-child(7){
     width: 92px;
 }
 
-.gantt-dashboard-page .project-table th:nth-child(5),
-.gantt-dashboard-page .project-table td:nth-child(5){
+.gantt-dashboard-page .project-table th:nth-child(8),
+.gantt-dashboard-page .project-table td:nth-child(8){
     width: 220px;
 }
 
@@ -1516,6 +1529,17 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-table th,
     gap: 10px;
 }
 
+.gantt-dashboard-page .project-table-link-cell{
+    width: 128px;
+}
+
+.gantt-dashboard-page .project-table-link-slot{
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 28px;
+}
+
 .gantt-dashboard-page .project-table-title{
     display: block;
     width: 100%;
@@ -1533,6 +1557,72 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-table th,
     margin-top: 4px;
     color: var(--muted);
     line-height: 1.35;
+}
+
+.gantt-dashboard-page .project-card-ref-actions{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    flex-wrap: wrap;
+}
+
+.gantt-dashboard-page .project-external-links{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.gantt-dashboard-page .project-external-link{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    max-width: 100%;
+    padding: 5px 10px;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.gantt-dashboard-page .project-external-link:hover,
+.gantt-dashboard-page .project-external-link:focus-visible{
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
+.gantt-dashboard-page .project-external-link-youtrack{
+    background: #fb42b0;
+}
+
+.gantt-dashboard-page .project-external-link-redmine{
+    background: #f97316;
+}
+
+.gantt-dashboard-page .project-external-link-cdc{
+    background: #0f766e;
+}
+
+.gantt-dashboard-page .project-external-link.is-compact{
+    min-height: 22px;
+    padding: 3px 8px;
+    font-size: 0.66rem;
+}
+
+.gantt-dashboard-page .project-table-link-empty{
+    color: var(--muted);
+    font-size: 0.84rem;
 }
 
 .gantt-dashboard-page .project-table-color-cell{
@@ -1756,6 +1846,10 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-table th,
     display: none !important;
 }
 
+.gantt-dashboard-page .project-cdc-modal[hidden]{
+    display: none !important;
+}
+
 .gantt-dashboard-page .auth-overlay[hidden]{
     display: none !important;
 }
@@ -1924,8 +2018,9 @@ body.project-modal-scroll-locked .app-sidebar{
         "description description description"
         "ref service type"
         "parent start end"
-        "color status priority"
-        "risk budget progress"
+        "color manager status"
+        "risk budget priority"
+        "progress progress progress"
         "tasks tasks tasks"
         "help help help"
         "error error error"
@@ -1972,6 +2067,124 @@ body.project-modal-scroll-locked .app-sidebar{
 
 .gantt-dashboard-page .project-modal-title-edit.is-editing .project-modal-title-input{
     display: block;
+}
+
+.gantt-dashboard-page .project-modal-link-list{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.gantt-dashboard-page .project-modal-link-edit{
+    min-width: 0;
+    cursor: text;
+}
+
+.gantt-dashboard-page .project-modal-link-display{
+    display: inline-flex;
+    max-width: 100%;
+}
+
+.gantt-dashboard-page .project-modal-link-pill{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    max-width: 100%;
+    padding: 6px 12px;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 0.88rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.gantt-dashboard-page .project-modal-link-pill span:first-child{
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gantt-dashboard-page .project-modal-link-pill-youtrack{
+    background: #fb42b0;
+}
+
+.gantt-dashboard-page .project-modal-link-pill-redmine{
+    background: #f97316;
+}
+
+.gantt-dashboard-page .project-modal-link-pill-cdc{
+    background: #0f766e;
+    box-shadow: 0 10px 22px rgba(15, 118, 110, 0.24);
+}
+
+.gantt-dashboard-page .project-modal-link-pill-action{
+    border: 0;
+    cursor: pointer;
+}
+
+.gantt-dashboard-page .project-modal-link-pill-action:disabled{
+    cursor: not-allowed;
+    transform: none;
+    filter: none;
+    opacity: 0.55;
+    box-shadow: none;
+}
+
+.gantt-dashboard-page .project-modal-link-pill-action:hover,
+.gantt-dashboard-page .project-modal-link-pill-action:focus-visible{
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+}
+
+.gantt-dashboard-page .project-modal-link-pill.is-empty{
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--muted);
+    border: 1px solid var(--line);
+}
+
+.gantt-dashboard-page .project-modal-link-open{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    color: currentColor;
+    cursor: pointer;
+}
+
+.gantt-dashboard-page .project-modal-link-open:hover,
+.gantt-dashboard-page .project-modal-link-open:focus-visible{
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.gantt-dashboard-page .project-modal-link-pill.is-empty .project-modal-link-open{
+    display: none;
+}
+
+.gantt-dashboard-page .project-modal-link-input{
+    width: min(340px, 78vw);
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--input-bg);
+    color: var(--text);
+}
+
+.gantt-dashboard-page .project-modal-editable.is-editing .project-modal-link-display{
+    display: none;
+}
+
+.gantt-dashboard-page .project-modal-cdc-button{
+    width: fit-content;
+    min-height: 38px;
+    margin-top: 2px;
 }
 
 .gantt-dashboard-page .project-modal-description-toggle{
@@ -2354,10 +2567,14 @@ body.project-modal-scroll-locked .app-sidebar{
 }
 
 .gantt-dashboard-page .project-modal-insights > :nth-child(4){
-    grid-area: status;
+    grid-area: manager;
 }
 
 .gantt-dashboard-page .project-modal-insights > :nth-child(5){
+    grid-area: status;
+}
+
+.gantt-dashboard-page .project-modal-insights > :nth-child(6){
     grid-area: progress;
 }
 
@@ -3103,6 +3320,443 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
     display: none;
 }
 
+.gantt-dashboard-page .project-cdc-modal{
+    position: fixed;
+    inset: 0;
+    z-index: 1310;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.gantt-dashboard-page .project-cdc-modal-backdrop{
+    position: absolute;
+    inset: 0;
+    background: var(--overlay);
+    backdrop-filter: blur(6px);
+}
+
+.gantt-dashboard-page .project-cdc-modal-dialog{
+    position: relative;
+    z-index: 1;
+    width: min(1120px, 100%);
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 20px 20px 18px;
+    border-radius: 24px;
+    background: var(--panel-strong);
+    border: 1px solid var(--line);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+    backdrop-filter: blur(24px);
+}
+
+.gantt-dashboard-page .project-cdc-modal-heading{
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 10px 0 18px;
+}
+
+.gantt-dashboard-page .project-cdc-modal-subtitle{
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.gantt-dashboard-page .project-cdc-modal-tools{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.gantt-dashboard-page .project-cdc-modal-tools .auth-submit{
+    min-height: 38px;
+}
+
+.gantt-dashboard-page .project-cdc-modal-tools[hidden],
+.gantt-dashboard-page .project-cdc-read[hidden],
+.gantt-dashboard-page .project-cdc-form[hidden]{
+    display: none !important;
+}
+
+.gantt-dashboard-page .project-cdc-modal[data-mode="view"] .project-cdc-form,
+.gantt-dashboard-page .project-cdc-modal[data-mode="view"] #projectCdcEditTools,
+.gantt-dashboard-page .project-cdc-modal[data-mode="edit"] .project-cdc-read,
+.gantt-dashboard-page .project-cdc-modal[data-mode="edit"] #projectCdcViewTools{
+    display: none !important;
+}
+
+.gantt-dashboard-page .project-cdc-read{
+    display: block;
+}
+
+.gantt-dashboard-page .project-cdc-document-sheet{
+    padding: 28px 28px 40px;
+    border-radius: 12px;
+    border: 1px solid rgba(44, 91, 137, 0.18);
+    background: #ffffff;
+    color: #1f2937;
+    box-sizing: border-box;
+}
+
+.gantt-dashboard-page .project-cdc-document-title{
+    margin: 0;
+    color: #2c5b89;
+    font-size: 2rem;
+    font-weight: 800;
+    text-align: center;
+}
+
+.gantt-dashboard-page .project-cdc-document-title span{
+    color: #7a9b34;
+}
+
+.gantt-dashboard-page .project-cdc-document-summary{
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 32px;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.gantt-dashboard-page .project-cdc-document-summary th,
+.gantt-dashboard-page .project-cdc-document-summary td{
+    border: 1px solid #000000;
+    text-align: center;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.gantt-dashboard-page .project-cdc-document-summary th{
+    padding: 16px 12px;
+    background: #2c5b89;
+    color: #ffffff;
+    font-size: 0.96rem;
+    font-weight: 700;
+}
+
+.gantt-dashboard-page .project-cdc-document-summary td{
+    padding: 28px 12px;
+    color: #1f2937;
+    background: #ffffff;
+    font-size: 0.96rem;
+}
+
+.gantt-dashboard-page .project-cdc-document-empty-state{
+    min-height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gantt-dashboard-page .project-cdc-empty-action{
+    min-width: 260px;
+}
+
+.gantt-dashboard-page .project-cdc-document-section{
+    margin-top: 72px;
+}
+
+.gantt-dashboard-page .project-cdc-document-section h4{
+    margin: 0 0 22px;
+    color: #2c5b89;
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.gantt-dashboard-page .project-cdc-document-body{
+    color: #000000;
+    line-height: 1.7;
+}
+
+.gantt-dashboard-page .project-cdc-document-body p,
+.gantt-dashboard-page .project-cdc-document-body p *,
+.gantt-dashboard-page .project-cdc-document-body li,
+.gantt-dashboard-page .project-cdc-document-body li *{
+    color: #000000 !important;
+}
+
+.gantt-dashboard-page .project-cdc-document-body img{
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 12px 0;
+    border-radius: 8px;
+}
+
+.gantt-dashboard-page .project-cdc-document-body a{
+    color: #1155cc !important;
+    text-decoration: underline;
+}
+
+.gantt-dashboard-page .project-cdc-document-body a *{
+    color: #1155cc !important;
+}
+
+.gantt-dashboard-page .project-cdc-document-body > :first-child{
+    margin-top: 0;
+}
+
+.gantt-dashboard-page .project-cdc-document-body > :last-child{
+    margin-bottom: 0;
+}
+
+.gantt-dashboard-page .project-cdc-summary-card,
+.gantt-dashboard-page .project-cdc-title-editor,
+.gantt-dashboard-page .project-cdc-summary-editor,
+.gantt-dashboard-page .project-cdc-read-section{
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: var(--panel-soft);
+}
+
+.gantt-dashboard-page .project-cdc-summary-card{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.gantt-dashboard-page .project-cdc-summary-item,
+.gantt-dashboard-page .project-cdc-summary-field{
+    display: grid;
+    gap: 6px;
+}
+
+.gantt-dashboard-page .project-cdc-summary-item > span,
+.gantt-dashboard-page .project-cdc-summary-editor-heading > span,
+.gantt-dashboard-page .project-cdc-summary-field > span{
+    color: #25d3f1;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.gantt-dashboard-page .project-cdc-summary-item > strong{
+    font-size: 0.98rem;
+    color: var(--text);
+}
+
+.gantt-dashboard-page .project-cdc-read-sections{
+    display: grid;
+    gap: 16px;
+}
+
+.gantt-dashboard-page .project-cdc-read-section h4{
+    margin: 0 0 12px;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.gantt-dashboard-page .project-cdc-read-section-body{
+    color: var(--text);
+    line-height: 1.65;
+}
+
+.gantt-dashboard-page .project-cdc-read-section-body img{
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+.gantt-dashboard-page .project-cdc-read-section-body a{
+    color: #67e8f9;
+}
+
+.gantt-dashboard-page .project-cdc-read-section-body > :first-child{
+    margin-top: 0;
+}
+
+.gantt-dashboard-page .project-cdc-read-section-body > :last-child{
+    margin-bottom: 0;
+}
+
+.gantt-dashboard-page .project-cdc-form{
+    display: grid;
+    gap: 18px;
+}
+
+.gantt-dashboard-page .project-cdc-title-field{
+    display: grid;
+    gap: 8px;
+}
+
+.gantt-dashboard-page .project-cdc-title-field > span{
+    color: #25d3f1;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.gantt-dashboard-page .project-cdc-title-field input{
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--input-bg);
+    color: var(--text);
+}
+
+.gantt-dashboard-page .project-cdc-summary-editor-grid{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.gantt-dashboard-page .project-cdc-summary-table-wrap{
+    margin-top: 12px;
+    overflow-x: auto;
+}
+
+.gantt-dashboard-page .project-cdc-summary-table{
+    width: 100%;
+    min-width: 980px;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.gantt-dashboard-page .project-cdc-summary-table th,
+.gantt-dashboard-page .project-cdc-summary-table td{
+    border: 1px solid var(--line);
+}
+
+.gantt-dashboard-page .project-cdc-summary-table th{
+    padding: 12px 10px;
+    background: #23344d;
+    color: #ffffff;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: center;
+}
+
+.gantt-dashboard-page .project-cdc-summary-table td{
+    padding: 10px;
+    background: rgba(20, 29, 48, 0.28);
+}
+
+.gantt-dashboard-page .project-cdc-summary-table input{
+    width: 100%;
+    min-height: 40px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--input-bg);
+    color: var(--text);
+}
+
+.gantt-dashboard-page .project-cdc-summary-field input{
+    width: 100%;
+    min-height: 40px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--input-bg);
+    color: var(--text);
+}
+
+.gantt-dashboard-page .project-cdc-field{
+    display: grid;
+    gap: 8px;
+}
+
+.gantt-dashboard-page .project-cdc-field > span{
+    color: #25d3f1;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.gantt-dashboard-page .project-cdc-editor{
+    width: 100%;
+    min-height: 180px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: var(--input-bg);
+    color: var(--text);
+    resize: vertical;
+}
+
+.gantt-dashboard-page .project-cdc-field .tox{
+    border-radius: 16px !important;
+    border-color: var(--line) !important;
+    overflow: hidden;
+}
+
+.gantt-dashboard-page .project-cdc-field .tox-editor-container,
+.gantt-dashboard-page .project-cdc-field .tox-edit-area{
+    border-radius: 0 0 16px 16px;
+}
+
+.gantt-dashboard-page .project-cdc-field-actions{
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.gantt-dashboard-page .project-cdc-field-actions .ghost-button{
+    min-height: 36px;
+}
+
+.gantt-dashboard-page .project-cdc-status{
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--panel-soft);
+    color: var(--text);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.gantt-dashboard-page .project-cdc-status[data-tone="success"]{
+    border-color: rgba(34, 197, 94, 0.38);
+    background: rgba(34, 197, 94, 0.12);
+    color: #86efac;
+}
+
+.gantt-dashboard-page .project-cdc-status[data-tone="warning"]{
+    border-color: rgba(245, 158, 11, 0.38);
+    background: rgba(245, 158, 11, 0.12);
+    color: #fde68a;
+}
+
+.gantt-dashboard-page .project-cdc-status[data-tone="error"]{
+    border-color: rgba(239, 68, 68, 0.38);
+    background: rgba(239, 68, 68, 0.12);
+    color: #fecaca;
+}
+
+.gantt-dashboard-page .project-cdc-actions{
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.tox-tinymce-aux,
+.tox-silver-sink,
+.tox-notifications-container{
+    z-index: 1600 !important;
+}
+
 .gantt-dashboard-page.is-simple-display{
     --panel: rgba(255, 255, 255, 0.96);
     --panel-strong: rgba(255, 255, 255, 0.98);
@@ -3250,6 +3904,10 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
     .gantt-dashboard-page .project-modal-youtrack-pill{
         position: static;
         margin: 0 52px 8px 0;
+    }
+
+    .gantt-dashboard-page .project-modal-link-list{
+        width: 100%;
     }
 
     .gantt-dashboard-page .project-modal-youtrack-tasks-header{
@@ -3469,7 +4127,15 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
         padding: 10px;
     }
 
+    .gantt-dashboard-page .project-cdc-modal{
+        padding: 10px;
+    }
+
     .gantt-dashboard-page .project-modal-dialog{
+        padding: 18px 14px;
+    }
+
+    .gantt-dashboard-page .project-cdc-modal-dialog{
         padding: 18px 14px;
     }
 
@@ -3486,6 +4152,7 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
             "start"
             "end"
             "priority"
+            "manager"
             "status"
             "risk"
             "budget"
@@ -3493,6 +4160,45 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
             "help"
             "error"
             "actions";
+    }
+
+    .gantt-dashboard-page .project-cdc-modal-heading{
+        flex-direction: column;
+    }
+
+    .gantt-dashboard-page .project-cdc-modal-tools{
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .gantt-dashboard-page .project-cdc-modal-tools .ghost-button{
+        flex: 1 1 180px;
+    }
+
+    .gantt-dashboard-page .project-cdc-modal-tools .auth-submit{
+        flex: 1 1 180px;
+    }
+
+    .gantt-dashboard-page .project-cdc-summary-card,
+    .gantt-dashboard-page .project-cdc-summary-editor-grid{
+        grid-template-columns: 1fr;
+    }
+
+    .gantt-dashboard-page .project-cdc-document-sheet{
+        padding: 20px 18px 28px;
+    }
+
+    .gantt-dashboard-page .project-cdc-document-title{
+        font-size: 1.6rem;
+    }
+
+    .gantt-dashboard-page .project-cdc-document-section{
+        margin-top: 48px;
+    }
+
+    .gantt-dashboard-page .project-cdc-document-summary,
+    .gantt-dashboard-page .project-cdc-summary-table{
+        min-width: 0;
     }
 
     .gantt-dashboard-page .timeline-board{
