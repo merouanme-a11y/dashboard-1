@@ -210,6 +210,7 @@ const dom = {
     projectCdcStatus: document.querySelector("#projectCdcStatus"),
     projectCdcTopSubmitButton: document.querySelector("#projectCdcTopSubmitButton"),
     projectCdcSubmitButton: document.querySelector("#projectCdcSubmitButton"),
+    projectCdcDeleteButton: document.querySelector("#projectCdcDeleteButton"),
     projectCdcTitleInput: document.querySelector("#projectCdcTitleInput"),
     projectCdcRequesterInput: document.querySelector("#projectCdcRequesterInput"),
     projectCdcRequestDateInput: document.querySelector("#projectCdcRequestDateInput"),
@@ -1188,6 +1189,9 @@ function bindStaticEvents() {
         dom.projectCdcModifyButton.addEventListener("click", () => {
             openProjectCdcModal(getProjectCdcCurrentProject() || getProjectModalCurrentProject(), { mode: "edit" });
         });
+    }
+    if (dom.projectCdcDeleteButton) {
+        dom.projectCdcDeleteButton.addEventListener("click", onProjectCdcDelete);
     }
     if (dom.projectCdcImportButton && dom.projectCdcFileInput) {
         dom.projectCdcImportButton.addEventListener("click", () => {
@@ -2962,6 +2966,9 @@ function setProjectCdcBusy(isBusy) {
     if (dom.projectCdcSubmitButton) {
         dom.projectCdcSubmitButton.disabled = isBusy;
     }
+    if (dom.projectCdcDeleteButton) {
+        dom.projectCdcDeleteButton.disabled = isBusy;
+    }
     if (dom.projectCdcModifyButton) {
         dom.projectCdcModifyButton.disabled = isBusy;
     }
@@ -2980,6 +2987,7 @@ function setProjectCdcBusy(isBusy) {
 
     if (!isBusy) {
         syncProjectCdcDownloadButtons();
+        syncProjectCdcEditControls();
     }
 }
 
@@ -3008,6 +3016,7 @@ function syncProjectCdcModalHeading(project = getProjectCdcCurrentProject() || g
             ? "Completez le document de cadrage du projet."
             : "Consultez le document de cadrage du projet.";
         syncProjectCdcViewControls(null);
+        syncProjectCdcEditControls(null);
         syncProjectCdcDownloadButtons(null);
         return;
     }
@@ -3023,6 +3032,7 @@ function syncProjectCdcModalHeading(project = getProjectCdcCurrentProject() || g
             : "Consultez le document de cadrage du projet.");
 
     syncProjectCdcViewControls(project);
+    syncProjectCdcEditControls(project);
     syncProjectCdcDownloadButtons(project);
 }
 
@@ -3061,6 +3071,16 @@ function syncProjectCdcViewControls(project = getProjectCdcCurrentProject() || g
 
     const hasContent = Boolean(project?.id) && projectHasCdcContent(project);
     dom.projectCdcModifyButton.hidden = !hasContent;
+}
+
+function syncProjectCdcEditControls(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject()) {
+    if (!dom.projectCdcDeleteButton) {
+        return;
+    }
+
+    const hasContent = Boolean(project?.id) && projectHasCdcContent(project);
+    dom.projectCdcDeleteButton.hidden = !hasContent;
+    dom.projectCdcDeleteButton.disabled = !hasContent;
 }
 
 async function uploadProjectCdcEditorAsset(file, kind = "file") {
@@ -3418,6 +3438,63 @@ async function saveProjectCdc(options = {}) {
     } catch (error) {
         setProjectCdcStatus(error.message || "Impossible d enregistrer le cahier des charges.", "error");
         throw error;
+    } finally {
+        setProjectCdcBusy(false);
+    }
+}
+
+function buildProjectCdcEmptyDraft(project) {
+    const projectDraft = {
+        ...project,
+        [PROJECT_CDC_TITLE_FIELD.key]: null,
+        cdcUpdatedAt: null,
+        cdcDocxAvailable: false,
+        cdcPdfAvailable: false
+    };
+
+    PROJECT_CDC_SUMMARY_FIELDS.forEach(({ key }) => {
+        projectDraft[key] = null;
+    });
+    PROJECT_CDC_FIELDS.forEach(({ key }) => {
+        projectDraft[key] = null;
+    });
+
+    return projectDraft;
+}
+
+async function onProjectCdcDelete() {
+    const project = getProjectCdcCurrentProject() || getProjectModalCurrentProject();
+    if (!project?.id || !projectHasCdcContent(project)) {
+        return;
+    }
+
+    const projectLabel = String(project.ref || project.title || "ce projet").trim();
+    const confirmed = window.confirm(`Supprimer définitivement le cahier des charges de ${projectLabel} ? Cette action supprimera aussi les fichiers liés.`);
+    if (!confirmed) {
+        return;
+    }
+
+    const projectDraft = buildProjectCdcEmptyDraft(project);
+
+    setProjectCdcBusy(true);
+    clearProjectCdcStatus();
+
+    try {
+        const response = await createProjectRecord(buildProjectPersistencePayload(projectDraft), false, false);
+        const savedProject = normalizeProjectForState(response?.project || projectDraft);
+        upsertProjectInState(savedProject);
+        persistState();
+        render();
+        if ((dom.projectModal?.dataset.projectId || "") === savedProject.id) {
+            openProjectModal(savedProject);
+        }
+        populateProjectCdcForm(savedProject);
+        renderProjectCdcReadView(savedProject);
+        setProjectCdcModalMode("view");
+        syncProjectModalCdcControls(savedProject);
+        syncProjectCdcModalHeading(savedProject);
+    } catch (error) {
+        setProjectCdcStatus(error.message || "Impossible de supprimer le cahier des charges.", "error");
     } finally {
         setProjectCdcBusy(false);
     }

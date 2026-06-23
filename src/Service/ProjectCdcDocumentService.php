@@ -46,6 +46,7 @@ final class ProjectCdcDocumentService
 
     public function __construct(
         private KernelInterface $kernel,
+        private FileUploadService $fileUploadService,
         private ?string $libreOfficeBinary = null,
     ) {}
 
@@ -209,6 +210,8 @@ final class ProjectCdcDocumentService
 
     public function deleteProjectDocuments(array $project): void
     {
+        $this->deleteProjectEditorAssets($project);
+
         $projectId = trim((string) ($project['id'] ?? ''));
         if ($projectId === '') {
             return;
@@ -238,6 +241,76 @@ final class ProjectCdcDocumentService
         }
 
         @rmdir($directory);
+    }
+
+    private function deleteProjectEditorAssets(array $project): void
+    {
+        $assetPaths = [];
+
+        foreach (array_keys(self::SECTION_DEFINITIONS) as $fieldName) {
+            foreach ($this->extractProjectEditorAssetPaths((string) ($project[$fieldName] ?? '')) as $assetPath) {
+                $assetPaths[$assetPath] = true;
+            }
+        }
+
+        foreach (array_keys($assetPaths) as $assetPath) {
+            $this->fileUploadService->deleteFile($assetPath);
+        }
+    }
+
+    private function extractProjectEditorAssetPaths(string $html): array
+    {
+        $html = trim($html);
+        if ($html === '') {
+            return [];
+        }
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $document->preserveWhiteSpace = false;
+        $document->formatOutput = false;
+
+        $wrappedHtml = '<!DOCTYPE html><html><body>' . $html . '</body></html>';
+        if (!@$document->loadHTML('<?xml encoding="utf-8" ?>' . $wrappedHtml, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD)) {
+            return [];
+        }
+
+        $xpath = new DOMXPath($document);
+        $assetPaths = [];
+
+        foreach (['src', 'href'] as $attributeName) {
+            foreach ($xpath->query(sprintf('//*[@%s]', $attributeName)) as $node) {
+                if (!$node instanceof DOMElement) {
+                    continue;
+                }
+
+                $assetPath = $this->normalizeProjectEditorAssetPath($node->getAttribute($attributeName));
+                if ($assetPath !== null) {
+                    $assetPaths[$assetPath] = true;
+                }
+            }
+        }
+
+        return array_keys($assetPaths);
+    }
+
+    private function normalizeProjectEditorAssetPath(string $value): ?string
+    {
+        $normalizedValue = trim(html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        if ($normalizedValue === '' || str_starts_with(strtolower($normalizedValue), 'data:')) {
+            return null;
+        }
+
+        $path = parse_url($normalizedValue, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            $path = $normalizedValue;
+        }
+
+        $path = rawurldecode(str_replace('\\', '/', $path));
+        if (!preg_match('#(?:^|/)(uploads/(?:images|files)/editor/[^?#]+)$#i', $path, $matches)) {
+            return null;
+        }
+
+        return ltrim($matches[1], '/');
     }
 
     public function extractSectionsFromDocx(string $docxPath): array
