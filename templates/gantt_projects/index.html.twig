@@ -425,6 +425,19 @@
                             </div>
                         </label>
                     </div>
+                    <section class="project-modal-follow-up" id="projectModalFollowUpSection" hidden aria-live="polite">
+                        <div class="project-modal-follow-up-header">
+                            <div>
+                                <p class="section-kicker">Suivi</p>
+                                <h4>Taches du projet</h4>
+                            </div>
+                            <div class="project-modal-follow-up-tools">
+                                <span class="project-modal-follow-up-count" id="projectModalFollowUpCount"></span>
+                                <button class="ghost-button project-modal-follow-up-add-button" id="projectModalFollowUpAddButton" type="button">Ajouter un suivi</button>
+                            </div>
+                        </div>
+                        <div class="project-modal-follow-up-body" id="projectModalFollowUpBody"></div>
+                    </section>
                     <section class="project-modal-youtrack-tasks" id="projectModalYouTrackTasks" hidden aria-live="polite">
                         <div class="project-modal-youtrack-tasks-header">
                             <div>
@@ -453,6 +466,47 @@
                         <button class="danger-button" id="projectModalDeleteButton" type="button">Supprimer le projet</button>
                         <button class="ghost-button" id="projectModalClearButton" type="button" hidden>Retirer de la timeline</button>
                         <button class="auth-submit" id="projectModalSubmitButton" type="submit">Valider</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="project-follow-up-modal" id="projectFollowUpModal" hidden>
+            <div class="project-follow-up-modal-backdrop" data-close-project-follow-up-modal></div>
+            <div class="project-follow-up-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="projectFollowUpModalTitle">
+                <button class="project-modal-close" id="projectFollowUpModalClose" type="button" aria-label="Fermer le suivi projet">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+                <p class="section-kicker">Suivi projet</p>
+                <div class="project-follow-up-modal-heading">
+                    <div>
+                        <h3 id="projectFollowUpModalTitle">Tache de suivi</h3>
+                        <p class="project-follow-up-modal-subtitle" id="projectFollowUpModalSubtitle">Consultez ou mettez a jour le suivi du projet.</p>
+                    </div>
+                </div>
+                <form class="project-follow-up-form" id="projectFollowUpForm">
+                    <div class="project-follow-up-grid">
+                        <label class="project-follow-up-field" for="projectFollowUpDateInput">
+                            <span>Date</span>
+                            <input id="projectFollowUpDateInput" type="date" required>
+                        </label>
+                        <label class="project-follow-up-field" for="projectFollowUpTitleInput">
+                            <span>Titre</span>
+                            <input id="projectFollowUpTitleInput" type="text" autocomplete="off" spellcheck="false" required>
+                        </label>
+                    </div>
+                    <label class="project-follow-up-field" for="projectFollowUpDetailsInput">
+                        <span>Details</span>
+                        <textarea id="projectFollowUpDetailsInput" rows="7" spellcheck="false"></textarea>
+                    </label>
+                    <label class="project-follow-up-field" for="projectFollowUpYouTrackUrlInput">
+                        <span>Lien YouTrack</span>
+                        <input id="projectFollowUpYouTrackUrlInput" type="text" autocomplete="off" spellcheck="false" placeholder="https://maintenance.adep.com/tickets/MTN-1125/">
+                    </label>
+                    <div class="project-follow-up-link-preview" id="projectFollowUpLinkPreview"></div>
+                    <p class="project-follow-up-status" id="projectFollowUpStatus" hidden></p>
+                    <div class="project-follow-up-actions">
+                        <button class="auth-submit" id="projectFollowUpSubmitButton" type="submit">Enregistrer</button>
                     </div>
                 </form>
             </div>

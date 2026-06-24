@@ -56,6 +56,7 @@ final class GanttProjectsController extends AbstractController
                     'projects' => $this->generateUrl('app_gantt_projects_api_projects'),
                     'createProject' => $this->generateUrl('app_gantt_projects_api_create_project'),
                     'projectUsers' => $this->generateUrl('app_gantt_projects_api_project_users'),
+                    'projectFollowUpTask' => $this->generateUrl('app_gantt_projects_api_project_follow_up_task'),
                     'projectTeam' => $this->generateUrl('app_gantt_projects_api_project_team'),
                     'youtrackProjectTasks' => $this->generateUrl('app_gantt_projects_api_youtrack_project_tasks'),
                     'createYouTrackProjectTask' => $this->generateUrl('app_gantt_projects_api_create_youtrack_project_task'),

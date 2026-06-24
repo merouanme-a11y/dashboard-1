@@ -1049,6 +1049,8 @@ XML;
                 'bold' => !empty($formatting['bold']),
                 'italic' => !empty($formatting['italic']),
                 'underline' => !empty($formatting['underline']),
+                'color' => $formatting['color'] ?? null,
+                'backgroundColor' => $formatting['backgroundColor'] ?? null,
             ]];
         }
 
@@ -1083,16 +1085,7 @@ XML;
             ]];
         }
 
-        $nextFormatting = $formatting;
-        if (in_array($tagName, ['strong', 'b'], true)) {
-            $nextFormatting['bold'] = true;
-        }
-        if (in_array($tagName, ['em', 'i'], true)) {
-            $nextFormatting['italic'] = true;
-        }
-        if ($tagName === 'u') {
-            $nextFormatting['underline'] = true;
-        }
+        $nextFormatting = $this->extendHtmlInlineFormatting($node, $formatting);
 
         $runs = [];
         foreach ($node->childNodes as $childNode) {
@@ -1110,7 +1103,9 @@ XML;
                     }
 
                     $run['underline'] = true;
-                    $run['color'] = '1155CC';
+                    if (empty($run['color'])) {
+                        $run['color'] = '1155CC';
+                    }
                 }
                 unset($run);
 
@@ -1188,6 +1183,9 @@ XML;
             } elseif ($styleId === null || $styleId === '') {
                 $runProperties .= '<w:color w:val="000000"/>';
             }
+            if (!empty($run['backgroundColor'])) {
+                $runProperties .= '<w:shd w:val="clear" w:color="auto" w:fill="' . $this->xmlEscape((string) $run['backgroundColor']) . '"/>';
+            }
             if (!empty($run['size'])) {
                 $fontSize = (int) $run['size'];
                 $runProperties .= '<w:sz w:val="' . $fontSize . '"/><w:szCs w:val="' . $fontSize . '"/>';
@@ -1210,6 +1208,157 @@ XML;
         }
 
         return '<w:p>' . $paragraphProperties . $paragraphRuns . '</w:p>';
+    }
+
+    private function extendHtmlInlineFormatting(DOMElement $node, array $formatting): array
+    {
+        $tagName = strtolower($node->tagName);
+        $nextFormatting = $formatting;
+
+        if (in_array($tagName, ['strong', 'b'], true)) {
+            $nextFormatting['bold'] = true;
+        }
+        if (in_array($tagName, ['em', 'i'], true)) {
+            $nextFormatting['italic'] = true;
+        }
+        if ($tagName === 'u') {
+            $nextFormatting['underline'] = true;
+        }
+        if ($tagName === 'mark' && empty($nextFormatting['backgroundColor'])) {
+            $nextFormatting['backgroundColor'] = 'FFF2CC';
+        }
+        if ($tagName === 'font') {
+            $fontColor = $this->normalizeCssColorToWordHex($node->getAttribute('color'));
+            if ($fontColor !== null) {
+                $nextFormatting['color'] = $fontColor;
+            }
+        }
+
+        $styleDeclarations = $this->parseHtmlInlineStyleDeclarations((string) $node->getAttribute('style'));
+        if (!empty($styleDeclarations['font-weight']) && preg_match('/\b(?:bold|[5-9]00)\b/i', $styleDeclarations['font-weight']) === 1) {
+            $nextFormatting['bold'] = true;
+        }
+        if (!empty($styleDeclarations['font-style']) && stripos($styleDeclarations['font-style'], 'italic') !== false) {
+            $nextFormatting['italic'] = true;
+        }
+        if (!empty($styleDeclarations['text-decoration']) && stripos($styleDeclarations['text-decoration'], 'underline') !== false) {
+            $nextFormatting['underline'] = true;
+        }
+
+        $textColor = $this->normalizeCssColorToWordHex($styleDeclarations['color'] ?? null);
+        if ($textColor !== null) {
+            $nextFormatting['color'] = $textColor;
+        }
+
+        $backgroundColor = $this->normalizeCssColorToWordHex($styleDeclarations['background-color'] ?? ($styleDeclarations['background'] ?? null));
+        if ($backgroundColor !== null) {
+            $nextFormatting['backgroundColor'] = $backgroundColor;
+        }
+
+        return $nextFormatting;
+    }
+
+    private function parseHtmlInlineStyleDeclarations(string $styleValue): array
+    {
+        $declarations = [];
+
+        foreach (explode(';', $styleValue) as $declaration) {
+            $separatorPosition = strpos($declaration, ':');
+            if ($separatorPosition === false) {
+                continue;
+            }
+
+            $property = strtolower(trim(substr($declaration, 0, $separatorPosition)));
+            $value = trim(substr($declaration, $separatorPosition + 1));
+            if ($property === '' || $value === '') {
+                continue;
+            }
+
+            $declarations[$property] = $value;
+        }
+
+        return $declarations;
+    }
+
+    private function normalizeCssColorToWordHex(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = strtolower(trim($value));
+        if ($normalized === '') {
+            return null;
+        }
+
+        $normalized = preg_replace('/\s*!important\s*$/i', '', $normalized) ?? $normalized;
+        if ($normalized === '' || in_array($normalized, ['auto', 'inherit', 'initial', 'unset', 'transparent', 'none'], true)) {
+            return null;
+        }
+
+        if (preg_match('/^#([0-9a-f]{3})$/i', $normalized, $matches) === 1) {
+            $hex = strtoupper($matches[1]);
+
+            return $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+        }
+
+        if (preg_match('/^#([0-9a-f]{6})$/i', $normalized, $matches) === 1) {
+            return strtoupper($matches[1]);
+        }
+
+        if (preg_match('/^rgba?\(\s*(\d{1,3}%?)\s*,\s*(\d{1,3}%?)\s*,\s*(\d{1,3}%?)(?:\s*,\s*([0-9.]+)\s*)?\)$/i', $normalized, $matches) === 1) {
+            if (isset($matches[4]) && $matches[4] !== '' && (float) $matches[4] <= 0.0) {
+                return null;
+            }
+
+            return sprintf(
+                '%02X%02X%02X',
+                $this->normalizeCssColorChannel($matches[1]),
+                $this->normalizeCssColorChannel($matches[2]),
+                $this->normalizeCssColorChannel($matches[3])
+            );
+        }
+
+        $namedColors = [
+            'black' => '000000',
+            'white' => 'FFFFFF',
+            'red' => 'FF0000',
+            'green' => '008000',
+            'blue' => '0000FF',
+            'yellow' => 'FFFF00',
+            'orange' => 'FFA500',
+            'purple' => '800080',
+            'violet' => 'EE82EE',
+            'pink' => 'FFC0CB',
+            'grey' => '808080',
+            'gray' => '808080',
+            'silver' => 'C0C0C0',
+            'maroon' => '800000',
+            'olive' => '808000',
+            'lime' => '00FF00',
+            'aqua' => '00FFFF',
+            'teal' => '008080',
+            'navy' => '000080',
+            'fuchsia' => 'FF00FF',
+        ];
+
+        return $namedColors[$normalized] ?? null;
+    }
+
+    private function normalizeCssColorChannel(string $value): int
+    {
+        $normalized = trim($value);
+        if ($normalized === '') {
+            return 0;
+        }
+
+        if (str_ends_with($normalized, '%')) {
+            $percentage = max(0.0, min(100.0, (float) rtrim($normalized, '%')));
+
+            return (int) round(($percentage / 100) * 255);
+        }
+
+        return max(0, min(255, (int) round((float) $normalized)));
     }
 
     private function registerImageMedia(string $source, DOMElement $imageNode, array &$mediaRegistry): ?array
@@ -1674,6 +1823,8 @@ XML;
         $bold = $xpath->query('./w:rPr/w:b', $runNode)->length > 0;
         $italic = $xpath->query('./w:rPr/w:i', $runNode)->length > 0;
         $underline = $xpath->query('./w:rPr/w:u[@w:val!="none"] | ./w:rPr/w:u[not(@w:val)]', $runNode)->length > 0;
+        $textColor = $this->extractWordRunColor($runNode, $xpath);
+        $backgroundColor = $this->extractWordRunBackgroundColor($runNode, $xpath);
 
         $fragments = [];
         foreach ($runNode->childNodes as $childNode) {
@@ -1701,6 +1852,17 @@ XML;
             return '';
         }
 
+        $styleFragments = [];
+        if ($textColor !== null) {
+            $styleFragments[] = 'color:#' . strtolower($textColor);
+        }
+        if ($backgroundColor !== null) {
+            $styleFragments[] = 'background-color:#' . strtolower($backgroundColor);
+        }
+        if ($styleFragments !== []) {
+            $content = '<span style="' . htmlspecialchars(implode(';', $styleFragments), ENT_QUOTES | ENT_HTML5, 'UTF-8') . '">' . $content . '</span>';
+        }
+
         if ($underline) {
             $content = '<u>' . $content . '</u>';
         }
@@ -1712,6 +1874,99 @@ XML;
         }
 
         return $content;
+    }
+
+    private function extractWordRunColor(DOMElement $runNode, DOMXPath $xpath): ?string
+    {
+        $colorNode = $xpath->query('./w:rPr/w:color', $runNode)->item(0);
+        if (!$colorNode instanceof DOMElement) {
+            return null;
+        }
+
+        $value = trim((string) $colorNode->getAttributeNS(self::WORD_NS, 'val'));
+        if ($value === '') {
+            $value = trim((string) ($colorNode->getAttribute('w:val') ?: $colorNode->getAttribute('val')));
+        }
+
+        return $this->normalizeWordHexColor($value);
+    }
+
+    private function extractWordRunBackgroundColor(DOMElement $runNode, DOMXPath $xpath): ?string
+    {
+        $shadingNode = $xpath->query('./w:rPr/w:shd', $runNode)->item(0);
+        if ($shadingNode instanceof DOMElement) {
+            $fill = trim((string) $shadingNode->getAttributeNS(self::WORD_NS, 'fill'));
+            if ($fill === '') {
+                $fill = trim((string) ($shadingNode->getAttribute('w:fill') ?: $shadingNode->getAttribute('fill')));
+            }
+
+            $normalizedFill = $this->normalizeWordHexColor($fill);
+            if ($normalizedFill !== null) {
+                return $normalizedFill;
+            }
+        }
+
+        $highlightNode = $xpath->query('./w:rPr/w:highlight', $runNode)->item(0);
+        if (!$highlightNode instanceof DOMElement) {
+            return null;
+        }
+
+        $value = trim((string) $highlightNode->getAttributeNS(self::WORD_NS, 'val'));
+        if ($value === '') {
+            $value = trim((string) ($highlightNode->getAttribute('w:val') ?: $highlightNode->getAttribute('val')));
+        }
+
+        return $this->mapWordHighlightToHex($value);
+    }
+
+    private function normalizeWordHexColor(?string $value): ?string
+    {
+        $normalized = strtoupper(trim((string) $value));
+        if ($normalized === '' || in_array($normalized, ['AUTO', 'NONE', 'NIL'], true)) {
+            return null;
+        }
+
+        if (preg_match('/^[0-9A-F]{6}$/', $normalized) === 1) {
+            return $normalized;
+        }
+
+        if (preg_match('/^[0-9A-F]{3}$/', $normalized) === 1) {
+            return $normalized[0] . $normalized[0]
+                . $normalized[1] . $normalized[1]
+                . $normalized[2] . $normalized[2];
+        }
+
+        return null;
+    }
+
+    private function mapWordHighlightToHex(?string $value): ?string
+    {
+        $normalized = strtolower(trim((string) $value));
+        if ($normalized === '') {
+            return null;
+        }
+
+        $map = [
+            'black' => '000000',
+            'blue' => '0000FF',
+            'cyan' => '00FFFF',
+            'darkblue' => '00008B',
+            'darkcyan' => '008B8B',
+            'darkgray' => 'A9A9A9',
+            'darkgreen' => '006400',
+            'darkmagenta' => '8B008B',
+            'darkred' => '8B0000',
+            'darkyellow' => '808000',
+            'green' => '00FF00',
+            'lightgray' => 'D3D3D3',
+            'magenta' => 'FF00FF',
+            'none' => null,
+            'red' => 'FF0000',
+            'white' => 'FFFFFF',
+            'yellow' => 'FFFF00',
+        ];
+
+        return $map[$normalized] ?? null;
     }
 
     private function renderWordDrawingToHtml(DOMElement $drawingNode, DOMXPath $xpath, array $relationships, array $mediaFiles): string

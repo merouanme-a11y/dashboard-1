@@ -15,6 +15,7 @@ const API_ROUTES = {
     projects: String(GANTT_ROUTE_CONFIG.projects || `${GANTT_BASE_URL}/api/projects`),
     createProject: String(GANTT_ROUTE_CONFIG.createProject || `${GANTT_BASE_URL}/api/create-project`),
     projectUsers: String(GANTT_ROUTE_CONFIG.projectUsers || `${GANTT_BASE_URL}/api/project-users`),
+    projectFollowUpTask: String(GANTT_ROUTE_CONFIG.projectFollowUpTask || `${GANTT_BASE_URL}/api/project-follow-up-task`),
     projectTeam: String(GANTT_ROUTE_CONFIG.projectTeam || `${GANTT_BASE_URL}/api/project-team`),
     youtrackProjectTasks: String(GANTT_ROUTE_CONFIG.youtrackProjectTasks || `${GANTT_BASE_URL}/api/youtrack-project-tasks`),
     createYouTrackProjectTask: String(GANTT_ROUTE_CONFIG.createYouTrackProjectTask || `${GANTT_BASE_URL}/api/create-youtrack-project-task`),
@@ -179,6 +180,10 @@ const dom = {
     projectModalStatusInput: document.querySelector("#projectModalStatusInput"),
     projectModalProgressDisplay: document.querySelector("#projectModalProgressDisplay"),
     projectModalProgressInput: document.querySelector("#projectModalProgressInput"),
+    projectModalFollowUpSection: document.querySelector("#projectModalFollowUpSection"),
+    projectModalFollowUpCount: document.querySelector("#projectModalFollowUpCount"),
+    projectModalFollowUpAddButton: document.querySelector("#projectModalFollowUpAddButton"),
+    projectModalFollowUpBody: document.querySelector("#projectModalFollowUpBody"),
     projectModalYouTrackTasks: document.querySelector("#projectModalYouTrackTasks"),
     projectModalYouTrackTasksCount: document.querySelector("#projectModalYouTrackTasksCount"),
     projectModalYouTrackColumnsMenu: document.querySelector("#projectModalYouTrackColumnsMenu"),
@@ -191,6 +196,18 @@ const dom = {
     projectModalSubmitButton: document.querySelector("#projectModalSubmitButton"),
     projectModalDescription: document.querySelector("#projectModalDescription"),
     projectModalDescriptionInput: document.querySelector("#projectModalDescriptionInput"),
+    projectFollowUpModal: document.querySelector("#projectFollowUpModal"),
+    projectFollowUpModalClose: document.querySelector("#projectFollowUpModalClose"),
+    projectFollowUpModalTitle: document.querySelector("#projectFollowUpModalTitle"),
+    projectFollowUpModalSubtitle: document.querySelector("#projectFollowUpModalSubtitle"),
+    projectFollowUpForm: document.querySelector("#projectFollowUpForm"),
+    projectFollowUpDateInput: document.querySelector("#projectFollowUpDateInput"),
+    projectFollowUpTitleInput: document.querySelector("#projectFollowUpTitleInput"),
+    projectFollowUpDetailsInput: document.querySelector("#projectFollowUpDetailsInput"),
+    projectFollowUpYouTrackUrlInput: document.querySelector("#projectFollowUpYouTrackUrlInput"),
+    projectFollowUpLinkPreview: document.querySelector("#projectFollowUpLinkPreview"),
+    projectFollowUpStatus: document.querySelector("#projectFollowUpStatus"),
+    projectFollowUpSubmitButton: document.querySelector("#projectFollowUpSubmitButton"),
     projectCdcModal: document.querySelector("#projectCdcModal"),
     projectCdcModalClose: document.querySelector("#projectCdcModalClose"),
     projectCdcModalTitle: document.querySelector("#projectCdcModalTitle"),
@@ -792,6 +809,20 @@ async function createProjectRecord(project, createInYouTrack = false, removeFrom
     return payload;
 }
 
+async function saveProjectFollowUpTask(projectId, task) {
+    const normalizedProjectId = String(projectId || "").trim();
+    const payload = await apiRequest(API_ROUTES.projectFollowUpTask, {
+        method: "POST",
+        body: JSON.stringify({
+            projectId: normalizedProjectId,
+            task
+        })
+    });
+
+    invalidateApiCache("projects");
+    return payload;
+}
+
 async function loadYouTrackProjectTasks(projectKey) {
     const normalizedProjectKey = String(projectKey || "").trim();
     if (!normalizedProjectKey) {
@@ -1123,6 +1154,21 @@ function bindStaticEvents() {
     dom.projectModalStatusInput.addEventListener("change", syncProjectModalDisplays);
     dom.projectModalProgressInput.addEventListener("input", syncProjectModalDisplays);
     dom.projectModalDescriptionInput.addEventListener("input", syncProjectModalDisplays);
+    if (dom.projectModalFollowUpAddButton) {
+        dom.projectModalFollowUpAddButton.addEventListener("click", () => {
+            const currentProject = getProjectModalCurrentProject();
+            if (!currentProject?.id) {
+                showProjectModalError("Enregistrez d'abord le projet pour ajouter un suivi.");
+                return;
+            }
+
+            openProjectFollowUpModal(currentProject);
+        });
+    }
+    if (dom.projectModalFollowUpBody) {
+        dom.projectModalFollowUpBody.addEventListener("click", onProjectModalFollowUpBodyClick);
+        dom.projectModalFollowUpBody.addEventListener("keydown", onProjectModalFollowUpBodyKeydown);
+    }
     if (dom.projectModalCdcButton) {
         dom.projectModalCdcButton.addEventListener("click", () => {
             const currentProject = getProjectModalCurrentProject();
@@ -1166,6 +1212,22 @@ function bindStaticEvents() {
             closeProjectModal();
         }
     });
+    if (dom.projectFollowUpModalClose) {
+        dom.projectFollowUpModalClose.addEventListener("click", closeProjectFollowUpModal);
+    }
+    if (dom.projectFollowUpModal) {
+        dom.projectFollowUpModal.addEventListener("click", (event) => {
+            if (event.target.hasAttribute("data-close-project-follow-up-modal")) {
+                closeProjectFollowUpModal();
+            }
+        });
+    }
+    if (dom.projectFollowUpForm) {
+        dom.projectFollowUpForm.addEventListener("submit", onProjectFollowUpSubmit);
+    }
+    if (dom.projectFollowUpYouTrackUrlInput) {
+        dom.projectFollowUpYouTrackUrlInput.addEventListener("input", syncProjectFollowUpModalLinkPreview);
+    }
     if (dom.projectCdcModalClose) {
         dom.projectCdcModalClose.addEventListener("click", () => {
             closeProjectCdcModal();
@@ -1235,6 +1297,11 @@ function bindStaticEvents() {
     document.addEventListener("pointerup", onPointerUp);
     document.addEventListener("fullscreenchange", onPlanningFullscreenChange);
     document.addEventListener("keydown", (event) => {
+        if (!dom.projectFollowUpModal.hidden && event.key === "Escape") {
+            closeProjectFollowUpModal();
+            return;
+        }
+
         if (!dom.projectCdcModal.hidden && event.key === "Escape") {
             closeProjectCdcModal();
             return;
@@ -2556,6 +2623,7 @@ function openProjectModal(project) {
     syncProjectModalYouTrackControls(project);
     syncProjectModalYouTrackBadge(project);
     syncProjectModalYouTrackTeam(project);
+    syncProjectModalFollowUpSection(project);
     syncProjectModalYouTrackTasks(project);
     syncProjectModalCdcControls(project);
     setProjectModalDescriptionExpanded(false);
@@ -2598,6 +2666,7 @@ function openCreateProjectModal() {
     setProjectModalTeamMembers([]);
     setProjectModalTaskColumns([...DEFAULT_PROJECT_TASK_COLUMNS]);
     hideProjectModalError();
+    syncProjectModalFollowUpSection(null);
     syncProjectModalYouTrackControls(null);
     syncProjectModalYouTrackBadge(null);
     resetProjectModalYouTrackTasks();
@@ -2618,6 +2687,7 @@ function openCreateProjectModal() {
 function closeProjectModal() {
     projectModalTasksRequestToken += 1;
     projectModalTeamRequestToken += 1;
+    closeProjectFollowUpModal();
     closeProjectCdcModal({ preserveProjectModal: true });
     dom.projectModal.hidden = true;
     delete dom.projectModal.dataset.projectId;
@@ -2637,6 +2707,7 @@ function closeProjectModal() {
     closeProjectModalEditors();
     hideProjectModalError();
     syncProjectModalYouTrackBadge(null);
+    syncProjectModalFollowUpSection(null);
     resetProjectModalYouTrackTasks();
     removeRootClass("modal-open");
     setProjectModalScrollLock(false);
@@ -2654,32 +2725,284 @@ function getProjectCdcFieldElement(inputId) {
     return document.getElementById(inputId);
 }
 
-function normalizeProjectCdcHtmlValue(value) {
-    const normalized = String(value || "").trim();
+function parseProjectCdcStyleDeclarations(value) {
+    const declarations = new Map();
+    const styleValue = String(value || "").trim();
+    if (!styleValue) {
+        return declarations;
+    }
+
+    styleValue.split(";").forEach((entry) => {
+        const separatorIndex = entry.indexOf(":");
+        if (separatorIndex === -1) {
+            return;
+        }
+
+        const property = entry.slice(0, separatorIndex).trim().toLowerCase();
+        const propertyValue = entry.slice(separatorIndex + 1).trim();
+        if (!property || !propertyValue) {
+            return;
+        }
+
+        declarations.set(property, propertyValue);
+    });
+
+    return declarations;
+}
+
+function serializeProjectCdcStyleDeclarations(declarations) {
+    if (!(declarations instanceof Map) || declarations.size === 0) {
+        return "";
+    }
+
+    return Array.from(declarations.entries())
+        .map(([property, value]) => `${property}: ${value}`)
+        .join("; ");
+}
+
+function mergeProjectCdcStyleValues(primaryValue, fallbackValue) {
+    const primaryDeclarations = parseProjectCdcStyleDeclarations(primaryValue);
+    const fallbackDeclarations = parseProjectCdcStyleDeclarations(fallbackValue);
+
+    fallbackDeclarations.forEach((value, property) => {
+        if (!primaryDeclarations.has(property)) {
+            primaryDeclarations.set(property, value);
+        }
+    });
+
+    return serializeProjectCdcStyleDeclarations(primaryDeclarations);
+}
+
+function normalizeProjectCdcCssColorValue(value, options = {}) {
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+    if (!normalized) {
+        return "";
+    }
+
+    const allowTransparent = options.allowTransparent === true;
+    if (!allowTransparent && (/^rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)$/.test(normalized) || normalized === "transparent")) {
+        return "";
+    }
+
+    return normalized;
+}
+
+function parseProjectCdcColorChannels(value) {
+    const normalized = normalizeProjectCdcCssColorValue(value, { allowTransparent: true });
     if (!normalized) {
         return null;
     }
 
-    if (typeof DOMParser === "undefined") {
-        return normalized;
+    const hexMatch = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hexMatch) {
+        const hexValue = hexMatch[1].length === 3
+            ? hexMatch[1].split("").map((chunk) => `${chunk}${chunk}`).join("")
+            : hexMatch[1];
+
+        return {
+            red: Number.parseInt(hexValue.slice(0, 2), 16),
+            green: Number.parseInt(hexValue.slice(2, 4), 16),
+            blue: Number.parseInt(hexValue.slice(4, 6), 16),
+            alpha: 1,
+        };
     }
 
-    try {
-        const documentFragment = new DOMParser().parseFromString(normalized, "text/html");
-        const textContent = String(documentFragment.body?.textContent || "")
-            .replace(/\u00a0/g, " ")
-            .trim();
-        const hasEmbeddedContent = Boolean(
-            documentFragment.body?.querySelector("img, table, iframe, video, object, embed, svg, canvas")
-        );
-
-        return textContent || hasEmbeddedContent ? normalized : null;
-    } catch (error) {
-        return normalized;
+    const rgbMatch = normalized.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+)\s*)?\)$/i);
+    if (rgbMatch) {
+        return {
+            red: Math.max(0, Math.min(255, Number.parseFloat(rgbMatch[1]))),
+            green: Math.max(0, Math.min(255, Number.parseFloat(rgbMatch[2]))),
+            blue: Math.max(0, Math.min(255, Number.parseFloat(rgbMatch[3]))),
+            alpha: rgbMatch[4] === undefined ? 1 : Math.max(0, Math.min(1, Number.parseFloat(rgbMatch[4]))),
+        };
     }
+
+    return null;
 }
 
-function normalizeProjectCdcRenderedHtmlValue(value) {
+function isProjectCdcPreviewBackgroundVisible(value) {
+    const channels = parseProjectCdcColorChannels(value);
+    return Boolean(channels && channels.alpha > 0.05);
+}
+
+function shouldDarkenProjectCdcPreviewTextColor(value) {
+    const channels = parseProjectCdcColorChannels(value);
+    if (!channels || channels.alpha <= 0.05) {
+        return false;
+    }
+
+    const { red, green, blue } = channels;
+    const minimumChannel = Math.min(red, green, blue);
+    const maximumChannel = Math.max(red, green, blue);
+    const colorSpread = maximumChannel - minimumChannel;
+    const averageChannel = (red + green + blue) / 3;
+
+    return averageChannel >= 185 && colorSpread <= 70;
+}
+
+function getProjectCdcPreviewReadableTextColor(value, fallbackColor = "#1f2937") {
+    const normalized = normalizeProjectCdcCssColorValue(value);
+    if (!normalized) {
+        return "";
+    }
+
+    return shouldDarkenProjectCdcPreviewTextColor(normalized) ? fallbackColor : normalized;
+}
+
+function normalizeProjectCdcPreviewDocumentColors(rootNode, fallbackColor = "#1f2937") {
+    if (!(rootNode instanceof Element)) {
+        return;
+    }
+
+    const elements = [rootNode, ...rootNode.querySelectorAll("*")];
+    elements.forEach((element) => {
+        const declarations = parseProjectCdcStyleDeclarations(element.getAttribute("style") || "");
+        const inlineColor = normalizeProjectCdcCssColorValue(
+            declarations.get("color")
+            || element.getAttribute("color")
+            || ""
+        );
+        if (!inlineColor) {
+            return;
+        }
+
+        const inlineBackgroundColor = normalizeProjectCdcCssColorValue(
+            declarations.get("background-color")
+            || declarations.get("background")
+            || ""
+        );
+        if (isProjectCdcPreviewBackgroundVisible(inlineBackgroundColor)) {
+            return;
+        }
+
+        const readableColor = getProjectCdcPreviewReadableTextColor(inlineColor, fallbackColor);
+        if (!readableColor || readableColor === inlineColor) {
+            return;
+        }
+
+        declarations.set("color", readableColor);
+        const nextStyle = serializeProjectCdcStyleDeclarations(declarations);
+        if (nextStyle) {
+            element.setAttribute("style", nextStyle);
+        }
+
+        if (element.hasAttribute("color")) {
+            element.setAttribute("color", readableColor);
+        }
+    });
+}
+
+function hydrateProjectCdcInlineAttributes(rootNode) {
+    if (!(rootNode instanceof Element)) {
+        return;
+    }
+
+    const elements = [rootNode, ...rootNode.querySelectorAll("*")];
+    elements.forEach((element) => {
+        const inlineStyle = String(element.getAttribute("style") || "");
+        const mceStyle = String(element.getAttribute("data-mce-style") || "");
+        const mergedStyle = mergeProjectCdcStyleValues(inlineStyle, mceStyle);
+        if (mergedStyle) {
+            element.setAttribute("style", mergedStyle);
+        } else {
+            element.removeAttribute("style");
+        }
+
+        const src = String(element.getAttribute("src") || "").trim();
+        const mceSrc = String(element.getAttribute("data-mce-src") || "").trim();
+        if (!src && mceSrc) {
+            element.setAttribute("src", mceSrc);
+        }
+
+        const href = String(element.getAttribute("href") || "").trim();
+        const mceHref = String(element.getAttribute("data-mce-href") || "").trim();
+        if (!href && mceHref) {
+            element.setAttribute("href", mceHref);
+        }
+
+        Array.from(element.attributes).forEach((attribute) => {
+            if (/^data-mce-/i.test(attribute.name)) {
+                element.removeAttribute(attribute.name);
+            }
+        });
+    });
+}
+
+function applyProjectCdcComputedInlineStyles(sourceRoot, targetRoot) {
+    if (!(sourceRoot instanceof HTMLElement) || !(targetRoot instanceof HTMLElement)) {
+        return;
+    }
+
+    const sourceElements = [sourceRoot, ...sourceRoot.querySelectorAll("*")];
+    const targetElements = [targetRoot, ...targetRoot.querySelectorAll("*")];
+    const sourceWindow = sourceRoot.ownerDocument?.defaultView || window;
+
+    sourceElements.forEach((sourceElement, index) => {
+        const targetElement = targetElements[index];
+        if (!(sourceElement instanceof HTMLElement) || !(targetElement instanceof HTMLElement)) {
+            return;
+        }
+
+        if (index === 0) {
+            targetElement.removeAttribute("contenteditable");
+            targetElement.removeAttribute("spellcheck");
+            return;
+        }
+
+        const computedStyle = sourceWindow.getComputedStyle(sourceElement);
+        const parentComputedStyle = sourceElement.parentElement instanceof HTMLElement
+            ? sourceWindow.getComputedStyle(sourceElement.parentElement)
+            : null;
+
+        const elementBackgroundColor = normalizeProjectCdcCssColorValue(computedStyle.backgroundColor);
+        const parentBackgroundColor = normalizeProjectCdcCssColorValue(parentComputedStyle?.backgroundColor || "");
+        const hasVisibleOwnBackground = isProjectCdcPreviewBackgroundVisible(elementBackgroundColor)
+            && elementBackgroundColor !== parentBackgroundColor;
+
+        const elementColor = hasVisibleOwnBackground
+            ? normalizeProjectCdcCssColorValue(computedStyle.color)
+            : getProjectCdcPreviewReadableTextColor(computedStyle.color);
+        const parentColor = normalizeProjectCdcCssColorValue(parentComputedStyle?.color || "");
+        if (elementColor && elementColor !== parentColor) {
+            targetElement.style.color = elementColor;
+        }
+
+        if (elementBackgroundColor && elementBackgroundColor !== parentBackgroundColor) {
+            targetElement.style.backgroundColor = elementBackgroundColor;
+        }
+
+        targetElement.removeAttribute("contenteditable");
+        targetElement.removeAttribute("spellcheck");
+    });
+}
+
+function getProjectCdcEditorHtmlValue(inputId) {
+    if (typeof window.tinymce === "undefined") {
+        return null;
+    }
+
+    const editor = window.tinymce.get(inputId);
+    const editorBody = editor?.getBody?.();
+    if (!(editorBody instanceof HTMLElement)) {
+        return null;
+    }
+
+    const clone = editorBody.cloneNode(true);
+    if (!(clone instanceof HTMLElement)) {
+        return null;
+    }
+
+    hydrateProjectCdcInlineAttributes(clone);
+    applyProjectCdcComputedInlineStyles(editorBody, clone);
+
+    return clone.innerHTML.trim();
+}
+
+function sanitizeProjectCdcRenderedHtmlValue(value, options = {}) {
+    const { normalizePreviewColors = false } = options;
     let currentValue = String(value || "").trim();
     if (!currentValue) {
         return "";
@@ -2698,6 +3021,10 @@ function normalizeProjectCdcRenderedHtmlValue(value) {
             }
 
             body.querySelectorAll("script, style, textarea").forEach((node) => node.remove());
+            hydrateProjectCdcInlineAttributes(body);
+            if (normalizePreviewColors) {
+                normalizeProjectCdcPreviewDocumentColors(body);
+            }
 
             const hasHtmlElements = body.children.length > 0
                 || Boolean(body.querySelector("img, table, iframe, video, object, embed, svg, canvas, br"));
@@ -2718,6 +3045,41 @@ function normalizeProjectCdcRenderedHtmlValue(value) {
     }
 
     return currentValue;
+}
+
+function normalizeProjectCdcHtmlValue(value) {
+    const normalized = String(value || "").trim();
+    if (!normalized) {
+        return null;
+    }
+
+    if (typeof DOMParser === "undefined") {
+        return normalized;
+    }
+
+    try {
+        const documentFragment = new DOMParser().parseFromString(normalized, "text/html");
+        hydrateProjectCdcInlineAttributes(documentFragment.body);
+        const textContent = String(documentFragment.body?.textContent || "")
+            .replace(/\u00a0/g, " ")
+            .trim();
+        const hasEmbeddedContent = Boolean(
+            documentFragment.body?.querySelector("img, table, iframe, video, object, embed, svg, canvas")
+        );
+        const html = documentFragment.body?.innerHTML?.trim() || normalized;
+
+        return textContent || hasEmbeddedContent ? html : null;
+    } catch (error) {
+        return normalized;
+    }
+}
+
+function normalizeProjectCdcRenderedHtmlValue(value) {
+    return sanitizeProjectCdcRenderedHtmlValue(value, { normalizePreviewColors: true });
+}
+
+function normalizeProjectCdcEditorRenderedHtmlValue(value) {
+    return sanitizeProjectCdcRenderedHtmlValue(value, { normalizePreviewColors: false });
 }
 
 function projectHasCdcContent(project) {
@@ -3233,7 +3595,7 @@ async function ensureProjectCdcEditors() {
 }
 
 function setProjectCdcEditorValue(inputId, value) {
-    const normalizedValue = normalizeProjectCdcRenderedHtmlValue(value);
+    const normalizedValue = normalizeProjectCdcEditorRenderedHtmlValue(value);
     const textarea = getProjectCdcFieldElement(inputId);
     if (textarea) {
         textarea.value = normalizedValue;
@@ -3347,7 +3709,8 @@ function getProjectCdcPayloadFromForm() {
 
     return PROJECT_CDC_FIELDS.reduce((payload, fieldDefinition) => {
         const input = getProjectCdcFieldElement(fieldDefinition.inputId);
-        payload[fieldDefinition.key] = normalizeProjectCdcHtmlValue(input?.value);
+        const editorHtmlValue = getProjectCdcEditorHtmlValue(fieldDefinition.inputId);
+        payload[fieldDefinition.key] = normalizeProjectCdcHtmlValue(editorHtmlValue ?? input?.value);
         return payload;
     }, {});
 }
@@ -3846,6 +4209,428 @@ function setProjectModalScrollLock(locked) {
 function getProjectModalCurrentProject() {
     const projectId = dom.projectModal.dataset.projectId || "";
     return projectId ? findProject(projectId) : null;
+}
+
+function getProjectFollowUpCurrentProject() {
+    const projectId = dom.projectFollowUpModal?.dataset.projectId || "";
+    return projectId ? findProject(projectId) : null;
+}
+
+function normalizeProjectFollowUpTask(task) {
+    const id = String(task?.id || "").trim();
+    const projectId = String(task?.projectId || task?.project_id || "").trim();
+    const date = normalizeDateInputValue(task?.date || task?.task_date || "");
+    const title = String(task?.title || "").trim();
+
+    if (!title || !date) {
+        return null;
+    }
+
+    return {
+        id,
+        projectId,
+        date,
+        title,
+        details: normalizeProjectMetaInput(task?.details) || "",
+        youtrackUrl: normalizeProjectExternalLinkValue(task?.youtrackUrl ?? task?.youtrack_url ?? "") || "",
+        createdById: String(task?.createdById || task?.created_by_id || "").trim(),
+        createdByDisplayName: String(task?.createdByDisplayName || task?.created_by_display_name || "").trim(),
+        createdByEmail: String(task?.createdByEmail || task?.created_by_email || "").trim(),
+        createdAt: String(task?.createdAt || task?.created_at || "").trim(),
+        updatedAt: String(task?.updatedAt || task?.updated_at || "").trim(),
+    };
+}
+
+function compareProjectFollowUpTasks(left, right) {
+    const dateDifference = getComparableProjectFollowUpMomentValue(right?.date) - getComparableProjectFollowUpMomentValue(left?.date);
+    if (dateDifference !== 0) {
+        return dateDifference;
+    }
+
+    const updatedDifference = getComparableProjectFollowUpMomentValue(right?.updatedAt) - getComparableProjectFollowUpMomentValue(left?.updatedAt);
+    if (updatedDifference !== 0) {
+        return updatedDifference;
+    }
+
+    const createdDifference = getComparableProjectFollowUpMomentValue(right?.createdAt) - getComparableProjectFollowUpMomentValue(left?.createdAt);
+    if (createdDifference !== 0) {
+        return createdDifference;
+    }
+
+    return String(right?.id || "").localeCompare(String(left?.id || ""), "fr");
+}
+
+function getComparableProjectFollowUpMomentValue(value) {
+    const normalized = String(value || "").trim();
+    if (!normalized) {
+        return Number.NEGATIVE_INFINITY;
+    }
+
+    const timestamp = Date.parse(normalized);
+    return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+}
+
+function getProjectFollowUpTasks(project = null) {
+    const rawTasks = Array.isArray(project?.followUpTasks) ? project.followUpTasks : [];
+    return rawTasks
+        .map((task) => normalizeProjectFollowUpTask(task))
+        .filter(Boolean)
+        .sort(compareProjectFollowUpTasks);
+}
+
+function getProjectFollowUpTaskById(project, taskId) {
+    const normalizedTaskId = String(taskId || "").trim();
+    if (!normalizedTaskId) {
+        return null;
+    }
+
+    return getProjectFollowUpTasks(project).find((task) => task.id === normalizedTaskId) || null;
+}
+
+function formatProjectFollowUpCreator(task) {
+    return String(
+        task?.createdByDisplayName
+        || task?.createdByEmail
+        || task?.createdById
+        || "Non renseigne"
+    ).trim();
+}
+
+function formatProjectFollowUpProjectLabel(project = getProjectModalCurrentProject()) {
+    const projectId = String(project?.id || "").trim();
+    const modalProjectId = String(dom.projectModal?.dataset.projectId || "").trim();
+    const useLiveProjectModalInputs = projectId !== "" && projectId === modalProjectId;
+    const ref = useLiveProjectModalInputs
+        ? (dom.projectModalRefInput?.value.trim() || project?.ref || "")
+        : String(project?.ref || "").trim();
+    const title = useLiveProjectModalInputs
+        ? (dom.projectModalTitleInput?.value.trim() || project?.title || "")
+        : String(project?.title || "").trim();
+
+    if (ref && title) {
+        return `${ref} - ${title}`;
+    }
+
+    return ref || title || "Projet";
+}
+
+function canCurrentUserEditProjectFollowUpTask(task) {
+    if (!task) {
+        return false;
+    }
+
+    const currentUser = getCurrentAuthenticatedUser();
+    if (!currentUser) {
+        return false;
+    }
+
+    const currentProjectUser = getCurrentAuthenticatedProjectUser();
+    return doesProjectOwnerMatchCurrentUser({
+        id: task.createdById,
+        displayName: task.createdByDisplayName,
+        email: task.createdByEmail,
+    }, currentUser, currentProjectUser);
+}
+
+function syncProjectModalFollowUpSection(project = getProjectModalCurrentProject()) {
+    if (!dom.projectModalFollowUpSection || !dom.projectModalFollowUpBody || !dom.projectModalFollowUpCount) {
+        return;
+    }
+
+    const projectId = String(project?.id || "").trim();
+    if (!projectId) {
+        dom.projectModalFollowUpSection.hidden = true;
+        dom.projectModalFollowUpCount.textContent = "";
+        dom.projectModalFollowUpBody.innerHTML = "";
+        if (dom.projectModalFollowUpAddButton) {
+            dom.projectModalFollowUpAddButton.disabled = true;
+        }
+        return;
+    }
+
+    const tasks = getProjectFollowUpTasks(project);
+    const followUpCount = tasks.length;
+    dom.projectModalFollowUpSection.hidden = false;
+    dom.projectModalFollowUpCount.textContent = `${followUpCount} suivi${followUpCount > 1 ? "s" : ""}`;
+    dom.projectModalFollowUpBody.innerHTML = renderProjectModalFollowUpTasks(project);
+
+    if (dom.projectModalFollowUpAddButton) {
+        dom.projectModalFollowUpAddButton.disabled = false;
+    }
+}
+
+function renderProjectModalFollowUpTasks(project = getProjectModalCurrentProject()) {
+    const tasks = getProjectFollowUpTasks(project);
+    if (!tasks.length) {
+        return `<div class="project-modal-follow-up-message">Aucun suivi n'a encore ete ajoute a ce projet.</div>`;
+    }
+
+    return `
+        <div class="project-modal-follow-up-table-wrap">
+            <table class="project-modal-follow-up-table">
+                <thead>
+                    <tr>
+                        <th scope="col" class="project-modal-follow-up-col-date">Date</th>
+                        <th scope="col" class="project-modal-follow-up-col-title">Titre</th>
+                        <th scope="col">Details</th>
+                        <th scope="col" class="project-modal-follow-up-col-link">Lien YouTrack</th>
+                        <th scope="col" class="project-modal-follow-up-col-author">Cree par</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tasks.map((task) => `
+                        <tr
+                            tabindex="0"
+                            role="button"
+                            data-project-follow-up-id="${escapeHtml(task.id)}"
+                            aria-label="Ouvrir le suivi ${escapeHtml(task.title)}"
+                        >
+                            <td class="project-modal-follow-up-col-date">${escapeHtml(formatProjectTaskDisplayDate(task.date))}</td>
+                            <td class="project-modal-follow-up-col-title">
+                                <span class="project-modal-follow-up-title">${escapeHtml(task.title)}</span>
+                            </td>
+                            <td>
+                                <span class="project-modal-follow-up-details">${escapeHtml(task.details || "-")}</span>
+                            </td>
+                            <td class="project-modal-follow-up-col-link">
+                                <div class="project-modal-follow-up-link-slot">
+                                    ${task.youtrackUrl
+                                        ? renderProjectExternalLinkButton(task.youtrackUrl, "youtrack", project, { compact: true })
+                                        : `<span class="project-modal-follow-up-link-empty">-</span>`}
+                                </div>
+                            </td>
+                            <td class="project-modal-follow-up-col-author">${escapeHtml(formatProjectFollowUpCreator(task))}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function openProjectFollowUpModal(project = getProjectModalCurrentProject(), task = null) {
+    if (!dom.projectFollowUpModal || !dom.projectFollowUpForm || !project?.id) {
+        return;
+    }
+
+    const normalizedTask = task ? normalizeProjectFollowUpTask(task) : null;
+    const canEdit = normalizedTask ? canCurrentUserEditProjectFollowUpTask(normalizedTask) : true;
+    const projectLabel = formatProjectFollowUpProjectLabel(project);
+
+    dom.projectFollowUpModal.dataset.projectId = project.id;
+    dom.projectFollowUpModal.dataset.mode = normalizedTask ? "edit" : "create";
+    dom.projectFollowUpModal.dataset.canEdit = canEdit ? "1" : "0";
+
+    if (normalizedTask?.id) {
+        dom.projectFollowUpModal.dataset.taskId = normalizedTask.id;
+    } else {
+        delete dom.projectFollowUpModal.dataset.taskId;
+    }
+
+    dom.projectFollowUpDateInput.value = normalizedTask?.date || formatDateInputValue(new Date());
+    dom.projectFollowUpTitleInput.value = normalizedTask?.title || "";
+    dom.projectFollowUpDetailsInput.value = normalizedTask?.details || "";
+    dom.projectFollowUpYouTrackUrlInput.value = normalizedTask?.youtrackUrl || "";
+    dom.projectFollowUpModalTitle.textContent = normalizedTask ? normalizedTask.title : "Nouveau suivi";
+    dom.projectFollowUpModalSubtitle.textContent = normalizedTask
+        ? `Suivi du projet ${projectLabel}`
+        : `Ajouter un suivi pour ${projectLabel}`;
+
+    clearProjectFollowUpStatus();
+    setProjectFollowUpModalEditable(canEdit);
+    syncProjectFollowUpModalLinkPreview();
+
+    if (!canEdit && normalizedTask) {
+        setProjectFollowUpStatus(`Lecture seule : suivi cree par ${formatProjectFollowUpCreator(normalizedTask)}.`, "info");
+    }
+
+    dom.projectFollowUpModal.hidden = false;
+
+    requestAnimationFrame(() => {
+        if (canEdit) {
+            dom.projectFollowUpTitleInput.focus();
+            dom.projectFollowUpTitleInput.select();
+            return;
+        }
+
+        dom.projectFollowUpModalClose?.focus();
+    });
+}
+
+function closeProjectFollowUpModal() {
+    if (!dom.projectFollowUpModal || !dom.projectFollowUpForm) {
+        return;
+    }
+
+    dom.projectFollowUpModal.hidden = true;
+    dom.projectFollowUpForm.reset();
+    clearProjectFollowUpStatus();
+    setProjectFollowUpModalEditable(true);
+
+    if (dom.projectFollowUpLinkPreview) {
+        dom.projectFollowUpLinkPreview.innerHTML = "";
+    }
+
+    delete dom.projectFollowUpModal.dataset.projectId;
+    delete dom.projectFollowUpModal.dataset.taskId;
+    delete dom.projectFollowUpModal.dataset.mode;
+    delete dom.projectFollowUpModal.dataset.canEdit;
+}
+
+function setProjectFollowUpModalEditable(canEdit) {
+    if (!dom.projectFollowUpForm) {
+        return;
+    }
+
+    const editableFields = [
+        dom.projectFollowUpTitleInput,
+        dom.projectFollowUpDetailsInput,
+        dom.projectFollowUpYouTrackUrlInput,
+    ].filter(Boolean);
+
+    editableFields.forEach((field) => {
+        field.readOnly = !canEdit;
+    });
+
+    if (dom.projectFollowUpDateInput) {
+        dom.projectFollowUpDateInput.readOnly = !canEdit;
+    }
+
+    if (dom.projectFollowUpSubmitButton) {
+        dom.projectFollowUpSubmitButton.hidden = !canEdit;
+        dom.projectFollowUpSubmitButton.disabled = !canEdit;
+    }
+}
+
+function setProjectFollowUpStatus(message, tone = "info") {
+    if (!dom.projectFollowUpStatus) {
+        return;
+    }
+
+    dom.projectFollowUpStatus.hidden = false;
+    dom.projectFollowUpStatus.dataset.tone = tone;
+    dom.projectFollowUpStatus.textContent = String(message || "").trim();
+}
+
+function clearProjectFollowUpStatus() {
+    if (!dom.projectFollowUpStatus) {
+        return;
+    }
+
+    dom.projectFollowUpStatus.hidden = true;
+    dom.projectFollowUpStatus.textContent = "";
+    delete dom.projectFollowUpStatus.dataset.tone;
+}
+
+function syncProjectFollowUpModalLinkPreview() {
+    if (!dom.projectFollowUpLinkPreview) {
+        return;
+    }
+
+    const project = getProjectFollowUpCurrentProject() || getProjectModalCurrentProject();
+    const youtrackUrl = normalizeProjectExternalLinkValue(dom.projectFollowUpYouTrackUrlInput?.value);
+
+    dom.projectFollowUpLinkPreview.innerHTML = youtrackUrl
+        ? renderProjectExternalLinkButton(youtrackUrl, "youtrack", project, { compact: true })
+        : `<span class="project-modal-follow-up-link-empty">Aucun lien YouTrack</span>`;
+}
+
+function onProjectModalFollowUpBodyClick(event) {
+    if (event.target.closest("[data-project-external-link]")) {
+        return;
+    }
+
+    const row = event.target.closest("[data-project-follow-up-id]");
+    if (!row) {
+        return;
+    }
+
+    const project = getProjectModalCurrentProject();
+    const task = getProjectFollowUpTaskById(project, row.dataset.projectFollowUpId);
+    if (!project || !task) {
+        return;
+    }
+
+    openProjectFollowUpModal(project, task);
+}
+
+function onProjectModalFollowUpBodyKeydown(event) {
+    if (event.target.closest("[data-project-external-link]")) {
+        return;
+    }
+
+    if (event.key !== "Enter" && event.key !== " ") {
+        return;
+    }
+
+    const row = event.target.closest("[data-project-follow-up-id]");
+    if (!row) {
+        return;
+    }
+
+    event.preventDefault();
+    row.click();
+}
+
+async function onProjectFollowUpSubmit(event) {
+    event.preventDefault();
+
+    const project = getProjectFollowUpCurrentProject();
+    if (!project?.id) {
+        closeProjectFollowUpModal();
+        return;
+    }
+
+    if (dom.projectFollowUpModal?.dataset.canEdit === "0") {
+        return;
+    }
+
+    const taskId = String(dom.projectFollowUpModal?.dataset.taskId || "").trim();
+    const date = normalizeDateInputValue(dom.projectFollowUpDateInput?.value);
+    const title = String(dom.projectFollowUpTitleInput?.value || "").trim();
+    const details = normalizeProjectMetaInput(dom.projectFollowUpDetailsInput?.value) || "";
+    const youtrackUrl = normalizeProjectExternalLinkValue(dom.projectFollowUpYouTrackUrlInput?.value) || "";
+
+    if (!date) {
+        setProjectFollowUpStatus("La date du suivi est obligatoire.", "error");
+        return;
+    }
+
+    if (!title) {
+        setProjectFollowUpStatus("Le titre du suivi est obligatoire.", "error");
+        return;
+    }
+
+    clearProjectFollowUpStatus();
+    dom.projectFollowUpSubmitButton.disabled = true;
+    setProjectFollowUpStatus("Enregistrement du suivi en cours...", "info");
+
+    try {
+        const response = await saveProjectFollowUpTask(project.id, {
+            id: taskId || null,
+            date,
+            title,
+            details,
+            youtrackUrl,
+        });
+        const savedProject = normalizeProjectForState(response?.project || project);
+
+        upsertProjectInState(savedProject);
+        render();
+
+        if (String(dom.projectModal?.dataset.projectId || "").trim() === String(savedProject.id || "").trim()) {
+            syncProjectModalFollowUpSection(savedProject);
+        }
+
+        closeProjectFollowUpModal();
+    } catch (error) {
+        console.error(error);
+        setProjectFollowUpStatus(error.message || "Impossible d'enregistrer le suivi.", "error");
+    } finally {
+        if (dom.projectFollowUpSubmitButton && !dom.projectFollowUpModal.hidden) {
+            dom.projectFollowUpSubmitButton.disabled = false;
+        }
+    }
 }
 
 function isProjectModalYouTrackEnabled(project = getProjectModalCurrentProject()) {
@@ -7070,6 +7855,7 @@ function createEmptyProjectDraft() {
         ownerId: null,
         ownerDisplayName: null,
         ownerEmail: null,
+        followUpTasks: [],
         teamMembers: [],
         taskColumns: [...DEFAULT_PROJECT_TASK_COLUMNS]
     });
@@ -7323,6 +8109,7 @@ function normalizeProjectForState(project) {
         ownerDisplayName: project.ownerDisplayName || null,
         ownerEmail: project.ownerEmail || null,
         projectManager: project.projectManager || null,
+        followUpTasks: getProjectFollowUpTasks(project),
         teamMembers: getProjectTeamMembers(project),
         taskColumns: getProjectTaskColumns(project)
     };

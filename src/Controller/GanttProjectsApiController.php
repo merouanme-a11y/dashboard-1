@@ -469,6 +469,82 @@ final class GanttProjectsApiController extends AbstractController
         }
     }
 
+    #[Route('/api/project-follow-up-task', name: 'app_gantt_projects_api_project_follow_up_task', methods: ['POST'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
+    public function projectFollowUpTask(Request $request): JsonResponse
+    {
+        $user = $this->bootAndGetUser();
+        $currentUser = $this->ganttLegacyRuntime->createFrontendUserPayload($user);
+        $payload = $this->readJsonRequest($request);
+        $projectId = trim((string) ($payload['projectId'] ?? ''));
+        $task = $payload['task'] ?? null;
+
+        if ($projectId === '') {
+            return $this->jsonError('Projet de suivi manquant.', 400);
+        }
+
+        if (!is_array($task)) {
+            return $this->jsonError('Aucune tache de suivi a enregistrer.', 400);
+        }
+
+        $project = app_fetch_project_by_id($projectId);
+        if ($project === null) {
+            return $this->jsonError('Projet introuvable.', 404);
+        }
+
+        $taskId = trim((string) ($task['id'] ?? ''));
+        $existingTask = $taskId !== '' ? app_fetch_project_follow_up_task_by_id($projectId, $taskId) : null;
+        if ($taskId !== '' && $existingTask === null) {
+            return $this->jsonError('Tache de suivi introuvable.', 404);
+        }
+
+        if ($existingTask !== null && !$this->followUpTaskCreatorMatchesDashboardUser($existingTask, $currentUser)) {
+            return $this->jsonError('Lecture seule : vous ne pouvez modifier que vos propres suivis.', 403);
+        }
+
+        $taskDate = app_normalize_project_date_value($task['date'] ?? null);
+        $title = trim((string) ($task['title'] ?? ''));
+        $details = app_normalize_project_nullable_string($task['details'] ?? null);
+        $youtrackUrl = app_normalize_project_nullable_string($task['youtrackUrl'] ?? null);
+
+        if ($taskDate === null) {
+            return $this->jsonError('La date du suivi est obligatoire.', 400);
+        }
+
+        if ($title === '') {
+            return $this->jsonError('Le titre du suivi est obligatoire.', 400);
+        }
+
+        try {
+            $savedTask = app_store_project_follow_up_task($projectId, [
+                'id' => $existingTask['id'] ?? null,
+                'date' => $taskDate,
+                'title' => $title,
+                'details' => $details,
+                'youtrackUrl' => $youtrackUrl,
+                'createdById' => $existingTask['createdById'] ?? ($currentUser['id'] ?? null),
+                'createdByDisplayName' => $existingTask['createdByDisplayName'] ?? ($currentUser['displayName'] ?? $currentUser['username'] ?? null),
+                'createdByEmail' => $existingTask['createdByEmail'] ?? ($currentUser['email'] ?? null),
+                'createdAt' => $existingTask['createdAt'] ?? date('Y-m-d H:i:s'),
+            ]);
+
+            $savedProject = app_fetch_project_by_id($projectId);
+            if ($savedProject === null) {
+                return $this->jsonError('Projet introuvable apres enregistrement du suivi.', 404);
+            }
+
+            return new JsonResponse([
+                'task' => $savedTask,
+                'project' => $savedProject,
+            ], $existingTask !== null ? 200 : 201);
+        } catch (\InvalidArgumentException $exception) {
+            return $this->jsonError($exception->getMessage(), 400);
+        } catch (\RuntimeException $exception) {
+            return $this->jsonError($exception->getMessage(), 500);
+        } catch (\Throwable) {
+            return $this->jsonError('Impossible d enregistrer la tache de suivi.', 500);
+        }
+    }
+
     #[Route('/api/import-exported-projects', name: 'app_gantt_projects_api_import_exported_projects', methods: ['POST'], defaults: ['_managed_page_path' => 'app_gantt_projects'])]
     public function importExportedProjects(Request $request): JsonResponse
     {
@@ -817,9 +893,29 @@ final class GanttProjectsApiController extends AbstractController
 
     private function projectOwnerMatchesDashboardUser(array $project, array $dashboardUser): bool
     {
-        $ownerEmail = app_normalize_youtrack_user_match_value($project['ownerEmail'] ?? '');
-        $ownerId = app_normalize_youtrack_user_match_value($project['ownerId'] ?? '');
-        $ownerDisplayName = app_normalize_youtrack_user_match_value($project['ownerDisplayName'] ?? '');
+        return $this->dashboardUserMatchesStoredIdentity(
+            $project['ownerId'] ?? null,
+            $project['ownerDisplayName'] ?? null,
+            $project['ownerEmail'] ?? null,
+            $dashboardUser
+        );
+    }
+
+    private function followUpTaskCreatorMatchesDashboardUser(array $task, array $dashboardUser): bool
+    {
+        return $this->dashboardUserMatchesStoredIdentity(
+            $task['createdById'] ?? null,
+            $task['createdByDisplayName'] ?? null,
+            $task['createdByEmail'] ?? null,
+            $dashboardUser
+        );
+    }
+
+    private function dashboardUserMatchesStoredIdentity($storedId, $storedDisplayName, $storedEmail, array $dashboardUser): bool
+    {
+        $ownerEmail = app_normalize_youtrack_user_match_value($storedEmail ?? '');
+        $ownerId = app_normalize_youtrack_user_match_value($storedId ?? '');
+        $ownerDisplayName = app_normalize_youtrack_user_match_value($storedDisplayName ?? '');
 
         $userEmail = app_normalize_youtrack_user_match_value($dashboardUser['email'] ?? '');
         $userId = app_normalize_youtrack_user_match_value($dashboardUser['id'] ?? $dashboardUser['username'] ?? '');

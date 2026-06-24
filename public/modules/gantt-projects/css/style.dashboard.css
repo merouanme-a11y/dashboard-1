@@ -2021,6 +2021,7 @@ body.project-modal-scroll-locked .app-sidebar{
         "color manager status"
         "risk budget priority"
         "progress progress progress"
+        "followup followup followup"
         "tasks tasks tasks"
         "help help help"
         "error error error"
@@ -2641,6 +2642,156 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
     gap: 8px;
     padding-top: 10px;
     cursor: default;
+}
+
+.gantt-dashboard-page .project-modal-follow-up{
+    grid-area: followup;
+    display: grid;
+    gap: 12px;
+    padding-top: 6px;
+}
+
+.gantt-dashboard-page .project-modal-follow-up[hidden]{
+    display: none;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-header h4{
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.2;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-tools{
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-count{
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-align: right;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-add-button{
+    min-height: 38px;
+    padding: 0 14px;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-body{
+    min-width: 0;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-message{
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-table-wrap{
+    width: 100%;
+    overflow: auto;
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.gantt-dashboard-page .project-modal-follow-up-table{
+    width: 100%;
+    min-width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-table th,
+.gantt-dashboard-page .project-modal-follow-up-table td{
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+    font-size: 0.86rem;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-table th{
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel-strong);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-table tbody tr{
+    cursor: pointer;
+    transition: background 160ms ease;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-table tbody tr:hover,
+.gantt-dashboard-page .project-modal-follow-up-table tbody tr:focus-visible{
+    background: rgba(255, 255, 255, 0.04);
+    outline: none;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-table tbody tr:last-child td{
+    border-bottom: 0;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-col-date{
+    width: 112px;
+    white-space: nowrap;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-col-title{
+    width: 190px;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-col-link{
+    width: 130px;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-col-author{
+    width: 160px;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-title{
+    display: block;
+    color: var(--text);
+    font-weight: 700;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-details{
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--muted);
+    line-height: 1.5;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-link-slot{
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+}
+
+.gantt-dashboard-page .project-modal-follow-up-link-empty{
+    color: var(--muted);
 }
 
 .gantt-dashboard-page .project-modal-youtrack-tasks{
@@ -3332,6 +3483,144 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
     overscroll-behavior: contain;
 }
 
+.gantt-dashboard-page .project-follow-up-modal{
+    position: fixed;
+    inset: 0;
+    z-index: 1305;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.gantt-dashboard-page .project-follow-up-modal[hidden]{
+    display: none;
+}
+
+.gantt-dashboard-page .project-follow-up-modal-backdrop{
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 13, 23, 0.78);
+    backdrop-filter: blur(4px);
+}
+
+.gantt-dashboard-page .project-follow-up-modal-dialog{
+    position: relative;
+    z-index: 1;
+    width: min(720px, 100%);
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 18px 18px 16px;
+    border-radius: 24px;
+    background: var(--panel-strong);
+    border: 1px solid var(--line);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+    backdrop-filter: blur(24px);
+}
+
+.gantt-dashboard-page .project-follow-up-modal-heading{
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 10px 0 18px;
+}
+
+.gantt-dashboard-page .project-follow-up-modal-subtitle{
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.gantt-dashboard-page .project-follow-up-form{
+    display: grid;
+    gap: 14px;
+}
+
+.gantt-dashboard-page .project-follow-up-grid{
+    display: grid;
+    grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+    gap: 14px;
+}
+
+.gantt-dashboard-page .project-follow-up-field{
+    display: grid;
+    gap: 8px;
+}
+
+.gantt-dashboard-page .project-follow-up-field > span{
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.gantt-dashboard-page .project-follow-up-field input,
+.gantt-dashboard-page .project-follow-up-field textarea{
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font: inherit;
+}
+
+.gantt-dashboard-page .project-follow-up-field textarea{
+    min-height: 160px;
+    resize: vertical;
+}
+
+.gantt-dashboard-page .project-follow-up-field input:focus-visible,
+.gantt-dashboard-page .project-follow-up-field textarea:focus-visible{
+    outline: 2px solid rgba(77, 165, 247, 0.5);
+    outline-offset: 2px;
+}
+
+.gantt-dashboard-page .project-follow-up-field input[readonly],
+.gantt-dashboard-page .project-follow-up-field textarea[readonly],
+.gantt-dashboard-page .project-follow-up-field input:disabled{
+    cursor: default;
+    opacity: 0.88;
+}
+
+.gantt-dashboard-page .project-follow-up-link-preview{
+    min-height: 32px;
+}
+
+.gantt-dashboard-page .project-follow-up-status{
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.gantt-dashboard-page .project-follow-up-status[data-tone="success"]{
+    border-color: rgba(16, 185, 129, 0.36);
+    background: rgba(16, 185, 129, 0.12);
+    color: #bbf7d0;
+}
+
+.gantt-dashboard-page .project-follow-up-status[data-tone="error"]{
+    border-color: rgba(239, 68, 68, 0.38);
+    background: rgba(239, 68, 68, 0.12);
+    color: #fecaca;
+}
+
+.gantt-dashboard-page .project-follow-up-actions{
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 .gantt-dashboard-page .project-cdc-modal-backdrop{
     position: absolute;
     inset: 0;
@@ -3480,10 +3769,8 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
 }
 
 .gantt-dashboard-page .project-cdc-document-body p,
-.gantt-dashboard-page .project-cdc-document-body p *,
-.gantt-dashboard-page .project-cdc-document-body li,
-.gantt-dashboard-page .project-cdc-document-body li *{
-    color: #000000 !important;
+.gantt-dashboard-page .project-cdc-document-body li{
+    color: inherit;
 }
 
 .gantt-dashboard-page .project-cdc-document-body img{
@@ -3495,12 +3782,8 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
 }
 
 .gantt-dashboard-page .project-cdc-document-body a{
-    color: #1155cc !important;
+    color: inherit;
     text-decoration: underline;
-}
-
-.gantt-dashboard-page .project-cdc-document-body a *{
-    color: #1155cc !important;
 }
 
 .gantt-dashboard-page .project-cdc-document-body > :first-child{
@@ -3915,9 +4198,23 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
         flex-direction: column;
     }
 
+    .gantt-dashboard-page .project-modal-follow-up-header{
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .gantt-dashboard-page .project-modal-follow-up-tools{
+        width: 100%;
+        justify-content: flex-start;
+    }
+
     .gantt-dashboard-page .project-modal-youtrack-tasks-tools{
         width: 100%;
         justify-content: flex-start;
+    }
+
+    .gantt-dashboard-page .project-modal-follow-up-table{
+        min-width: 760px;
     }
 
     .gantt-dashboard-page .project-modal-youtrack-table{ min-width: 100%; }
@@ -4131,11 +4428,19 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
         padding: 10px;
     }
 
+    .gantt-dashboard-page .project-follow-up-modal{
+        padding: 10px;
+    }
+
     .gantt-dashboard-page .project-modal-dialog{
         padding: 18px 14px;
     }
 
     .gantt-dashboard-page .project-cdc-modal-dialog{
+        padding: 18px 14px;
+    }
+
+    .gantt-dashboard-page .project-follow-up-modal-dialog{
         padding: 18px 14px;
     }
 
@@ -4157,6 +4462,7 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
             "risk"
             "budget"
             "progress"
+            "followup"
             "help"
             "error"
             "actions";
@@ -4181,6 +4487,10 @@ html.dark .gantt-dashboard-page:not(.theme-light) .project-modal-color-display >
 
     .gantt-dashboard-page .project-cdc-summary-card,
     .gantt-dashboard-page .project-cdc-summary-editor-grid{
+        grid-template-columns: 1fr;
+    }
+
+    .gantt-dashboard-page .project-follow-up-grid{
         grid-template-columns: 1fr;
     }
 

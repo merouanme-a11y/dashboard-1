@@ -32,7 +32,7 @@ function app_fetch_project_by_id(string $projectId): ?array
         return null;
     }
 
-    return app_normalize_project_record($row);
+    return app_attach_follow_up_tasks_to_project(app_normalize_project_record($row));
 }
 
 function app_fetch_project_by_ref(string $projectRef): ?array
@@ -57,7 +57,7 @@ function app_fetch_project_by_ref(string $projectRef): ?array
         return null;
     }
 
-    return app_normalize_project_record($row);
+    return app_attach_follow_up_tasks_to_project(app_normalize_project_record($row));
 }
 
 function app_fetch_project_by_youtrack_id(string $youtrackId): ?array
@@ -82,7 +82,7 @@ function app_fetch_project_by_youtrack_id(string $youtrackId): ?array
         return null;
     }
 
-    return app_normalize_project_record($row);
+    return app_attach_follow_up_tasks_to_project(app_normalize_project_record($row));
 }
 
 function app_fetch_projects_from_database(bool $seedIfEmpty): array
@@ -112,7 +112,7 @@ function app_fetch_projects_from_database(bool $seedIfEmpty): array
 
     app_sync_project_service_links($projects);
 
-    return $projects;
+    return app_attach_follow_up_tasks_to_projects($projects);
 }
 
 function app_store_projects(array $projects): array
@@ -248,7 +248,203 @@ function app_store_projects(array $projects): array
     app_sync_project_service_links($storedProjects);
     app_write_projects_json_mirror($storedProjects);
 
-    return $normalizedProjects;
+    $storedProjectsById = [];
+    foreach ($storedProjects as $storedProject) {
+        if (!is_array($storedProject)) {
+            continue;
+        }
+
+        $storedProjectsById[(string) ($storedProject['id'] ?? '')] = $storedProject;
+    }
+
+    $result = [];
+    foreach ($normalizedProjects as $normalizedProject) {
+        $normalizedProjectId = (string) ($normalizedProject['id'] ?? '');
+        $result[] = $storedProjectsById[$normalizedProjectId] ?? $normalizedProject;
+    }
+
+    return $result;
+}
+
+function app_attach_follow_up_tasks_to_project(array $project): array
+{
+    $projectId = trim((string) ($project['id'] ?? ''));
+    if ($projectId === '') {
+        $project['followUpTasks'] = [];
+        return $project;
+    }
+
+    $project['followUpTasks'] = app_fetch_project_follow_up_tasks($projectId);
+    return $project;
+}
+
+function app_attach_follow_up_tasks_to_projects(array $projects): array
+{
+    if ($projects === []) {
+        return [];
+    }
+
+    $projectIds = [];
+    foreach ($projects as $project) {
+        if (!is_array($project)) {
+            continue;
+        }
+
+        $projectId = trim((string) ($project['id'] ?? ''));
+        if ($projectId !== '') {
+            $projectIds[] = $projectId;
+        }
+    }
+
+    $tasksByProjectId = app_fetch_project_follow_up_tasks_map($projectIds);
+    $result = [];
+
+    foreach ($projects as $project) {
+        if (!is_array($project)) {
+            continue;
+        }
+
+        $projectId = trim((string) ($project['id'] ?? ''));
+        $project['followUpTasks'] = $projectId !== ''
+            ? ($tasksByProjectId[$projectId] ?? [])
+            : [];
+        $result[] = $project;
+    }
+
+    return $result;
+}
+
+function app_fetch_project_follow_up_tasks(string $projectId): array
+{
+    $tasksByProjectId = app_fetch_project_follow_up_tasks_map([$projectId]);
+    return $tasksByProjectId[trim($projectId)] ?? [];
+}
+
+function app_fetch_project_follow_up_task_by_id(string $projectId, string $taskId): ?array
+{
+    app_ensure_projects_schema();
+
+    $normalizedProjectId = trim($projectId);
+    $normalizedTaskId = trim($taskId);
+    if ($normalizedProjectId === '' || $normalizedTaskId === '') {
+        return null;
+    }
+
+    $statement = app_db()->prepare(
+        'SELECT id, project_id, task_date, title, details, youtrack_url, created_by_id, created_by_display_name, created_by_email, created_at, updated_at
+         FROM project_follow_up_tasks
+         WHERE project_id = :projectId AND id = :taskId
+         LIMIT 1'
+    );
+    $statement->execute([
+        'projectId' => $normalizedProjectId,
+        'taskId' => $normalizedTaskId,
+    ]);
+
+    $row = $statement->fetch();
+    if (!is_array($row)) {
+        return null;
+    }
+
+    return app_normalize_project_follow_up_task_record($row);
+}
+
+function app_fetch_project_follow_up_tasks_map(array $projectIds): array
+{
+    app_ensure_projects_schema();
+
+    $normalizedProjectIds = array_values(array_filter(array_map(
+        static fn ($projectId): string => trim((string) $projectId),
+        $projectIds
+    )));
+    if ($normalizedProjectIds === []) {
+        return [];
+    }
+
+    $placeholders = implode(', ', array_fill(0, count($normalizedProjectIds), '?'));
+    $statement = app_db()->prepare(
+        'SELECT id, project_id, task_date, title, details, youtrack_url, created_by_id, created_by_display_name, created_by_email, created_at, updated_at
+         FROM project_follow_up_tasks
+         WHERE project_id IN (' . $placeholders . ')
+         ORDER BY task_date DESC, updated_at DESC, created_at DESC, id DESC'
+    );
+    $statement->execute($normalizedProjectIds);
+
+    $tasksByProjectId = [];
+    foreach ($statement->fetchAll() as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $task = app_normalize_project_follow_up_task_record($row);
+        if ($task === null) {
+            continue;
+        }
+
+        $projectId = (string) ($task['projectId'] ?? '');
+        if ($projectId === '') {
+            continue;
+        }
+
+        if (!array_key_exists($projectId, $tasksByProjectId)) {
+            $tasksByProjectId[$projectId] = [];
+        }
+
+        $tasksByProjectId[$projectId][] = $task;
+    }
+
+    return $tasksByProjectId;
+}
+
+function app_store_project_follow_up_task(string $projectId, array $task): array
+{
+    app_ensure_projects_schema();
+
+    $normalizedProjectId = trim($projectId);
+    if ($normalizedProjectId === '') {
+        throw new InvalidArgumentException('Projet de suivi introuvable.');
+    }
+
+    $normalizedTask = app_normalize_project_follow_up_task_record([
+        ...$task,
+        'projectId' => $normalizedProjectId,
+    ]);
+    if ($normalizedTask === null) {
+        throw new InvalidArgumentException('Tache de suivi invalide.');
+    }
+
+    $statement = app_db()->prepare(
+        'INSERT INTO project_follow_up_tasks (
+            id, project_id, task_date, title, details, youtrack_url, created_by_id, created_by_display_name, created_by_email, created_at
+        ) VALUES (
+            :id, :projectId, :taskDate, :title, :details, :youtrackUrl, :createdById, :createdByDisplayName, :createdByEmail, :createdAt
+        )
+        ON DUPLICATE KEY UPDATE
+            task_date = VALUES(task_date),
+            title = VALUES(title),
+            details = VALUES(details),
+            youtrack_url = VALUES(youtrack_url),
+            updated_at = CURRENT_TIMESTAMP'
+    );
+    $statement->execute([
+        'id' => $normalizedTask['id'],
+        'projectId' => $normalizedTask['projectId'],
+        'taskDate' => $normalizedTask['date'],
+        'title' => $normalizedTask['title'],
+        'details' => $normalizedTask['details'],
+        'youtrackUrl' => $normalizedTask['youtrackUrl'],
+        'createdById' => $normalizedTask['createdById'],
+        'createdByDisplayName' => $normalizedTask['createdByDisplayName'],
+        'createdByEmail' => $normalizedTask['createdByEmail'],
+        'createdAt' => $normalizedTask['createdAt'] ?? date('Y-m-d H:i:s'),
+    ]);
+
+    $savedTask = app_fetch_project_follow_up_task_by_id($normalizedProjectId, (string) $normalizedTask['id']);
+    if ($savedTask === null) {
+        throw new RuntimeException('Impossible d enregistrer la tache de suivi.');
+    }
+
+    return $savedTask;
 }
 
 function app_create_project(array $project): array
@@ -399,6 +595,28 @@ function app_ensure_projects_schema(): void
                 ON DELETE CASCADE,
             CONSTRAINT fk_projet_services_service
                 FOREIGN KEY (service_id) REFERENCES services(id)
+                ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS project_follow_up_tasks (
+            id VARCHAR(64) NOT NULL,
+            project_id VARCHAR(32) NOT NULL,
+            task_date DATE NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            details LONGTEXT DEFAULT NULL,
+            youtrack_url VARCHAR(255) DEFAULT NULL,
+            created_by_id VARCHAR(64) DEFAULT NULL,
+            created_by_display_name VARCHAR(255) DEFAULT NULL,
+            created_by_email VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_project_follow_up_tasks_project (project_id),
+            KEY idx_project_follow_up_tasks_date (task_date),
+            CONSTRAINT fk_project_follow_up_tasks_project
+                FOREIGN KEY (project_id) REFERENCES projets(id)
                 ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
@@ -778,6 +996,7 @@ function app_normalize_project_record(array $project): array
         'ownerEmail' => $ownerEmail,
         'teamMembers' => app_normalize_project_team_members($project['teamMembers'] ?? []),
         'taskColumns' => app_normalize_project_task_columns($project['taskColumns'] ?? []),
+        'followUpTasks' => app_normalize_project_follow_up_tasks($project['followUpTasks'] ?? []),
         'createdAt' => app_normalize_project_datetime_value($project['created_at'] ?? $project['createdAt'] ?? null),
         'updatedAt' => app_normalize_project_datetime_value($project['updated_at'] ?? $project['updatedAt'] ?? null),
     ];
@@ -956,6 +1175,61 @@ function app_normalize_project_task_columns($value): array
     }
 
     return array_values($columns);
+}
+
+function app_normalize_project_follow_up_tasks($value): array
+{
+    $tasks = [];
+
+    foreach (app_normalize_project_json_array($value) as $task) {
+        if (!is_array($task)) {
+            continue;
+        }
+
+        $normalizedTask = app_normalize_project_follow_up_task_record($task);
+        if ($normalizedTask === null) {
+            continue;
+        }
+
+        $tasks[(string) $normalizedTask['id']] = $normalizedTask;
+    }
+
+    return array_values($tasks);
+}
+
+function app_normalize_project_follow_up_task_record(array $task): ?array
+{
+    $taskId = trim((string) ($task['id'] ?? ''));
+    if ($taskId === '') {
+        $taskId = app_generate_project_follow_up_task_id();
+    }
+
+    $projectId = trim((string) ($task['projectId'] ?? $task['project_id'] ?? ''));
+    $title = trim((string) ($task['title'] ?? ''));
+    $taskDate = app_normalize_project_date_value($task['date'] ?? $task['task_date'] ?? null);
+
+    if ($taskId === '' || $title === '' || $taskDate === null) {
+        return null;
+    }
+
+    return [
+        'id' => $taskId,
+        'projectId' => $projectId,
+        'date' => $taskDate,
+        'title' => $title,
+        'details' => app_normalize_project_nullable_string($task['details'] ?? null),
+        'youtrackUrl' => app_normalize_project_nullable_string($task['youtrackUrl'] ?? $task['youtrack_url'] ?? null),
+        'createdById' => app_normalize_project_nullable_string($task['createdById'] ?? $task['created_by_id'] ?? null),
+        'createdByDisplayName' => app_normalize_project_nullable_string($task['createdByDisplayName'] ?? $task['created_by_display_name'] ?? null),
+        'createdByEmail' => app_normalize_project_nullable_string($task['createdByEmail'] ?? $task['created_by_email'] ?? null),
+        'createdAt' => app_normalize_project_datetime_value($task['createdAt'] ?? $task['created_at'] ?? null),
+        'updatedAt' => app_normalize_project_datetime_value($task['updatedAt'] ?? $task['updated_at'] ?? null),
+    ];
+}
+
+function app_generate_project_follow_up_task_id(): string
+{
+    return 'pfu_' . bin2hex(random_bytes(8));
 }
 
 function app_normalize_project_date_value($value): ?string
