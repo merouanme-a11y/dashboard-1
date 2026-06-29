@@ -133,6 +133,7 @@ const dom = {
     projectModalForm: document.querySelector("#projectModalForm"),
     projectModalYouTrackBadge: document.querySelector("#projectModalYouTrackBadge"),
     projectModalKicker: document.querySelector("#projectModalKicker"),
+    projectModalRefChip: document.querySelector("#projectModalRefChip"),
     projectModalTitle: document.querySelector("#projectModalTitle"),
     projectModalTitleInput: document.querySelector("#projectModalTitleInput"),
     projectModalYouTrackTicketPill: document.querySelector("#projectModalYouTrackTicketPill"),
@@ -200,6 +201,13 @@ const dom = {
     projectFollowUpModalClose: document.querySelector("#projectFollowUpModalClose"),
     projectFollowUpModalTitle: document.querySelector("#projectFollowUpModalTitle"),
     projectFollowUpModalSubtitle: document.querySelector("#projectFollowUpModalSubtitle"),
+    projectFollowUpModifyButton: document.querySelector("#projectFollowUpModifyButton"),
+    projectFollowUpReadView: document.querySelector("#projectFollowUpReadView"),
+    projectFollowUpReadDate: document.querySelector("#projectFollowUpReadDate"),
+    projectFollowUpReadTitle: document.querySelector("#projectFollowUpReadTitle"),
+    projectFollowUpReadAuthor: document.querySelector("#projectFollowUpReadAuthor"),
+    projectFollowUpReadLink: document.querySelector("#projectFollowUpReadLink"),
+    projectFollowUpReadDetails: document.querySelector("#projectFollowUpReadDetails"),
     projectFollowUpForm: document.querySelector("#projectFollowUpForm"),
     projectFollowUpDateInput: document.querySelector("#projectFollowUpDateInput"),
     projectFollowUpTitleInput: document.querySelector("#projectFollowUpTitleInput"),
@@ -208,6 +216,9 @@ const dom = {
     projectFollowUpLinkPreview: document.querySelector("#projectFollowUpLinkPreview"),
     projectFollowUpStatus: document.querySelector("#projectFollowUpStatus"),
     projectFollowUpSubmitButton: document.querySelector("#projectFollowUpSubmitButton"),
+    projectFollowUpDeleteButton: document.querySelector("#projectFollowUpDeleteButton"),
+    projectFollowUpImageInput: document.querySelector("#projectFollowUpImageInput"),
+    projectFollowUpAttachmentInput: document.querySelector("#projectFollowUpAttachmentInput"),
     projectCdcModal: document.querySelector("#projectCdcModal"),
     projectCdcModalClose: document.querySelector("#projectCdcModalClose"),
     projectCdcModalTitle: document.querySelector("#projectCdcModalTitle"),
@@ -335,7 +346,7 @@ const TIMELINE_ZOOM_MAX = 1.5;
 let interaction = null;
 let timelineRowReorder = null;
 let appStarted = false;
-const startupCdcLinkState = {
+const startupModalLinkState = {
     handled: false
 };
 let projectsSyncTimeout = null;
@@ -378,6 +389,11 @@ const projectModalTaskColumnsState = {
     columns: [...DEFAULT_PROJECT_TASK_COLUMNS],
 };
 const projectCdcEditorState = {
+    initPromise: null,
+    lastActiveEditorId: "",
+    pendingTargetInputId: "",
+};
+const projectFollowUpEditorState = {
     initPromise: null,
     lastActiveEditorId: "",
     pendingTargetInputId: "",
@@ -485,7 +501,7 @@ async function init() {
 async function startApplication() {
     if (appStarted) {
         render();
-        handleStartupCdcDeepLink();
+        handleStartupModalDeepLink();
         return;
     }
 
@@ -503,7 +519,7 @@ async function startApplication() {
         state.projectUsers = Array.isArray(projectUsersPayload?.users) ? projectUsersPayload.users : [];
         hydrateState(seedProjects, viewStatePayload?.settings || GANTT_CONFIG.sharedViewState || {});
         render();
-        handleStartupCdcDeepLink();
+        handleStartupModalDeepLink();
     } catch (error) {
         console.error(error);
         dom.timelineRows.innerHTML = `<div class="timeline-empty">Impossible de charger les projets. Vérifiez la session utilisateur et les endpoints PHP.</div>`;
@@ -816,6 +832,21 @@ async function saveProjectFollowUpTask(projectId, task) {
         body: JSON.stringify({
             projectId: normalizedProjectId,
             task
+        })
+    });
+
+    invalidateApiCache("projects");
+    return payload;
+}
+
+async function deleteProjectFollowUpTask(projectId, taskId) {
+    const normalizedProjectId = String(projectId || "").trim();
+    const normalizedTaskId = String(taskId || "").trim();
+    const payload = await apiRequest(API_ROUTES.projectFollowUpTask, {
+        method: "DELETE",
+        body: JSON.stringify({
+            projectId: normalizedProjectId,
+            taskId: normalizedTaskId
         })
     });
 
@@ -1172,6 +1203,18 @@ function bindStaticEvents() {
     if (dom.projectModalCdcButton) {
         dom.projectModalCdcButton.addEventListener("click", () => {
             const currentProject = getProjectModalCurrentProject();
+            if (!currentProject?.id) {
+                window.alert("Enregistrez d abord le projet pour activer le cahier des charges.");
+                return;
+            }
+
+            if (!projectHasCdcContent(currentProject)) {
+                const confirmed = window.confirm("Souhaitez-vous ajouter un cahier des charges pour ce projet ?");
+                if (!confirmed) {
+                    return;
+                }
+            }
+
             openProjectCdcModal(currentProject, {
                 mode: projectHasCdcContent(currentProject) ? "view" : "edit"
             });
@@ -1180,11 +1223,21 @@ function bindStaticEvents() {
     if (dom.projectModalCdcPill) {
         dom.projectModalCdcPill.addEventListener("click", () => {
             const currentProject = getProjectModalCurrentProject();
-            if (!currentProject?.id || !projectHasCdcContent(currentProject)) {
+            if (!currentProject?.id) {
+                window.alert("Enregistrez d abord le projet pour activer le cahier des charges.");
                 return;
             }
 
-            openProjectCdcModal(currentProject, { mode: "view" });
+            if (!projectHasCdcContent(currentProject)) {
+                const confirmed = window.confirm("Souhaitez-vous ajouter un cahier des charges pour ce projet ?");
+                if (!confirmed) {
+                    return;
+                }
+            }
+
+            openProjectCdcModal(currentProject, {
+                mode: projectHasCdcContent(currentProject) ? "view" : "edit"
+            });
         });
     }
     if (dom.projectModalCreateInYouTrack) {
@@ -1222,11 +1275,26 @@ function bindStaticEvents() {
             }
         });
     }
+    if (dom.projectFollowUpModifyButton) {
+        dom.projectFollowUpModifyButton.addEventListener("click", () => {
+            openProjectFollowUpEditMode();
+        });
+    }
     if (dom.projectFollowUpForm) {
         dom.projectFollowUpForm.addEventListener("submit", onProjectFollowUpSubmit);
+        dom.projectFollowUpForm.addEventListener("click", onProjectFollowUpFormClick);
+    }
+    if (dom.projectFollowUpDeleteButton) {
+        dom.projectFollowUpDeleteButton.addEventListener("click", onProjectFollowUpDelete);
     }
     if (dom.projectFollowUpYouTrackUrlInput) {
         dom.projectFollowUpYouTrackUrlInput.addEventListener("input", syncProjectFollowUpModalLinkPreview);
+    }
+    if (dom.projectFollowUpImageInput) {
+        dom.projectFollowUpImageInput.addEventListener("change", onProjectFollowUpImageFileChange);
+    }
+    if (dom.projectFollowUpAttachmentInput) {
+        dom.projectFollowUpAttachmentInput.addEventListener("change", onProjectFollowUpAttachmentFileChange);
     }
     if (dom.projectCdcModalClose) {
         dom.projectCdcModalClose.addEventListener("click", () => {
@@ -2631,6 +2699,10 @@ function openProjectModal(project) {
     dom.projectModal.hidden = false;
     addRootClass("modal-open");
     setProjectModalScrollLock(true);
+
+    if (!isProjectCdcModalOpen() && !isProjectFollowUpModalOpen()) {
+        syncProjectModalUrl(project);
+    }
 }
 
 function openCreateProjectModal() {
@@ -2693,6 +2765,7 @@ function closeProjectModal() {
     delete dom.projectModal.dataset.projectId;
     delete dom.projectModal.dataset.youtrackProjectKey;
     delete dom.projectModal.dataset.mode;
+    delete dom.projectModal.dataset.statusTone;
     dom.projectModalForm.reset();
     if (dom.projectModalCreateInYouTrack) {
         dom.projectModalCreateInYouTrack.checked = false;
@@ -2709,6 +2782,7 @@ function closeProjectModal() {
     syncProjectModalYouTrackBadge(null);
     syncProjectModalFollowUpSection(null);
     resetProjectModalYouTrackTasks();
+    clearProjectModalUrl();
     removeRootClass("modal-open");
     setProjectModalScrollLock(false);
 }
@@ -2719,6 +2793,10 @@ function getProjectModalMode() {
 
 function isProjectCdcModalOpen() {
     return Boolean(dom.projectCdcModal && !dom.projectCdcModal.hidden);
+}
+
+function isProjectFollowUpModalOpen() {
+    return Boolean(dom.projectFollowUpModal && !dom.projectFollowUpModal.hidden);
 }
 
 function getProjectCdcFieldElement(inputId) {
@@ -2852,8 +2930,36 @@ function getProjectCdcPreviewReadableTextColor(value, fallbackColor = "#1f2937")
     return shouldDarkenProjectCdcPreviewTextColor(normalized) ? fallbackColor : normalized;
 }
 
+function isProjectCdcElementNode(node) {
+    if (!node || typeof node !== "object") {
+        return false;
+    }
+
+    const ownerWindow = node.ownerDocument?.defaultView || window;
+    const ElementConstructor = ownerWindow.Element || window.Element;
+    if (typeof ElementConstructor === "function") {
+        return node instanceof ElementConstructor;
+    }
+
+    return node.nodeType === 1 && typeof node.querySelectorAll === "function";
+}
+
+function isProjectCdcHtmlElementNode(node) {
+    if (!isProjectCdcElementNode(node)) {
+        return false;
+    }
+
+    const ownerWindow = node.ownerDocument?.defaultView || window;
+    const HTMLElementConstructor = ownerWindow.HTMLElement || window.HTMLElement;
+    if (typeof HTMLElementConstructor === "function") {
+        return node instanceof HTMLElementConstructor;
+    }
+
+    return typeof node.style !== "undefined";
+}
+
 function normalizeProjectCdcPreviewDocumentColors(rootNode, fallbackColor = "#1f2937") {
-    if (!(rootNode instanceof Element)) {
+    if (!isProjectCdcElementNode(rootNode)) {
         return;
     }
 
@@ -2896,7 +3002,7 @@ function normalizeProjectCdcPreviewDocumentColors(rootNode, fallbackColor = "#1f
 }
 
 function hydrateProjectCdcInlineAttributes(rootNode) {
-    if (!(rootNode instanceof Element)) {
+    if (!isProjectCdcElementNode(rootNode)) {
         return;
     }
 
@@ -2931,8 +3037,9 @@ function hydrateProjectCdcInlineAttributes(rootNode) {
     });
 }
 
-function applyProjectCdcComputedInlineStyles(sourceRoot, targetRoot) {
-    if (!(sourceRoot instanceof HTMLElement) || !(targetRoot instanceof HTMLElement)) {
+function applyProjectCdcComputedInlineStyles(sourceRoot, targetRoot, options = {}) {
+    const { normalizeTextColorForLightPreview = true } = options;
+    if (!isProjectCdcHtmlElementNode(sourceRoot) || !isProjectCdcHtmlElementNode(targetRoot)) {
         return;
     }
 
@@ -2942,7 +3049,7 @@ function applyProjectCdcComputedInlineStyles(sourceRoot, targetRoot) {
 
     sourceElements.forEach((sourceElement, index) => {
         const targetElement = targetElements[index];
-        if (!(sourceElement instanceof HTMLElement) || !(targetElement instanceof HTMLElement)) {
+        if (!isProjectCdcHtmlElementNode(sourceElement) || !isProjectCdcHtmlElementNode(targetElement)) {
             return;
         }
 
@@ -2953,7 +3060,7 @@ function applyProjectCdcComputedInlineStyles(sourceRoot, targetRoot) {
         }
 
         const computedStyle = sourceWindow.getComputedStyle(sourceElement);
-        const parentComputedStyle = sourceElement.parentElement instanceof HTMLElement
+        const parentComputedStyle = isProjectCdcHtmlElementNode(sourceElement.parentElement)
             ? sourceWindow.getComputedStyle(sourceElement.parentElement)
             : null;
 
@@ -2964,7 +3071,11 @@ function applyProjectCdcComputedInlineStyles(sourceRoot, targetRoot) {
 
         const elementColor = hasVisibleOwnBackground
             ? normalizeProjectCdcCssColorValue(computedStyle.color)
-            : getProjectCdcPreviewReadableTextColor(computedStyle.color);
+            : (
+                normalizeTextColorForLightPreview
+                    ? getProjectCdcPreviewReadableTextColor(computedStyle.color)
+                    : normalizeProjectCdcCssColorValue(computedStyle.color)
+            );
         const parentColor = normalizeProjectCdcCssColorValue(parentComputedStyle?.color || "");
         if (elementColor && elementColor !== parentColor) {
             targetElement.style.color = elementColor;
@@ -2979,26 +3090,38 @@ function applyProjectCdcComputedInlineStyles(sourceRoot, targetRoot) {
     });
 }
 
-function getProjectCdcEditorHtmlValue(inputId) {
+function getProjectCdcEditorHtmlValue(inputId, options = {}) {
+    const { normalizeTextColorForLightPreview = true } = options;
     if (typeof window.tinymce === "undefined") {
         return null;
     }
 
     const editor = window.tinymce.get(inputId);
-    const editorBody = editor?.getBody?.();
-    if (!(editorBody instanceof HTMLElement)) {
+    if (!editor) {
         return null;
+    }
+
+    if (typeof editor.save === "function") {
+        editor.save();
+    }
+
+    const editorBody = editor?.getBody?.();
+    const fallbackHtmlValue = typeof editor.getContent === "function"
+        ? String(editor.getContent({ format: "html" }) || "").trim()
+        : "";
+    if (!isProjectCdcHtmlElementNode(editorBody)) {
+        return fallbackHtmlValue || null;
     }
 
     const clone = editorBody.cloneNode(true);
-    if (!(clone instanceof HTMLElement)) {
-        return null;
+    if (!isProjectCdcHtmlElementNode(clone)) {
+        return fallbackHtmlValue || null;
     }
 
     hydrateProjectCdcInlineAttributes(clone);
-    applyProjectCdcComputedInlineStyles(editorBody, clone);
+    applyProjectCdcComputedInlineStyles(editorBody, clone, { normalizeTextColorForLightPreview });
 
-    return clone.innerHTML.trim();
+    return String(clone.innerHTML || "").trim() || fallbackHtmlValue || null;
 }
 
 function sanitizeProjectCdcRenderedHtmlValue(value, options = {}) {
@@ -3110,21 +3233,6 @@ function normalizeProjectRefValue(value) {
     return String(value || "").trim().toUpperCase();
 }
 
-function readStartupCdcLinkRequest() {
-    const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.get("cdc") !== "1") {
-        return null;
-    }
-
-    const projectId = String(searchParams.get("projectId") || "").trim();
-    const projectRef = String(searchParams.get("projectRef") || "").trim();
-    if (!projectId && !projectRef) {
-        return null;
-    }
-
-    return { projectId, projectRef };
-}
-
 function findProjectByRef(projectRef) {
     const normalizedProjectRef = normalizeProjectRefValue(projectRef);
     if (!normalizedProjectRef) {
@@ -3134,13 +3242,35 @@ function findProjectByRef(projectRef) {
     return state.projects.find((project) => normalizeProjectRefValue(project?.ref) === normalizedProjectRef) || null;
 }
 
-function buildProjectCdcModalUrl(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject()) {
+function readStartupModalLinkRequest() {
+    const searchParams = new URLSearchParams(window.location.search);
+    const followUpRequested = searchParams.get("followUp") === "1";
+    const cdcRequested = searchParams.get("cdc") === "1";
+    const projectRequested = searchParams.get("project") === "1";
+    if (!followUpRequested && !cdcRequested && !projectRequested) {
+        return null;
+    }
+
+    const projectId = String(searchParams.get("projectId") || "").trim();
+    const projectRef = String(searchParams.get("projectRef") || "").trim();
+    if (!projectId && !projectRef) {
+        return null;
+    }
+
+    return {
+        type: followUpRequested ? "followUp" : (cdcRequested ? "cdc" : "project"),
+        projectId,
+        projectRef,
+        followUpId: String(searchParams.get("followUpId") || searchParams.get("taskId") || "").trim()
+    };
+}
+
+function buildProjectModalBaseUrl(project = getProjectModalCurrentProject() || getProjectFollowUpCurrentProject() || getProjectCdcCurrentProject()) {
     if (!project?.id) {
         return null;
     }
 
     const url = new URL(window.location.href);
-    url.searchParams.set("cdc", "1");
     url.searchParams.set("projectId", String(project.id));
 
     const projectRef = String(project.ref || "").trim();
@@ -3150,6 +3280,76 @@ function buildProjectCdcModalUrl(project = getProjectCdcCurrentProject() || getP
         url.searchParams.delete("projectRef");
     }
 
+    return url;
+}
+
+function buildProjectModalUrl(project = getProjectModalCurrentProject()) {
+    const url = buildProjectModalBaseUrl(project);
+    if (!url) {
+        return null;
+    }
+
+    url.searchParams.set("project", "1");
+    url.searchParams.delete("cdc");
+    url.searchParams.delete("followUp");
+    url.searchParams.delete("followUpId");
+    return url.toString();
+}
+
+function syncProjectModalUrl(project = getProjectModalCurrentProject()) {
+    const nextUrl = buildProjectModalUrl(project);
+    if (!nextUrl) {
+        return;
+    }
+
+    window.history.replaceState(window.history.state, "", nextUrl);
+}
+
+function clearProjectModalUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("project");
+    url.searchParams.delete("cdc");
+    url.searchParams.delete("followUp");
+    url.searchParams.delete("followUpId");
+    url.searchParams.delete("projectId");
+    url.searchParams.delete("projectRef");
+    window.history.replaceState(window.history.state, "", url.toString());
+}
+
+function buildProjectCdcModalUrl(project = getProjectCdcCurrentProject() || getProjectModalCurrentProject()) {
+    const url = buildProjectModalBaseUrl(project);
+    if (!url) {
+        return null;
+    }
+
+    url.searchParams.delete("project");
+    url.searchParams.delete("followUp");
+    url.searchParams.delete("followUpId");
+    url.searchParams.set("cdc", "1");
+    return url.toString();
+}
+
+function getProjectFollowUpCurrentTask() {
+    const currentProject = getProjectFollowUpCurrentProject();
+    const taskId = String(dom.projectFollowUpModal?.dataset.taskId || "").trim();
+    if (!currentProject || !taskId) {
+        return null;
+    }
+
+    return getProjectFollowUpTaskById(currentProject, taskId);
+}
+
+function buildProjectFollowUpModalUrl(project = getProjectFollowUpCurrentProject() || getProjectModalCurrentProject(), task = getProjectFollowUpCurrentTask()) {
+    const normalizedTask = task ? normalizeProjectFollowUpTask(task) : getProjectFollowUpCurrentTask();
+    const url = buildProjectModalBaseUrl(project);
+    if (!url || !normalizedTask?.id) {
+        return null;
+    }
+
+    url.searchParams.delete("project");
+    url.searchParams.delete("cdc");
+    url.searchParams.set("followUp", "1");
+    url.searchParams.set("followUpId", String(normalizedTask.id));
     return url.toString();
 }
 
@@ -3163,33 +3363,69 @@ function syncProjectCdcModalUrl(project = getProjectCdcCurrentProject() || getPr
 }
 
 function clearProjectCdcModalUrl() {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("cdc");
-    url.searchParams.delete("projectId");
-    url.searchParams.delete("projectRef");
-    window.history.replaceState(window.history.state, "", url.toString());
-}
-
-function handleStartupCdcDeepLink() {
-    if (startupCdcLinkState.handled) {
+    const currentProject = getProjectModalCurrentProject();
+    if (currentProject && dom.projectModal && !dom.projectModal.hidden) {
+        syncProjectModalUrl(currentProject);
         return;
     }
 
-    const request = readStartupCdcLinkRequest();
+    clearProjectModalUrl();
+}
+
+function syncProjectFollowUpModalUrl(project = getProjectFollowUpCurrentProject() || getProjectModalCurrentProject(), task = getProjectFollowUpCurrentTask()) {
+    const nextUrl = buildProjectFollowUpModalUrl(project, task);
+    if (!nextUrl) {
+        return;
+    }
+
+    window.history.replaceState(window.history.state, "", nextUrl);
+}
+
+function clearProjectFollowUpModalUrl() {
+    const currentProject = getProjectModalCurrentProject();
+    if (currentProject && dom.projectModal && !dom.projectModal.hidden) {
+        syncProjectModalUrl(currentProject);
+        return;
+    }
+
+    clearProjectModalUrl();
+}
+
+async function handleStartupModalDeepLink() {
+    if (startupModalLinkState.handled) {
+        return;
+    }
+
+    const request = readStartupModalLinkRequest();
     if (!request) {
-        startupCdcLinkState.handled = true;
+        startupModalLinkState.handled = true;
         return;
     }
 
     const project = (request.projectId ? findProject(request.projectId) : null)
         || findProjectByRef(request.projectRef);
     if (!project) {
-        startupCdcLinkState.handled = true;
+        startupModalLinkState.handled = true;
         return;
     }
 
-    startupCdcLinkState.handled = true;
-    openProjectCdcModal(project, { mode: "view" });
+    startupModalLinkState.handled = true;
+
+    if (request.type === "followUp") {
+        openProjectModal(project);
+        const followUpTask = getProjectFollowUpTaskById(project, request.followUpId);
+        if (followUpTask) {
+            await openProjectFollowUpModal(project, followUpTask, { mode: "view" });
+        }
+        return;
+    }
+
+    if (request.type === "project") {
+        openProjectModal(project);
+        return;
+    }
+
+    await openProjectCdcModal(project, { mode: projectHasCdcContent(project) ? "view" : "edit" });
 }
 
 function getProjectCdcDocumentTitle(project) {
@@ -3403,24 +3639,24 @@ function syncProjectModalCdcControls(project = getProjectModalCurrentProject()) 
     const hasContent = hasProject && projectHasCdcContent(project);
 
     if (dom.projectModalCdcButton) {
-        dom.projectModalCdcButton.hidden = !hasProject;
-        dom.projectModalCdcButton.disabled = !hasProject;
-        dom.projectModalCdcButton.textContent = hasContent
-            ? "Cahier des charges"
-            : "Ajouter un cahier des charges";
+        dom.projectModalCdcButton.hidden = false;
+        dom.projectModalCdcButton.disabled = false;
+        dom.projectModalCdcButton.textContent = "Cahier des charges";
+        dom.projectModalCdcButton.classList.toggle("is-empty", !hasContent);
+        dom.projectModalCdcButton.setAttribute("aria-disabled", hasContent ? "false" : "true");
         dom.projectModalCdcButton.title = hasProject
-            ? (hasContent ? "Ouvrir le cahier des charges" : "Creer le cahier des charges")
+            ? (hasContent ? "Ouvrir le cahier des charges" : "Ajouter un cahier des charges")
             : "Enregistrez d abord le projet pour activer le cahier des charges";
     }
 
     if (dom.projectModalCdcPill) {
-        dom.projectModalCdcPill.hidden = !hasProject;
-        dom.projectModalCdcPill.disabled = !hasContent;
+        dom.projectModalCdcPill.hidden = false;
+        dom.projectModalCdcPill.textContent = "CDC";
         dom.projectModalCdcPill.setAttribute("aria-disabled", hasContent ? "false" : "true");
         dom.projectModalCdcPill.classList.toggle("is-empty", !hasContent);
-        dom.projectModalCdcPill.title = hasContent
-            ? "Ouvrir le cahier des charges"
-            : "Aucun cahier des charges saisi";
+        dom.projectModalCdcPill.title = hasProject
+            ? (hasContent ? "Ouvrir le cahier des charges" : "Ajouter un cahier des charges")
+            : "Enregistrez d abord le projet pour activer le cahier des charges";
     }
 
     syncProjectCdcModalHeading(project);
@@ -4231,7 +4467,7 @@ function normalizeProjectFollowUpTask(task) {
         projectId,
         date,
         title,
-        details: normalizeProjectMetaInput(task?.details) || "",
+        details: normalizeProjectFollowUpDetailsHtmlValue(task?.details) || "",
         youtrackUrl: normalizeProjectExternalLinkValue(task?.youtrackUrl ?? task?.youtrack_url ?? "") || "",
         createdById: String(task?.createdById || task?.created_by_id || "").trim(),
         createdByDisplayName: String(task?.createdByDisplayName || task?.created_by_display_name || "").trim(),
@@ -4332,6 +4568,346 @@ function canCurrentUserEditProjectFollowUpTask(task) {
     }, currentUser, currentProjectUser);
 }
 
+function normalizeProjectFollowUpDetailsHtmlValue(value) {
+    return normalizeProjectCdcHtmlValue(value);
+}
+
+function normalizeProjectFollowUpRenderedDetailsValue(value) {
+    return sanitizeProjectCdcRenderedHtmlValue(value, { normalizePreviewColors: false });
+}
+
+function renderProjectFollowUpDetailsPreviewMarkup(value) {
+    const renderedValue = normalizeProjectFollowUpRenderedDetailsValue(value);
+    if (!renderedValue) {
+        return `<p class="project-follow-up-read-empty">Aucun detail.</p>`;
+    }
+
+    return renderedValue;
+}
+
+function getActiveProjectFollowUpEditor(preferredInputId = "") {
+    if (typeof window.tinymce === "undefined") {
+        return null;
+    }
+
+    if (preferredInputId) {
+        const requestedEditor = window.tinymce.get(preferredInputId);
+        if (requestedEditor) {
+            return requestedEditor;
+        }
+    }
+
+    const preferredEditorId = projectFollowUpEditorState.lastActiveEditorId;
+    if (preferredEditorId) {
+        const preferredEditor = window.tinymce.get(preferredEditorId);
+        if (preferredEditor) {
+            return preferredEditor;
+        }
+    }
+
+    const activeEditor = window.tinymce.activeEditor;
+    if (activeEditor?.id === "projectFollowUpDetailsInput") {
+        return activeEditor;
+    }
+
+    return window.tinymce.get("projectFollowUpDetailsInput");
+}
+
+async function ensureProjectFollowUpEditor() {
+    if (!dom.projectFollowUpDetailsInput || typeof window.tinymce === "undefined" || typeof window.tinymce.init !== "function") {
+        return;
+    }
+
+    const existingEditor = window.tinymce.get("projectFollowUpDetailsInput");
+    if (existingEditor) {
+        return;
+    }
+
+    if (projectFollowUpEditorState.initPromise) {
+        await projectFollowUpEditorState.initPromise;
+        return;
+    }
+
+    const editorThemeIsDark = isDarkEditorTheme();
+    projectFollowUpEditorState.initPromise = Promise.resolve(window.tinymce.init({
+        selector: "#projectFollowUpDetailsInput.project-follow-up-editor",
+        menubar: false,
+        branding: false,
+        min_height: 220,
+        max_height: 360,
+        convert_urls: false,
+        relative_urls: false,
+        skin: editorThemeIsDark ? "oxide-dark" : "oxide",
+        content_css: editorThemeIsDark ? "dark" : "default",
+        plugins: "link lists table code autoresize",
+        toolbar: "undo redo | blocks | bold italic underline | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link table | code",
+        autoresize_bottom_margin: 16,
+        content_style: "body { font-family: Inter, Segoe UI, sans-serif; font-size: 14px; line-height: 1.6; }",
+        setup(editor) {
+            editor.on("focus", () => {
+                projectFollowUpEditorState.lastActiveEditorId = editor.id;
+            });
+            editor.on("init", () => {
+                if (!projectFollowUpEditorState.lastActiveEditorId) {
+                    projectFollowUpEditorState.lastActiveEditorId = editor.id;
+                }
+            });
+        }
+    }));
+
+    try {
+        await projectFollowUpEditorState.initPromise;
+    } finally {
+        projectFollowUpEditorState.initPromise = null;
+    }
+}
+
+function setProjectFollowUpEditorValue(value) {
+    const normalizedValue = normalizeProjectCdcEditorRenderedHtmlValue(value);
+    if (dom.projectFollowUpDetailsInput) {
+        dom.projectFollowUpDetailsInput.value = normalizedValue;
+    }
+
+    if (typeof window.tinymce === "undefined") {
+        return;
+    }
+
+    const editor = window.tinymce.get("projectFollowUpDetailsInput");
+    if (editor && editor.getContent() !== normalizedValue) {
+        editor.setContent(normalizedValue || "");
+        if (typeof editor.save === "function") {
+            editor.save();
+        }
+    }
+}
+
+function getProjectFollowUpEditorHtmlValue() {
+    const editorHtmlValue = getProjectCdcEditorHtmlValue("projectFollowUpDetailsInput", {
+        normalizeTextColorForLightPreview: false
+    });
+    return normalizeProjectFollowUpDetailsHtmlValue(editorHtmlValue ?? dom.projectFollowUpDetailsInput?.value) || "";
+}
+
+function insertProjectFollowUpHtml(targetInputId, html, fallbackInputId = "projectFollowUpDetailsInput") {
+    const editor = getActiveProjectFollowUpEditor(targetInputId);
+    if (editor) {
+        editor.focus();
+        editor.insertContent(html);
+        if (typeof editor.save === "function") {
+            editor.save();
+        }
+        projectFollowUpEditorState.lastActiveEditorId = editor.id;
+        return true;
+    }
+
+    const fallbackInput = fallbackInputId === "projectFollowUpDetailsInput"
+        ? dom.projectFollowUpDetailsInput
+        : null;
+    if (fallbackInput) {
+        const existingValue = String(fallbackInput.value || "");
+        fallbackInput.value = `${existingValue}${existingValue ? "\n" : ""}${html}`;
+        return true;
+    }
+
+    return false;
+}
+
+function onProjectFollowUpFormClick(event) {
+    const actionButton = event.target instanceof HTMLElement
+        ? event.target.closest("[data-follow-up-action]")
+        : null;
+
+    if (!(actionButton instanceof HTMLElement)) {
+        return;
+    }
+
+    const action = String(actionButton.dataset.followUpAction || "").trim();
+    if (action !== "add-image" && action !== "add-file") {
+        return;
+    }
+
+    projectFollowUpEditorState.pendingTargetInputId = String(actionButton.dataset.followUpTarget || "").trim() || "projectFollowUpDetailsInput";
+    projectFollowUpEditorState.lastActiveEditorId = projectFollowUpEditorState.pendingTargetInputId;
+
+    if (action === "add-image" && dom.projectFollowUpImageInput) {
+        dom.projectFollowUpImageInput.click();
+    }
+
+    if (action === "add-file" && dom.projectFollowUpAttachmentInput) {
+        dom.projectFollowUpAttachmentInput.click();
+    }
+}
+
+async function onProjectFollowUpImageFileChange() {
+    const file = dom.projectFollowUpImageInput?.files?.[0];
+    if (!file) {
+        return;
+    }
+
+    try {
+        const payload = await uploadProjectCdcEditorAsset(file, "image");
+        insertProjectFollowUpHtml(
+            projectFollowUpEditorState.pendingTargetInputId,
+            `<p><img src="${escapeHtml(String(payload.url || ""))}" alt="${escapeHtml(String(payload.name || "image"))}"></p>`
+        );
+        setProjectFollowUpStatus("Image ajoutee dans le suivi.", "success");
+    } catch (error) {
+        console.error(error);
+        setProjectFollowUpStatus(error.message || "Impossible d ajouter l image.", "error");
+    } finally {
+        projectFollowUpEditorState.pendingTargetInputId = "";
+        if (dom.projectFollowUpImageInput) {
+            dom.projectFollowUpImageInput.value = "";
+        }
+    }
+}
+
+async function onProjectFollowUpAttachmentFileChange() {
+    const file = dom.projectFollowUpAttachmentInput?.files?.[0];
+    if (!file) {
+        return;
+    }
+
+    try {
+        const payload = await uploadProjectCdcEditorAsset(file, "file");
+        insertProjectFollowUpHtml(
+            projectFollowUpEditorState.pendingTargetInputId,
+            `<p><a href="${escapeHtml(String(payload.url || ""))}" target="_blank" rel="noopener">${escapeHtml(String(payload.name || file.name || "document"))}</a></p>`
+        );
+        setProjectFollowUpStatus("Fichier ajoute dans le suivi.", "success");
+    } catch (error) {
+        console.error(error);
+        setProjectFollowUpStatus(error.message || "Impossible d ajouter le fichier.", "error");
+    } finally {
+        projectFollowUpEditorState.pendingTargetInputId = "";
+        if (dom.projectFollowUpAttachmentInput) {
+            dom.projectFollowUpAttachmentInput.value = "";
+        }
+    }
+}
+
+function getProjectFollowUpModalMode() {
+    const mode = String(dom.projectFollowUpModal?.dataset.mode || "").trim();
+    if (mode === "view") {
+        return "view";
+    }
+
+    return mode === "edit" ? "edit" : "create";
+}
+
+function syncProjectFollowUpDeleteButton() {
+    if (!dom.projectFollowUpDeleteButton) {
+        return;
+    }
+
+    const hasTask = Boolean(String(dom.projectFollowUpModal?.dataset.taskId || "").trim());
+    const canEdit = dom.projectFollowUpModal?.dataset.canEdit === "1";
+    const mode = getProjectFollowUpModalMode();
+    const shouldShowDeleteButton = hasTask && canEdit && mode !== "view";
+    dom.projectFollowUpDeleteButton.hidden = !shouldShowDeleteButton;
+    dom.projectFollowUpDeleteButton.disabled = !shouldShowDeleteButton;
+}
+
+function setProjectFollowUpModalMode(mode) {
+    if (!dom.projectFollowUpModal) {
+        return;
+    }
+
+    const normalizedMode = mode === "view" ? "view" : (mode === "edit" ? "edit" : "create");
+    dom.projectFollowUpModal.dataset.mode = normalizedMode;
+
+    const isViewMode = normalizedMode === "view";
+    const canEdit = dom.projectFollowUpModal.dataset.canEdit === "1";
+    const hasTask = Boolean(String(dom.projectFollowUpModal.dataset.taskId || "").trim());
+
+    if (dom.projectFollowUpReadView) {
+        dom.projectFollowUpReadView.hidden = !isViewMode;
+    }
+
+    if (dom.projectFollowUpForm) {
+        dom.projectFollowUpForm.hidden = isViewMode;
+    }
+
+    if (dom.projectFollowUpModifyButton) {
+        dom.projectFollowUpModifyButton.hidden = !(isViewMode && canEdit && hasTask);
+    }
+
+    syncProjectFollowUpDeleteButton();
+}
+
+function renderProjectFollowUpReadView(task, project = getProjectFollowUpCurrentProject() || getProjectModalCurrentProject()) {
+    const normalizedTask = task ? normalizeProjectFollowUpTask(task) : null;
+    if (!normalizedTask) {
+        if (dom.projectFollowUpReadDate) {
+            dom.projectFollowUpReadDate.textContent = "-";
+        }
+        if (dom.projectFollowUpReadTitle) {
+            dom.projectFollowUpReadTitle.textContent = "-";
+        }
+        if (dom.projectFollowUpReadAuthor) {
+            dom.projectFollowUpReadAuthor.textContent = "-";
+        }
+        if (dom.projectFollowUpReadLink) {
+            dom.projectFollowUpReadLink.innerHTML = `<span class="project-modal-follow-up-link-empty">Aucun lien YouTrack</span>`;
+        }
+        if (dom.projectFollowUpReadDetails) {
+            dom.projectFollowUpReadDetails.innerHTML = `<p class="project-follow-up-read-empty">Aucun detail.</p>`;
+        }
+        return;
+    }
+
+    if (dom.projectFollowUpReadDate) {
+        dom.projectFollowUpReadDate.textContent = formatProjectTaskDisplayDate(normalizedTask.date);
+    }
+    if (dom.projectFollowUpReadTitle) {
+        dom.projectFollowUpReadTitle.textContent = normalizedTask.title || "-";
+    }
+    if (dom.projectFollowUpReadAuthor) {
+        dom.projectFollowUpReadAuthor.textContent = formatProjectFollowUpCreator(normalizedTask);
+    }
+    if (dom.projectFollowUpReadLink) {
+        dom.projectFollowUpReadLink.innerHTML = normalizedTask.youtrackUrl
+            ? renderProjectExternalLinkButton(normalizedTask.youtrackUrl, "youtrack", project, { compact: true })
+            : `<span class="project-modal-follow-up-link-empty">Aucun lien YouTrack</span>`;
+    }
+    if (dom.projectFollowUpReadDetails) {
+        dom.projectFollowUpReadDetails.innerHTML = renderProjectFollowUpDetailsPreviewMarkup(normalizedTask.details);
+    }
+}
+
+async function openProjectFollowUpEditMode() {
+    if (!dom.projectFollowUpModal || dom.projectFollowUpModal.dataset.canEdit === "0") {
+        return;
+    }
+
+    setProjectFollowUpModalMode(String(dom.projectFollowUpModal.dataset.taskId || "").trim() ? "edit" : "create");
+
+    try {
+        await new Promise((resolve) => window.requestAnimationFrame(resolve));
+        await ensureProjectFollowUpEditor();
+        setProjectFollowUpEditorValue(dom.projectFollowUpDetailsInput?.value || "");
+    } catch (error) {
+        console.error(error);
+        setProjectFollowUpStatus(
+            "L editeur enrichi n a pas pu etre charge. Vous pouvez continuer avec la zone de texte simple.",
+            "warning"
+        );
+    }
+
+    requestAnimationFrame(() => {
+        const editor = typeof window.tinymce !== "undefined"
+            ? window.tinymce.get("projectFollowUpDetailsInput")
+            : null;
+        if (editor) {
+            editor.focus();
+            return;
+        }
+
+        dom.projectFollowUpTitleInput?.focus();
+        dom.projectFollowUpTitleInput?.select();
+    });
+}
+
 function syncProjectModalFollowUpSection(project = getProjectModalCurrentProject()) {
     if (!dom.projectModalFollowUpSection || !dom.projectModalFollowUpBody || !dom.projectModalFollowUpCount) {
         return;
@@ -4367,48 +4943,47 @@ function renderProjectModalFollowUpTasks(project = getProjectModalCurrentProject
 
     return `
         <div class="project-modal-follow-up-table-wrap">
-            <table class="project-modal-follow-up-table">
-                <thead>
-                    <tr>
-                        <th scope="col" class="project-modal-follow-up-col-date">Date</th>
-                        <th scope="col" class="project-modal-follow-up-col-title">Titre</th>
-                        <th scope="col">Details</th>
-                        <th scope="col" class="project-modal-follow-up-col-link">Lien YouTrack</th>
-                        <th scope="col" class="project-modal-follow-up-col-author">Cree par</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div class="project-modal-follow-up-list" role="table" aria-label="Suivis du projet">
+                <div class="project-modal-follow-up-grid project-modal-follow-up-head" role="row">
+                    <div class="project-modal-follow-up-col-date" role="columnheader">Date</div>
+                    <div class="project-modal-follow-up-col-title" role="columnheader">Titre</div>
+                    <div class="project-modal-follow-up-col-link" role="columnheader">Lien YouTrack</div>
+                    <div class="project-modal-follow-up-col-author" role="columnheader">Cree par</div>
+                    <div class="project-modal-follow-up-col-actions" role="columnheader">Action</div>
+                </div>
+                <div class="project-modal-follow-up-list-body" role="rowgroup">
                     ${tasks.map((task) => `
-                        <tr
+                        <div
+                            class="project-modal-follow-up-grid project-modal-follow-up-row"
                             tabindex="0"
                             role="button"
                             data-project-follow-up-id="${escapeHtml(task.id)}"
                             aria-label="Ouvrir le suivi ${escapeHtml(task.title)}"
                         >
-                            <td class="project-modal-follow-up-col-date">${escapeHtml(formatProjectTaskDisplayDate(task.date))}</td>
-                            <td class="project-modal-follow-up-col-title">
+                            <div class="project-modal-follow-up-col-date" role="cell">${escapeHtml(formatProjectTaskDisplayDate(task.date))}</div>
+                            <div class="project-modal-follow-up-col-title" role="cell">
                                 <span class="project-modal-follow-up-title">${escapeHtml(task.title)}</span>
-                            </td>
-                            <td>
-                                <span class="project-modal-follow-up-details">${escapeHtml(task.details || "-")}</span>
-                            </td>
-                            <td class="project-modal-follow-up-col-link">
+                            </div>
+                            <div class="project-modal-follow-up-col-link" role="cell">
                                 <div class="project-modal-follow-up-link-slot">
                                     ${task.youtrackUrl
                                         ? renderProjectExternalLinkButton(task.youtrackUrl, "youtrack", project, { compact: true })
                                         : `<span class="project-modal-follow-up-link-empty">-</span>`}
                                 </div>
-                            </td>
-                            <td class="project-modal-follow-up-col-author">${escapeHtml(formatProjectFollowUpCreator(task))}</td>
-                        </tr>
+                            </div>
+                            <div class="project-modal-follow-up-col-author" role="cell">${escapeHtml(formatProjectFollowUpCreator(task))}</div>
+                            <div class="project-modal-follow-up-col-actions" role="cell">
+                                <button class="ghost-button project-modal-follow-up-view-button" type="button" data-project-follow-up-open="${escapeHtml(task.id)}">Voir +</button>
+                            </div>
+                        </div>
                     `).join("")}
-                </tbody>
-            </table>
+                </div>
+            </div>
         </div>
     `;
 }
 
-function openProjectFollowUpModal(project = getProjectModalCurrentProject(), task = null) {
+async function openProjectFollowUpModal(project = getProjectModalCurrentProject(), task = null, options = {}) {
     if (!dom.projectFollowUpModal || !dom.projectFollowUpForm || !project?.id) {
         return;
     }
@@ -4416,9 +4991,13 @@ function openProjectFollowUpModal(project = getProjectModalCurrentProject(), tas
     const normalizedTask = task ? normalizeProjectFollowUpTask(task) : null;
     const canEdit = normalizedTask ? canCurrentUserEditProjectFollowUpTask(normalizedTask) : true;
     const projectLabel = formatProjectFollowUpProjectLabel(project);
+    const requestedMode = options.mode === "view"
+        ? "view"
+        : options.mode === "edit"
+            ? "edit"
+            : (normalizedTask ? "view" : "create");
 
     dom.projectFollowUpModal.dataset.projectId = project.id;
-    dom.projectFollowUpModal.dataset.mode = normalizedTask ? "edit" : "create";
     dom.projectFollowUpModal.dataset.canEdit = canEdit ? "1" : "0";
 
     if (normalizedTask?.id) {
@@ -4429,7 +5008,7 @@ function openProjectFollowUpModal(project = getProjectModalCurrentProject(), tas
 
     dom.projectFollowUpDateInput.value = normalizedTask?.date || formatDateInputValue(new Date());
     dom.projectFollowUpTitleInput.value = normalizedTask?.title || "";
-    dom.projectFollowUpDetailsInput.value = normalizedTask?.details || "";
+    setProjectFollowUpEditorValue(normalizedTask?.details || "");
     dom.projectFollowUpYouTrackUrlInput.value = normalizedTask?.youtrackUrl || "";
     dom.projectFollowUpModalTitle.textContent = normalizedTask ? normalizedTask.title : "Nouveau suivi";
     dom.projectFollowUpModalSubtitle.textContent = normalizedTask
@@ -4438,15 +5017,50 @@ function openProjectFollowUpModal(project = getProjectModalCurrentProject(), tas
 
     clearProjectFollowUpStatus();
     setProjectFollowUpModalEditable(canEdit);
+    renderProjectFollowUpReadView(normalizedTask, project);
     syncProjectFollowUpModalLinkPreview();
 
-    if (!canEdit && normalizedTask) {
-        setProjectFollowUpStatus(`Lecture seule : suivi cree par ${formatProjectFollowUpCreator(normalizedTask)}.`, "info");
+    dom.projectFollowUpModal.hidden = false;
+    setProjectFollowUpModalMode(normalizedTask ? requestedMode : "create");
+    if (normalizedTask?.id) {
+        syncProjectFollowUpModalUrl(project, normalizedTask);
+    } else {
+        syncProjectModalUrl(project);
     }
 
-    dom.projectFollowUpModal.hidden = false;
+    if (getProjectFollowUpModalMode() !== "view" && canEdit) {
+        try {
+            await new Promise((resolve) => window.requestAnimationFrame(resolve));
+            await ensureProjectFollowUpEditor();
+            setProjectFollowUpEditorValue(normalizedTask?.details || "");
+        } catch (error) {
+            console.error(error);
+            setProjectFollowUpStatus(
+                "L editeur enrichi n a pas pu etre charge. Vous pouvez continuer avec la zone de texte simple.",
+                "warning"
+            );
+        }
+    }
 
     requestAnimationFrame(() => {
+        if (getProjectFollowUpModalMode() === "view") {
+            if (!dom.projectFollowUpModifyButton?.hidden) {
+                dom.projectFollowUpModifyButton.focus();
+                return;
+            }
+
+            dom.projectFollowUpModalClose?.focus();
+            return;
+        }
+
+        const editor = typeof window.tinymce !== "undefined"
+            ? window.tinymce.get("projectFollowUpDetailsInput")
+            : null;
+        if (editor && canEdit) {
+            editor.focus();
+            return;
+        }
+
         if (canEdit) {
             dom.projectFollowUpTitleInput.focus();
             dom.projectFollowUpTitleInput.select();
@@ -4464,17 +5078,34 @@ function closeProjectFollowUpModal() {
 
     dom.projectFollowUpModal.hidden = true;
     dom.projectFollowUpForm.reset();
+    setProjectFollowUpEditorValue("");
     clearProjectFollowUpStatus();
     setProjectFollowUpModalEditable(true);
+    setProjectFollowUpModalMode("view");
 
     if (dom.projectFollowUpLinkPreview) {
         dom.projectFollowUpLinkPreview.innerHTML = "";
     }
+    if (dom.projectFollowUpReadLink) {
+        dom.projectFollowUpReadLink.innerHTML = "";
+    }
+    if (dom.projectFollowUpReadDetails) {
+        dom.projectFollowUpReadDetails.innerHTML = "";
+    }
+    if (dom.projectFollowUpImageInput) {
+        dom.projectFollowUpImageInput.value = "";
+    }
+    if (dom.projectFollowUpAttachmentInput) {
+        dom.projectFollowUpAttachmentInput.value = "";
+    }
+    projectFollowUpEditorState.lastActiveEditorId = "";
+    projectFollowUpEditorState.pendingTargetInputId = "";
 
     delete dom.projectFollowUpModal.dataset.projectId;
     delete dom.projectFollowUpModal.dataset.taskId;
     delete dom.projectFollowUpModal.dataset.mode;
     delete dom.projectFollowUpModal.dataset.canEdit;
+    clearProjectFollowUpModalUrl();
 }
 
 function setProjectFollowUpModalEditable(canEdit) {
@@ -4499,6 +5130,22 @@ function setProjectFollowUpModalEditable(canEdit) {
     if (dom.projectFollowUpSubmitButton) {
         dom.projectFollowUpSubmitButton.hidden = !canEdit;
         dom.projectFollowUpSubmitButton.disabled = !canEdit;
+    }
+
+    syncProjectFollowUpDeleteButton();
+
+    dom.projectFollowUpForm.querySelectorAll("[data-follow-up-action]").forEach((button) => {
+        if (button instanceof HTMLButtonElement) {
+            button.hidden = !canEdit;
+            button.disabled = !canEdit;
+        }
+    });
+
+    if (typeof window.tinymce !== "undefined") {
+        const editor = window.tinymce.get("projectFollowUpDetailsInput");
+        if (editor && editor.mode && typeof editor.mode.set === "function") {
+            editor.mode.set(canEdit ? "design" : "readonly");
+        }
     }
 }
 
@@ -4585,10 +5232,14 @@ async function onProjectFollowUpSubmit(event) {
         return;
     }
 
+    if (typeof window.tinymce !== "undefined" && typeof window.tinymce.triggerSave === "function") {
+        window.tinymce.triggerSave();
+    }
+
     const taskId = String(dom.projectFollowUpModal?.dataset.taskId || "").trim();
     const date = normalizeDateInputValue(dom.projectFollowUpDateInput?.value);
     const title = String(dom.projectFollowUpTitleInput?.value || "").trim();
-    const details = normalizeProjectMetaInput(dom.projectFollowUpDetailsInput?.value) || "";
+    const details = getProjectFollowUpEditorHtmlValue();
     const youtrackUrl = normalizeProjectExternalLinkValue(dom.projectFollowUpYouTrackUrlInput?.value) || "";
 
     if (!date) {
@@ -4622,7 +5273,38 @@ async function onProjectFollowUpSubmit(event) {
             syncProjectModalFollowUpSection(savedProject);
         }
 
-        closeProjectFollowUpModal();
+        const savedTask = normalizeProjectFollowUpTask(response?.task)
+            || getProjectFollowUpTaskById(savedProject, response?.task?.id || taskId)
+            || getProjectFollowUpTaskById(savedProject, taskId);
+        if (!savedTask) {
+            closeProjectFollowUpModal();
+            return;
+        }
+
+        dom.projectFollowUpDateInput.value = savedTask.date || "";
+        dom.projectFollowUpTitleInput.value = savedTask.title || "";
+        setProjectFollowUpEditorValue(savedTask.details || "");
+        dom.projectFollowUpYouTrackUrlInput.value = savedTask.youtrackUrl || "";
+        dom.projectFollowUpModal.dataset.projectId = savedProject.id;
+        dom.projectFollowUpModal.dataset.taskId = savedTask.id;
+        dom.projectFollowUpModal.dataset.canEdit = canCurrentUserEditProjectFollowUpTask(savedTask) ? "1" : "0";
+        dom.projectFollowUpModalTitle.textContent = savedTask.title;
+        dom.projectFollowUpModalSubtitle.textContent = `Suivi du projet ${formatProjectFollowUpProjectLabel(savedProject)}`;
+        renderProjectFollowUpReadView(savedTask, savedProject);
+        syncProjectFollowUpModalLinkPreview();
+        clearProjectFollowUpStatus();
+        setProjectFollowUpModalEditable(dom.projectFollowUpModal.dataset.canEdit === "1");
+        setProjectFollowUpModalMode("view");
+        syncProjectFollowUpModalUrl(savedProject, savedTask);
+
+        requestAnimationFrame(() => {
+            if (!dom.projectFollowUpModifyButton?.hidden) {
+                dom.projectFollowUpModifyButton.focus();
+                return;
+            }
+
+            dom.projectFollowUpModalClose?.focus();
+        });
     } catch (error) {
         console.error(error);
         setProjectFollowUpStatus(error.message || "Impossible d'enregistrer le suivi.", "error");
@@ -4630,6 +5312,49 @@ async function onProjectFollowUpSubmit(event) {
         if (dom.projectFollowUpSubmitButton && !dom.projectFollowUpModal.hidden) {
             dom.projectFollowUpSubmitButton.disabled = false;
         }
+    }
+}
+
+async function onProjectFollowUpDelete() {
+    const project = getProjectFollowUpCurrentProject() || getProjectModalCurrentProject();
+    const task = getProjectFollowUpCurrentTask();
+    if (!project?.id || !task?.id || dom.projectFollowUpModal?.dataset.canEdit === "0") {
+        return;
+    }
+
+    const taskLabel = String(task.title || task.id || "ce suivi").trim();
+    const confirmed = window.confirm(`Supprimer définitivement le suivi "${taskLabel}" ?`);
+    if (!confirmed) {
+        return;
+    }
+
+    clearProjectFollowUpStatus();
+    if (dom.projectFollowUpSubmitButton) {
+        dom.projectFollowUpSubmitButton.disabled = true;
+    }
+    if (dom.projectFollowUpDeleteButton) {
+        dom.projectFollowUpDeleteButton.disabled = true;
+    }
+    setProjectFollowUpStatus("Suppression du suivi en cours...", "info");
+
+    try {
+        const response = await deleteProjectFollowUpTask(project.id, task.id);
+        const savedProject = normalizeProjectForState(response?.project || project);
+        upsertProjectInState(savedProject);
+        render();
+
+        if (String(dom.projectModal?.dataset.projectId || "").trim() === String(savedProject.id || "").trim()) {
+            syncProjectModalFollowUpSection(savedProject);
+        }
+
+        closeProjectFollowUpModal();
+    } catch (error) {
+        console.error(error);
+        setProjectFollowUpStatus(error.message || "Impossible de supprimer le suivi.", "error");
+        if (dom.projectFollowUpSubmitButton && !dom.projectFollowUpModal.hidden) {
+            dom.projectFollowUpSubmitButton.disabled = false;
+        }
+        syncProjectFollowUpDeleteButton();
     }
 }
 
@@ -8495,9 +9220,13 @@ function syncProjectModalDisplays() {
     }
 
     const status = getProjectEffectiveStatus(statusPreviewProject, storedStatus);
+    const statusMeta = getProjectStatusMeta(status);
 
     dom.projectModalTitle.textContent = title;
     dom.projectModalRefDisplay.textContent = ref;
+    if (dom.projectModalRefChip) {
+        dom.projectModalRefChip.textContent = ref || "Nouveau";
+    }
     dom.projectModalServiceDisplay.textContent = service;
     dom.projectModalTypeDisplay.textContent = projectType || "Non renseigné";
     dom.projectModalParentDisplay.textContent = selectedParentProject
@@ -8511,9 +9240,12 @@ function syncProjectModalDisplays() {
     dom.projectModalProjectManagerDisplay.textContent = formatProjectMeta(projectManager);
     dom.projectModalStatusDisplay.innerHTML = `
         <span class="project-modal-status-display">
-            <span class="project-status-badge ${escapeHtml(getProjectStatusMeta(status).className)}">${escapeHtml(status)}</span>
+            <span class="project-status-badge ${escapeHtml(statusMeta.className)}">${escapeHtml(status)}</span>
         </span>
     `;
+    if (dom.projectModal) {
+        dom.projectModal.dataset.statusTone = statusMeta.className;
+    }
     dom.projectModalProgressDisplay.innerHTML = renderProjectProgressMarkup(progression);
     dom.projectModalDescription.textContent = description || "-";
     dom.projectModalColorDisplay.innerHTML = `

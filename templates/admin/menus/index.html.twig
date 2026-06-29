@@ -566,6 +566,39 @@
                 });
             }
 
+            async function fetchJson(url, options) {
+                var response = await fetch(url, options || {});
+                var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+
+                if (!response.ok) {
+                    if (contentType.indexOf('application/json') !== -1) {
+                        var errorPayload = await response.json().catch(function() { return {}; });
+                        throw new Error(String(errorPayload._error || ('Erreur HTTP ' + response.status)));
+                    }
+
+                    if (response.redirected && String(response.url || '').indexOf('/login') !== -1) {
+                        throw new Error('Session expiree, reconnectez-vous.');
+                    }
+
+                    throw new Error('Erreur HTTP ' + response.status);
+                }
+
+                if (contentType.indexOf('application/json') === -1) {
+                    if (response.redirected && String(response.url || '').indexOf('/login') !== -1) {
+                        throw new Error('Session expiree, reconnectez-vous.');
+                    }
+
+                    throw new Error('Reponse serveur invalide.');
+                }
+
+                var payload = await response.json();
+                if (payload && payload._error) {
+                    throw new Error(String(payload._error));
+                }
+
+                return payload;
+            }
+
             function normalizeMenuLabel(item) {
                 return String((item && item.label) || (item && item.page) || '').trim();
             }
@@ -1218,14 +1251,12 @@
                     configUrl.searchParams.set('value', selValue);
                     configUrl.searchParams.set('menu_type', currentMenuType);
                     configUrl.searchParams.set('_t', String(ts));
-                    var responses = await Promise.all([fetch(pagesUrl.toString(), {cache: 'no-store'}), fetch(configUrl.toString(), {cache: 'no-store'})]);
-                    allAvailablePages = await responses[0].json();
-                    var menuPayload = await responses[1].json();
-                    if (allAvailablePages._error || menuPayload._error) {
-                        status.className = 'error';
-                        status.textContent = 'Erreur de chargement du menu';
-                        return;
-                    }
+                    var responses = await Promise.all([
+                        fetchJson(pagesUrl.toString(), {cache: 'no-store'}),
+                        fetchJson(configUrl.toString(), {cache: 'no-store'})
+                    ]);
+                    allAvailablePages = responses[0];
+                    var menuPayload = responses[1];
                     currentMenuConfig = Array.isArray(menuPayload.menu) ? menuPayload.menu : [];
                     allAvailablePages = allAvailablePages.map(function(item) { return mergeMenuItemWithAvailableMeta(item, {}); });
                     var availablePageMap = buildAvailablePageMap(allAvailablePages);
@@ -1234,7 +1265,7 @@
                     renderMenu(allAvailablePages, currentMenuConfig);
                 } catch (error) {
                     status.className = 'error';
-                    status.textContent = 'Erreur reseau';
+                    status.textContent = error && error.message ? error.message : 'Erreur reseau';
                 }
             }
 
@@ -1248,23 +1279,20 @@
                     return {page: item.dataset.page, url: item.dataset.url, label: item.dataset.label, icon: item.dataset.icon, folder: item.dataset.folder, parent_page: item.dataset.parentPage || null, icon_only: item.dataset.iconOnly === '1'};
                 });
                 try {
-                    var response = await fetch(apiUrls.saveConfig, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({menu_type: currentMenuType, type: selType, value: selValue, menu: items})});
-                    var data = await response.json();
+                    var data = await fetchJson(apiUrls.saveConfig, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({menu_type: currentMenuType, type: selType, value: selValue, menu: items})});
                     if (!data.success) {
-                        status.className = 'error';
-                        status.textContent = 'Erreur : ' + (data._error || 'Erreur');
-                    } else {
-                        var permissionResult = document.querySelector('.perm-check') ? await savePermissions() : null;
-                        status.className = permissionResult && permissionResult.success === false ? 'error' : 'success';
-                        status.textContent = permissionResult && permissionResult.changed ? 'OK menu et permissions enregistres pour ' + getCurrentSelectionLabel() : 'OK menu enregistre pour ' + getCurrentSelectionLabel();
-                        if (permissionResult && permissionResult.success === false) {
-                            status.textContent = 'Le menu a ete enregistre, mais pas les permissions.';
-                        }
-                        document.getElementById('menu-context-note').textContent = getCurrentMenuLabel() + ' : configuration specifique enregistree pour ' + getCurrentSelectionLabel() + '.';
+                        throw new Error('Erreur lors de l enregistrement du menu.');
                     }
+                    var permissionResult = document.querySelector('.perm-check') ? await savePermissions() : null;
+                    status.className = permissionResult && permissionResult.success === false ? 'error' : 'success';
+                    status.textContent = permissionResult && permissionResult.changed ? 'OK menu et permissions enregistres pour ' + getCurrentSelectionLabel() : 'OK menu enregistre pour ' + getCurrentSelectionLabel();
+                    if (permissionResult && permissionResult.success === false) {
+                        status.textContent = 'Le menu a ete enregistre, mais pas les permissions.';
+                    }
+                    document.getElementById('menu-context-note').textContent = getCurrentMenuLabel() + ' : configuration specifique enregistree pour ' + getCurrentSelectionLabel() + '.';
                 } catch (error) {
                     status.className = 'error';
-                    status.textContent = 'Erreur reseau';
+                    status.textContent = 'Erreur : ' + (error && error.message ? error.message : 'Erreur reseau');
                 }
                 button.disabled = false;
             }
@@ -1273,8 +1301,7 @@
                 if (!window.confirm('Reinitialiser ' + getCurrentMenuLabel() + ' pour la selection courante et revenir a l heritage ?')) {
                     return;
                 }
-                fetch(apiUrls.resetConfig, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({menu_type: currentMenuType, type: selType, value: selValue})})
-                    .then(function(response) { return response.json(); })
+                fetchJson(apiUrls.resetConfig, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({menu_type: currentMenuType, type: selType, value: selValue})})
                     .then(function(data) {
                         if (data.success) {
                             loadMenuData();
@@ -1282,6 +1309,10 @@
                             document.getElementById('menu-save-status').className = 'error';
                             document.getElementById('menu-save-status').textContent = 'Erreur : ' + (data._error || 'Erreur');
                         }
+                    })
+                    .catch(function(error) {
+                        document.getElementById('menu-save-status').className = 'error';
+                        document.getElementById('menu-save-status').textContent = 'Erreur : ' + (error && error.message ? error.message : 'Erreur reseau');
                     });
             }
 
@@ -1295,12 +1326,7 @@
                     var permissionsUrl = new URL(apiUrls.permissions, window.location.origin);
                     permissionsUrl.searchParams.set('type', selType === 'profile' ? 'profile' : 'user');
                     permissionsUrl.searchParams.set('value', selValue);
-                    var response = await fetch(permissionsUrl.toString(), {cache: 'no-store'});
-                    var data = await response.json();
-                    if (data._error) {
-                        container.innerHTML = '<div class="placeholder-msg" style="color:var(--danger);">Erreur : ' + escHtml(data._error) + '</div>';
-                        return;
-                    }
+                    var data = await fetchJson(permissionsUrl.toString(), {cache: 'no-store'});
                     var permissions = data.permissions || [];
                     if (permissions.length === 0) {
                         container.innerHTML = '<div class="placeholder-msg">Aucune page trouvee.</div>';
@@ -1332,7 +1358,7 @@
                     topSaveButton.disabled = false;
                     applyMenuPermissionStates();
                 } catch (error) {
-                    container.innerHTML = '<div class="placeholder-msg" style="color:var(--danger);">Erreur reseau</div>';
+                    container.innerHTML = '<div class="placeholder-msg" style="color:var(--danger);">Erreur : ' + escHtml(error && error.message ? error.message : 'Erreur reseau') + '</div>';
                 }
             }
 
@@ -1366,9 +1392,8 @@
                 var errors = 0;
                 for (var index = 0; index < updates.length; index += 1) {
                     try {
-                        var response = await fetch(apiUrls.updatePermission, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(updates[index])});
-                        var result = await response.json();
-                        if (result._error) {
+                        var result = await fetchJson(apiUrls.updatePermission, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(updates[index])});
+                        if (!result.success) {
                             errors += 1;
                         }
                     } catch (error) {

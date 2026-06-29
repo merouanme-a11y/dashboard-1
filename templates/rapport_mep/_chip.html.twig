@@ -1,0 +1,10 @@
+{% set style = colorMap[value]|default(null) %}
+{% if value %}
+    {% if style %}
+        <span class="rmep-chip" style="--chip-bg: {{ style.fill }}; --chip-color: {{ style.font }};">{{ value }}</span>
+    {% else %}
+        <span>{{ value }}</span>
+    {% endif %}
+{% else %}
+    -
+{% endif %}

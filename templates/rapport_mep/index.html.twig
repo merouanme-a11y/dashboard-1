@@ -1,0 +1,275 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Rapport MEP{% endblock %}
+
+{% block stylesheets %}
+    <link href="{{ asset('modules/rapport-mep/style.css') }}?v={{ assetVersion }}" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+    {% set report = selectedReport %}
+    <div class="rmep-page">
+        <section class="rmep-hero">
+            <div>
+                <p class="rmep-kicker">Excel vers dashboard</p>
+                <h1>Rapport MEP</h1>
+                <p class="rmep-lead">Base locale du module pour remplacer le classeur macro par un flux web dedie : import source, archivage, meta-infos de diffusion et tableau MEP.</p>
+            </div>
+
+            <div class="rmep-hero-actions">
+                <form method="post">
+                    <input type="hidden" name="_token" value="{{ csrf_token('rapport_mep_form') }}">
+                    <input type="hidden" name="action" value="new">
+                    <button type="submit" class="rmep-button rmep-button-primary">Nouveau rapport</button>
+                </form>
+                <button type="button" class="rmep-button rmep-button-secondary" data-rmep-history-open>Historique</button>
+            </div>
+        </section>
+
+        <div class="rmep-layout">
+            <div class="rmep-main">
+                {% if report %}
+                    <section class="rmep-panel">
+                        <div class="rmep-panel-head">
+                            <div>
+                                <h2>{{ report.title }}</h2>
+                                <p>{{ report.sourceFileName ?: 'Aucune source importee pour l instant.' }}</p>
+                            </div>
+                            {% if previewStats %}
+                                <div class="rmep-stats">
+                                    <div><strong>{{ previewStats.tickets }}</strong><span>tickets</span></div>
+                                    <div><strong>{{ previewStats.services }}</strong><span>services</span></div>
+                                    <div><strong>{{ previewStats.reporters }}</strong><span>rapporteurs</span></div>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <form method="post" enctype="multipart/form-data" class="rmep-form-grid">
+                            <input type="hidden" name="_token" value="{{ csrf_token('rapport_mep_form') }}">
+                            <input type="hidden" name="reportId" value="{{ report.id }}">
+
+                            <div class="rmep-field">
+                                <label for="releaseDate">Date MEP</label>
+                                <input id="releaseDate" type="date" name="releaseDate" value="{{ report.releaseDate }}">
+                            </div>
+
+                            <div class="rmep-field">
+                                <label for="releaseType">Type</label>
+                                <input id="releaseType" type="text" name="releaseType" value="{{ report.releaseType }}">
+                            </div>
+
+                            <div class="rmep-field">
+                                <label for="preparedBy">Mise en prod par</label>
+                                <input id="preparedBy" type="text" name="preparedBy" value="{{ report.preparedBy }}">
+                            </div>
+
+                            <div class="rmep-field">
+                                <label for="sourceFile">Importer la source</label>
+                                <input id="sourceFile" type="file" name="sourceFile" accept=".xlsx,.xlsm">
+                            </div>
+
+                            <div class="rmep-field rmep-field-full">
+                                <label for="emailTo">Destinataires</label>
+                                <textarea id="emailTo" name="emailTo" rows="2">{{ report.emailTo }}</textarea>
+                            </div>
+
+                            <div class="rmep-field rmep-field-full">
+                                <label for="emailSubject">Objet du mail</label>
+                                <input id="emailSubject" type="text" name="emailSubject" value="{{ report.emailSubject }}">
+                            </div>
+
+                            <div class="rmep-field rmep-field-full">
+                                <label for="emailBody">Contenu du mail</label>
+                                <textarea id="emailBody" name="emailBody" rows="6">{{ report.emailBody }}</textarea>
+                            </div>
+
+                            <div class="rmep-field rmep-field-full">
+                                <div class="rmep-info-grid">
+                                    {% for block in report.infoBlocks %}
+                                        <div class="rmep-info-card">
+                                            <label for="infoTitle{{ loop.index }}">Bloc info {{ loop.index }}</label>
+                                            <input id="infoTitle{{ loop.index }}" type="text" name="infoBlocks[{{ loop.index0 }}][title]" value="{{ block.title }}">
+                                            <textarea name="infoBlocks[{{ loop.index0 }}][body]" rows="4">{{ block.body }}</textarea>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div class="rmep-actions rmep-field-full">
+                                <button type="submit" name="action" value="save" class="rmep-button rmep-button-primary">Enregistrer</button>
+                                <button type="submit" name="action" value="import" class="rmep-button rmep-button-secondary">Importer la source Excel</button>
+                                {% if outlookProtocolUrl %}
+                                    <button type="submit" name="action" value="open_outlook" class="rmep-button rmep-button-primary">Ouvrir dans Outlook</button>
+                                {% endif %}
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="rmep-panel">
+                        <div class="rmep-panel-head">
+                            <div>
+                                <h2>Tableau MEP</h2>
+                                <p>{{ report.sourceSheetName ?: 'Feuille source non detectee' }}</p>
+                            </div>
+                        </div>
+
+                        {% if tableRows is not empty %}
+                            <div class="rmep-table-wrap">
+                                <table class="rmep-table">
+                                    <colgroup>
+                                        <col class="rmep-col-ticket">
+                                        <col class="rmep-col-service">
+                                        <col class="rmep-col-summary">
+                                        <col class="rmep-col-owner">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>ID de ticket</th>
+                                            <th>Service</th>
+                                            <th>Resume</th>
+                                            <th>Responsable</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in tableRows %}
+                                            <tr>
+                                                <td class="rmep-ticket-cell">
+                                                    {% if row.ticketUrl %}
+                                                        <a href="{{ row.ticketUrl }}" target="_blank" rel="noreferrer">{{ row.ticketId }}</a>
+                                                    {% else %}
+                                                        {{ row.ticketId ?: '-' }}
+                                                    {% endif %}
+                                                </td>
+                                                <td class="rmep-service-cell"{% if row.serviceStyle %} style="background: {{ row.serviceStyle.fill }}; color: {{ row.serviceStyle.font }};"{% endif %}>{{ row.service ?: '-' }}</td>
+                                                <td class="rmep-summary-cell">{{ row.summary }}</td>
+                                                <td class="rmep-owner-cell"{% if row.ownerStyle %} style="background: {{ row.ownerStyle.fill }}; color: {{ row.ownerStyle.font }};"{% endif %}>{{ row.owner ?: '-' }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="rmep-empty">
+                                Importe un fichier source `.xlsx` ou `.xlsm` pour alimenter le tableau.
+                            </div>
+                        {% endif %}
+                    </section>
+
+                {% else %}
+                    <section class="rmep-panel">
+                        <div class="rmep-empty">
+                            Cree d abord un rapport MEP pour lancer l import et la construction du module.
+                        </div>
+                    </section>
+                {% endif %}
+            </div>
+        </div>
+
+        <dialog class="rmep-history-modal" id="rmep-history-modal" aria-labelledby="rmep-history-title">
+            <div class="rmep-history-modal-head">
+                <div>
+                    <h2 id="rmep-history-title">Historique des rapports</h2>
+                    <p>{{ reports|length }} rapport(s) local(aux)</p>
+                </div>
+                <button type="button" class="rmep-icon-button" data-rmep-history-close aria-label="Fermer l historique">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="rmep-history-list">
+                {% for item in reports %}
+                    <div class="rmep-history-item{{ report and item.id == report.id ? ' is-active' : '' }}">
+                        <div class="rmep-history-copy">
+                            <strong>{{ item.title }}</strong>
+                            <span>{{ item.releaseDate ? item.releaseDate|date('d/m/Y') : 'Sans date' }}</span>
+                            <small>{{ item.preparedBy ?: 'Sans auteur' }}</small>
+                        </div>
+                        <div class="rmep-history-actions">
+                            <a class="rmep-button rmep-button-secondary" href="{{ path('app_rapport_mep', {report: item.id}) }}">Afficher</a>
+                            <form method="post" onsubmit="return confirm('Supprimer ce rapport MEP ?');">
+                                <input type="hidden" name="_token" value="{{ csrf_token('rapport_mep_form') }}">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="reportId" value="{{ item.id }}">
+                                <input type="hidden" name="selectedReportId" value="{{ report.id ?? '' }}">
+                                <button type="submit" class="rmep-button rmep-button-danger">Supprimer</button>
+                            </form>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="rmep-empty">
+                        Aucun rapport enregistre pour le moment.
+                    </div>
+                {% endfor %}
+            </div>
+        </dialog>
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+    <script>
+        (function initRapportMepHistoryModal() {
+            const dialog = document.getElementById('rmep-history-modal');
+            const openButtons = document.querySelectorAll('[data-rmep-history-open]');
+            const closeButtons = document.querySelectorAll('[data-rmep-history-close]');
+
+            if (!dialog || openButtons.length === 0) {
+                return;
+            }
+
+            const closeDialog = function () {
+                if (typeof dialog.close === 'function') {
+                    dialog.close();
+                    return;
+                }
+
+                dialog.removeAttribute('open');
+            };
+
+            openButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    if (typeof dialog.showModal === 'function') {
+                        dialog.showModal();
+                        return;
+                    }
+
+                    dialog.setAttribute('open', 'open');
+                });
+            });
+
+            closeButtons.forEach(function (button) {
+                button.addEventListener('click', closeDialog);
+            });
+
+            dialog.addEventListener('click', function (event) {
+                const rect = dialog.getBoundingClientRect();
+                const isInside = rect.top <= event.clientY
+                    && event.clientY <= rect.top + rect.height
+                    && rect.left <= event.clientX
+                    && event.clientX <= rect.left + rect.width;
+
+                if (!isInside) {
+                    closeDialog();
+                }
+            });
+        })();
+
+        (function initRapportMepOutlookAutoOpen() {
+            const shouldAutoOpen = {{ autoOpenOutlook and outlookProtocolUrl ? 'true' : 'false' }};
+            const protocolUrl = {{ outlookProtocolUrl ? outlookProtocolUrl|json_encode|raw : '""' }};
+
+            if (!shouldAutoOpen || !protocolUrl) {
+                return;
+            }
+
+            window.setTimeout(function () {
+                window.location.href = protocolUrl;
+
+                if (window.history && typeof window.history.replaceState === 'function') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('openOutlook');
+                    window.history.replaceState({}, document.title, url.toString());
+                }
+            }, 120);
+        })();
+    </script>
+{% endblock %}

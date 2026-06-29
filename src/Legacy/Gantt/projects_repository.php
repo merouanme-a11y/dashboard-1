@@ -447,6 +447,26 @@ function app_store_project_follow_up_task(string $projectId, array $task): array
     return $savedTask;
 }
 
+function app_delete_project_follow_up_task(string $projectId, string $taskId): void
+{
+    app_ensure_projects_schema();
+
+    $normalizedProjectId = trim($projectId);
+    $normalizedTaskId = trim($taskId);
+    if ($normalizedProjectId === '' || $normalizedTaskId === '') {
+        throw new InvalidArgumentException('Tache de suivi introuvable.');
+    }
+
+    $statement = app_db()->prepare(
+        'DELETE FROM project_follow_up_tasks
+         WHERE project_id = :projectId AND id = :taskId'
+    );
+    $statement->execute([
+        'projectId' => $normalizedProjectId,
+        'taskId' => $normalizedTaskId,
+    ]);
+}
+
 function app_create_project(array $project): array
 {
     app_ensure_projects_schema();
@@ -1217,7 +1237,7 @@ function app_normalize_project_follow_up_task_record(array $task): ?array
         'projectId' => $projectId,
         'date' => $taskDate,
         'title' => $title,
-        'details' => app_normalize_project_nullable_string($task['details'] ?? null),
+        'details' => app_normalize_project_html_value($task['details'] ?? null),
         'youtrackUrl' => app_normalize_project_nullable_string($task['youtrackUrl'] ?? $task['youtrack_url'] ?? null),
         'createdById' => app_normalize_project_nullable_string($task['createdById'] ?? $task['created_by_id'] ?? null),
         'createdByDisplayName' => app_normalize_project_nullable_string($task['createdByDisplayName'] ?? $task['created_by_display_name'] ?? null),

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>{{ report.emailSubject ?: 'Rapport MEP' }}</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 0.22in 0.2in;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            color: #000000;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            font-size: 7.2pt;
+            line-height: 1.22;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            text-align: center;
+            color: #000000;
+            font-size: 15pt;
+            font-weight: 700;
+        }
+
+        table {
+            width: 96%;
+            margin-left: auto;
+            margin-right: auto;
+            border-collapse: collapse;
+            border-spacing: 0;
+            border: 2px solid #000000;
+            empty-cells: show;
+            table-layout: fixed;
+        }
+
+        th,
+        td {
+            border: 2px solid #000000;
+            padding: 4px 5px;
+            display: table-cell;
+            vertical-align: middle !important;
+            text-align: center;
+            color: #000000;
+            font-weight: 700;
+            line-height: 1.1;
+            overflow-wrap: normal;
+            word-break: normal;
+            white-space: nowrap;
+        }
+
+        th {
+            background: #4a4a4a;
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .col-ticket { width: 12%; }
+        .col-service { width: 18%; }
+        .col-summary { width: 30%; }
+        .col-owner { width: 40%; }
+
+        .cell-summary {
+            text-align: left;
+            font-size: 6.9pt;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .cell-owner,
+        .head-owner {
+            white-space: nowrap !important;
+            overflow-wrap: normal !important;
+            word-break: keep-all !important;
+            width: 40% !important;
+            min-width: 40% !important;
+        }
+
+        .head-owner {
+            font-size: 6.6pt !important;
+        }
+
+        a {
+            color: #0b57d0;
+            font-weight: 700;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ report.emailSubject ?: 'Compte rendu | Mise en production Openassur' }}</h1>
+
+    {% set tableBorderStyle = 'width: 96%; margin-left: auto; margin-right: auto; border: 2px solid #000000; border-collapse: collapse; border-spacing: 0; table-layout: fixed;' %}
+    {% set cellBorderStyle = 'border: 2px solid #000000; padding: 4px 5px; display: table-cell; vertical-align: middle !important; text-align: center; color: #000000; font-weight: 700; line-height: 1.1; white-space: nowrap;' %}
+    {% set headCellBorderStyle = 'border: 2px solid #000000; padding: 4px 5px; display: table-cell; vertical-align: middle !important; text-align: center; color: #ffffff; background: #4a4a4a; font-weight: 700; line-height: 1.1; white-space: nowrap;' %}
+    <table border="1" cellspacing="0" cellpadding="0" frame="box" rules="all" style="{{ tableBorderStyle }}">
+        <colgroup>
+            <col class="col-ticket">
+            <col class="col-service">
+            <col class="col-summary">
+            <col class="col-owner" style="width: 40%;">
+        </colgroup>
+        <thead>
+            <tr>
+                <th valign="middle" style="{{ headCellBorderStyle }}">ID de ticket</th>
+                <th valign="middle" style="{{ headCellBorderStyle }}">Service</th>
+                <th valign="middle" style="{{ headCellBorderStyle }}">Resume</th>
+                <th valign="middle" class="head-owner" style="{{ headCellBorderStyle }} width: 40%; min-width: 40%; font-size: 6.6pt;">Responsable</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in report.rows %}
+                {% set serviceStyle = row.serviceColorStyle ?? null %}
+                {% set ownerStyle = row.ownerColorStyle ?? null %}
+                <tr>
+                    <td valign="middle" style="{{ cellBorderStyle }}">
+                        {% if row.ticketUrl %}
+                            <a href="{{ row.ticketUrl }}">{{ row.ticketId ?: '-' }}</a>
+                        {% else %}
+                            {{ row.ticketId ?: '-' }}
+                        {% endif %}
+                    </td>
+                    <td valign="middle" style="{{ cellBorderStyle }}{% if serviceStyle %} background: {{ serviceStyle.fill }}; color: {{ serviceStyle.font }};{% endif %}">{{ row.service ?: '-' }}</td>
+                    <td valign="middle" class="cell-summary" style="{{ cellBorderStyle }} text-align: left; font-size: 6.9pt; white-space: normal; overflow-wrap: anywhere; word-break: break-word;">{{ row.summary ?: '-' }}</td>
+                    <td valign="middle" class="cell-owner" style="{{ cellBorderStyle }} width: 40%; min-width: 40%;{% if ownerStyle %} background: {{ ownerStyle.fill }}; color: {{ ownerStyle.font }};{% endif %}">{{ row.owner ?: '-' }}</td>
+                </tr>
+            {% else %}
+                <tr>
+                    <td valign="middle" colspan="4" style="{{ cellBorderStyle }}">Aucune ligne importee.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

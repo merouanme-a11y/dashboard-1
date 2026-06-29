@@ -3,16 +3,18 @@
 declare(strict_types=1);
 
 if (!function_exists('app_runtime_env_value')) {
-    function app_runtime_env_value(string $name): ?string
+    function app_runtime_env_value(string $name, bool $includeProcessValue = true): ?string
     {
         $candidates = [
             $_SERVER[$name] ?? null,
             $_ENV[$name] ?? null,
         ];
 
-        $processValue = getenv($name);
-        if ($processValue !== false) {
-            $candidates[] = $processValue;
+        if ($includeProcessValue) {
+            $processValue = getenv($name);
+            if ($processValue !== false) {
+                $candidates[] = $processValue;
+            }
         }
 
         foreach ($candidates as $candidate) {
@@ -93,7 +95,16 @@ if (!function_exists('app_runtime_env_value')) {
 
     function app_load_runtime_dotenv(): void
     {
-        if (app_runtime_env_value('DATABASE_URL') !== null) {
+        $isHttpRequest = PHP_SAPI !== 'cli';
+        $hasCurrentRequestAppEnv = app_runtime_env_value('APP_ENV', false) !== null;
+        $hasCurrentRequestDatabaseUrl = app_runtime_env_value('DATABASE_URL', false) !== null;
+        $hasCurrentRequestDefaultUri = app_runtime_env_value('DEFAULT_URI', false) !== null;
+
+        if (
+            $hasCurrentRequestAppEnv
+            && $hasCurrentRequestDatabaseUrl
+            && (!$isHttpRequest || $hasCurrentRequestDefaultUri)
+        ) {
             return;
         }
 

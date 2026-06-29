@@ -871,6 +871,7 @@ class PageDisplayService
             'app_livre_de_caisse_listing' => 'Listing livre de caisse agence',
             'app_livre_de_caisse_management' => 'Gestion - Livres de caisse',
             'app_quittancement_generator' => 'Generateur de quittancements',
+            'app_rapport_mep' => 'Rapport MEP',
             'admin_parametrage' => 'Parametrage',
             'admin_modules' => 'Modules',
             'admin_pages' => 'Pages',
