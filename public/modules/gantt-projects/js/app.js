@@ -1495,6 +1495,10 @@ function renderScheduledRow(rowData) {
     const expanded = Boolean(rowData.expanded);
     const bar = getBarMetrics(project);
     const barWidth = Math.max(26, bar.width - 12);
+    const barLeft = bar.left + 6;
+    const barLabelOffset = barLeft < 0
+        ? Math.min(Math.abs(barLeft), Math.max(0, barWidth - 76))
+        : 0;
     const barClasses = ["timeline-bar"];
     const rowClasses = ["timeline-row"];
     const progression = normalizeProjectProgression(project.progression);
@@ -1503,6 +1507,9 @@ function renderScheduledRow(rowData) {
         : `<div class="timeline-bar-progress" style="width: ${progression}%;"></div>`;
     if (bar.isOutside) {
         barClasses.push("is-outside");
+    }
+    if (hasChildren) {
+        rowClasses.push("has-children");
     }
 
     const toggleMarkup = hasChildren
@@ -1570,7 +1577,7 @@ function renderScheduledRow(rowData) {
                 <div
                     class="${barClasses.join(" ")}"
                     data-bar-id="${escapeHtml(project.id)}"
-                    style="left: ${bar.left + 6}px; width: ${barWidth}px; --bar-color: ${escapeHtml(project.color)};"
+                    style="left: ${barLeft}px; width: ${barWidth}px; --bar-color: ${escapeHtml(project.color)}; --bar-label-offset: ${barLabelOffset}px;"
                 >
                     ${progressMarkup}
                     <span class="resize-handle" data-resize="left" data-project-id="${escapeHtml(project.id)}"></span>
@@ -2156,6 +2163,11 @@ function onTimelineClick(event) {
         }
 
         const rowProject = findProject(row.dataset.projectId);
+        if (rowProject && hasProjectChildren(rowProject.id, { scheduledOnly: true })) {
+            toggleTimelineProjectExpanded(rowProject.id);
+            return;
+        }
+
         if (rowProject) {
             openProjectModal(rowProject);
         }
@@ -4952,13 +4964,18 @@ function renderProjectModalFollowUpTasks(project = getProjectModalCurrentProject
                     <div class="project-modal-follow-up-col-actions" role="columnheader">Action</div>
                 </div>
                 <div class="project-modal-follow-up-list-body" role="rowgroup">
-                    ${tasks.map((task) => `
+                    ${tasks.map((task) => {
+                        const normalizedTask = normalizeProjectFollowUpTask(task);
+                        const descriptionId = `projectFollowUpDescription-${String(normalizedTask.id || "").replace(/[^a-z0-9_-]/gi, "-")}`;
+                        return `
                         <div
                             class="project-modal-follow-up-grid project-modal-follow-up-row"
                             tabindex="0"
                             role="button"
                             data-project-follow-up-id="${escapeHtml(task.id)}"
-                            aria-label="Ouvrir le suivi ${escapeHtml(task.title)}"
+                            aria-expanded="false"
+                            aria-controls="${escapeHtml(descriptionId)}"
+                            aria-label="Afficher la description du suivi ${escapeHtml(task.title)}"
                         >
                             <div class="project-modal-follow-up-col-date" role="cell">${escapeHtml(formatProjectTaskDisplayDate(task.date))}</div>
                             <div class="project-modal-follow-up-col-title" role="cell">
@@ -4973,10 +4990,21 @@ function renderProjectModalFollowUpTasks(project = getProjectModalCurrentProject
                             </div>
                             <div class="project-modal-follow-up-col-author" role="cell">${escapeHtml(formatProjectFollowUpCreator(task))}</div>
                             <div class="project-modal-follow-up-col-actions" role="cell">
-                                <button class="ghost-button project-modal-follow-up-view-button" type="button" data-project-follow-up-open="${escapeHtml(task.id)}">Voir +</button>
+                                <button class="ghost-button project-modal-follow-up-view-button" type="button" data-project-follow-up-open="${escapeHtml(task.id)}">Voir plus</button>
                             </div>
                         </div>
-                    `).join("")}
+                        <div
+                            class="project-modal-follow-up-description-row"
+                            id="${escapeHtml(descriptionId)}"
+                            data-project-follow-up-description="${escapeHtml(task.id)}"
+                            hidden
+                        >
+                            <div class="project-modal-follow-up-description-body">
+                                ${renderProjectFollowUpDetailsPreviewMarkup(normalizedTask.details)}
+                            </div>
+                        </div>
+                    `;
+                    }).join("")}
                 </div>
             </div>
         </div>
@@ -5187,22 +5215,32 @@ function onProjectModalFollowUpBodyClick(event) {
         return;
     }
 
+    const openButton = event.target.closest("[data-project-follow-up-open]");
+    if (openButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const project = getProjectModalCurrentProject();
+        const task = getProjectFollowUpTaskById(project, openButton.dataset.projectFollowUpOpen);
+        if (project && task) {
+            openProjectFollowUpModal(project, task);
+        }
+        return;
+    }
+
     const row = event.target.closest("[data-project-follow-up-id]");
     if (!row) {
         return;
     }
 
-    const project = getProjectModalCurrentProject();
-    const task = getProjectFollowUpTaskById(project, row.dataset.projectFollowUpId);
-    if (!project || !task) {
-        return;
-    }
-
-    openProjectFollowUpModal(project, task);
+    toggleProjectModalFollowUpDescription(row);
 }
 
 function onProjectModalFollowUpBodyKeydown(event) {
     if (event.target.closest("[data-project-external-link]")) {
+        return;
+    }
+
+    if (event.target.closest("[data-project-follow-up-open]")) {
         return;
     }
 
@@ -5217,6 +5255,42 @@ function onProjectModalFollowUpBodyKeydown(event) {
 
     event.preventDefault();
     row.click();
+}
+
+function toggleProjectModalFollowUpDescription(row) {
+    if (!(row instanceof HTMLElement)) {
+        return;
+    }
+
+    const taskId = String(row.dataset.projectFollowUpId || "").trim();
+    if (!taskId || !dom.projectModalFollowUpBody) {
+        return;
+    }
+
+    const descriptionRow = dom.projectModalFollowUpBody.querySelector(
+        `[data-project-follow-up-description="${cssEscape(taskId)}"]`
+    );
+    if (!(descriptionRow instanceof HTMLElement)) {
+        return;
+    }
+
+    const shouldExpand = row.getAttribute("aria-expanded") !== "true";
+
+    dom.projectModalFollowUpBody.querySelectorAll("[data-project-follow-up-id]").forEach((item) => {
+        if (item instanceof HTMLElement && item !== row) {
+            item.setAttribute("aria-expanded", "false");
+            item.classList.remove("is-description-open");
+        }
+    });
+    dom.projectModalFollowUpBody.querySelectorAll("[data-project-follow-up-description]").forEach((item) => {
+        if (item instanceof HTMLElement && item !== descriptionRow) {
+            item.hidden = true;
+        }
+    });
+
+    row.setAttribute("aria-expanded", shouldExpand ? "true" : "false");
+    row.classList.toggle("is-description-open", shouldExpand);
+    descriptionRow.hidden = !shouldExpand;
 }
 
 async function onProjectFollowUpSubmit(event) {
@@ -6511,6 +6585,25 @@ function hasProjectChildren(projectId, options = {}) {
     return getProjectChildren(projectId, options).length > 0;
 }
 
+function getProjectAncestorIds(projectId) {
+    const ancestorIds = [];
+    let currentProject = findProject(projectId);
+    const visitedProjectIds = new Set();
+
+    while (currentProject?.parentProjectId) {
+        const parentProjectId = String(currentProject.parentProjectId || "").trim();
+        if (!parentProjectId || visitedProjectIds.has(parentProjectId)) {
+            break;
+        }
+
+        visitedProjectIds.add(parentProjectId);
+        ancestorIds.unshift(parentProjectId);
+        currentProject = findProject(parentProjectId);
+    }
+
+    return ancestorIds;
+}
+
 function sanitizeExpandedProjectIds() {
     state.settings.expandedProjectIds = normalizeExpandedProjectIds(state.settings.expandedProjectIds)
         .filter((projectId) => hasProjectChildren(projectId, { scheduledOnly: true }));
@@ -6526,7 +6619,7 @@ function setTimelineProjectExpanded(projectId, expanded, options = {}) {
         return;
     }
 
-    const expandedProjectIds = new Set(normalizeExpandedProjectIds(state.settings.expandedProjectIds));
+    const expandedProjectIds = new Set(expanded ? getProjectAncestorIds(normalizedProjectId) : normalizeExpandedProjectIds(state.settings.expandedProjectIds));
     if (expanded) {
         expandedProjectIds.add(normalizedProjectId);
     } else {
@@ -6554,11 +6647,12 @@ function toggleTimelineProjectExpanded(projectId) {
 }
 
 function expandTimelineAncestors(projectId) {
-    let currentProject = findProject(projectId);
-    while (currentProject?.parentProjectId) {
-        setTimelineProjectExpanded(currentProject.parentProjectId, true, { persist: false, render: false });
-        currentProject = findProject(currentProject.parentProjectId);
-    }
+    const expandedProjectIds = new Set(normalizeExpandedProjectIds(state.settings.expandedProjectIds));
+    getProjectAncestorIds(projectId).forEach((ancestorProjectId) => {
+        expandedProjectIds.add(ancestorProjectId);
+    });
+    state.settings.expandedProjectIds = Array.from(expandedProjectIds);
+    sanitizeExpandedProjectIds();
 }
 
 function buildTimelineHierarchyRows(projects) {
@@ -8979,7 +9073,10 @@ function renderProjectExternalLinkButton(value, type, project, options = {}) {
             data-project-external-link="${escapeHtml(type)}"
             draggable="false"
         >
-            ${escapeHtml(label)}
+            <span>${escapeHtml(label)}</span>
+            <span class="project-external-link-open" aria-hidden="true">
+                <i class="bi bi-box-arrow-up-right"></i>
+            </span>
         </a>
     `;
 }

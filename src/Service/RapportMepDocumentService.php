@@ -318,16 +318,12 @@ final class RapportMepDocumentService
 
         file_put_contents($scriptPath, $script);
 
-        $process = Process::fromShellCommandline(sprintf(
+        $commandLine = sprintf(
             'cmd /c start "" /min powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Sta -File "%s"',
             str_replace('"', '""', $scriptPath)
-        ));
-        $process->setTimeout(10);
-        $process->run();
+        );
 
-        if (!$process->isSuccessful()) {
-            throw new \RuntimeException('Impossible de lancer l ouverture du brouillon dans Outlook. ' . trim($process->getErrorOutput() ?: $process->getOutput()));
-        }
+        $this->runDetachedShellCommandLine($commandLine, 10);
     }
 
     private function findOutlookBinary(): ?string
@@ -416,7 +412,7 @@ final class RapportMepDocumentService
             @unlink($pdfPath);
         }
 
-        $process = new Process([
+        $result = $this->runCommand([
             $binary,
             '--headless',
             '--convert-to',
@@ -424,12 +420,11 @@ final class RapportMepDocumentService
             '--outdir',
             $outputDirectory,
             $htmlPath,
-        ]);
-        $process->setTimeout(120);
-        $process->run();
+        ], 120, $this->getLibreOfficeWorkingDirectory($outputDirectory), $this->getLibreOfficeEnvironment($outputDirectory));
 
-        if (!$process->isSuccessful()) {
-            throw new \RuntimeException('La conversion PDF du rapport MEP a echoue : ' . trim($process->getErrorOutput() ?: $process->getOutput()));
+        if (!$result['success']) {
+            $errorMessage = trim((string) ($result['errorOutput'] !== '' ? $result['errorOutput'] : $result['output']));
+            throw new \RuntimeException('La conversion PDF du rapport MEP a echoue : ' . $errorMessage);
         }
 
         if (!is_file($expectedOutputPath)) {
@@ -487,5 +482,221 @@ final class RapportMepDocumentService
         }
 
         return 'rapport-mep-' . $releaseDate . '.eml';
+    }
+
+    /**
+     * @param list<string> $command
+     * @param array<string, string> $environment
+     *
+     * @return array{success: bool, output: string, errorOutput: string, exitCode: int}
+     */
+    private function runCommand(array $command, int $timeoutSeconds = 120, ?string $workingDirectory = null, array $environment = []): array
+    {
+        if ($this->isPhpFunctionAvailable('proc_open')) {
+            $processEnvironment = $environment !== [] ? array_merge($_ENV, $_SERVER, $environment) : null;
+            $process = new Process($command, $workingDirectory, $processEnvironment);
+            $process->setTimeout($timeoutSeconds);
+            $process->run();
+
+            return [
+                'success' => $process->isSuccessful(),
+                'output' => trim($process->getOutput()),
+                'errorOutput' => trim($process->getErrorOutput()),
+                'exitCode' => $process->getExitCode() ?? 1,
+            ];
+        }
+
+        return $this->runCommandWithoutProcess($command, $workingDirectory, $environment);
+    }
+
+    private function runDetachedShellCommandLine(string $commandLine, int $timeoutSeconds = 10): void
+    {
+        if ($this->isPhpFunctionAvailable('proc_open')) {
+            $process = Process::fromShellCommandline($commandLine);
+            $process->setTimeout($timeoutSeconds);
+            $process->run();
+
+            if (!$process->isSuccessful()) {
+                throw new \RuntimeException('Impossible de lancer l ouverture du brouillon dans Outlook. ' . trim($process->getErrorOutput() ?: $process->getOutput()));
+            }
+
+            return;
+        }
+
+        if ($this->isPhpFunctionAvailable('exec')) {
+            $output = [];
+            $exitCode = 0;
+            @exec($commandLine . (DIRECTORY_SEPARATOR === '\\' ? ' >NUL 2>&1' : ' >/dev/null 2>&1 &'), $output, $exitCode);
+
+            if ($exitCode !== 0) {
+                throw new \RuntimeException('Impossible de lancer l ouverture du brouillon dans Outlook.');
+            }
+
+            return;
+        }
+
+        if ($this->isPhpFunctionAvailable('system')) {
+            ob_start();
+            $exitCode = 0;
+            @system($commandLine . (DIRECTORY_SEPARATOR === '\\' ? ' >NUL 2>&1' : ' >/dev/null 2>&1 &'), $exitCode);
+            ob_end_clean();
+
+            if ($exitCode !== 0) {
+                throw new \RuntimeException('Impossible de lancer l ouverture du brouillon dans Outlook.');
+            }
+
+            return;
+        }
+
+        throw new \RuntimeException('Le serveur PHP ne permet pas de lancer Outlook automatiquement.');
+    }
+
+    /**
+     * @param list<string> $command
+     * @param array<string, string> $environment
+     *
+     * @return array{success: bool, output: string, errorOutput: string, exitCode: int}
+     */
+    private function runCommandWithoutProcess(array $command, ?string $workingDirectory = null, array $environment = []): array
+    {
+        $commandLine = $this->buildShellCommand($command, $workingDirectory, $environment);
+
+        if ($this->isPhpFunctionAvailable('exec')) {
+            $output = [];
+            $exitCode = 0;
+            @exec($commandLine . ' 2>&1', $output, $exitCode);
+            $combinedOutput = trim(implode(PHP_EOL, $output));
+
+            return [
+                'success' => $exitCode === 0,
+                'output' => $combinedOutput,
+                'errorOutput' => $combinedOutput,
+                'exitCode' => $exitCode,
+            ];
+        }
+
+        if ($this->isPhpFunctionAvailable('system')) {
+            ob_start();
+            $exitCode = 0;
+            @system($commandLine . ' 2>&1', $exitCode);
+            $combinedOutput = trim((string) ob_get_clean());
+
+            return [
+                'success' => $exitCode === 0,
+                'output' => $combinedOutput,
+                'errorOutput' => $combinedOutput,
+                'exitCode' => $exitCode,
+            ];
+        }
+
+        throw new \RuntimeException('Le serveur PHP ne permet pas d executer les commandes systeme requises.');
+    }
+
+    /**
+     * @param list<string> $command
+     * @param array<string, string> $environment
+     */
+    private function buildShellCommand(array $command, ?string $workingDirectory = null, array $environment = []): string
+    {
+        $commandParts = array_map(
+            static fn (string $part): string => escapeshellarg($part),
+            array_map(static fn ($part): string => (string) $part, $command)
+        );
+        $commandLine = implode(' ', $commandParts);
+
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $prefixParts = [];
+
+            if ($workingDirectory !== null && trim($workingDirectory) !== '') {
+                $prefixParts[] = 'cd /d ' . escapeshellarg($workingDirectory);
+            }
+
+            if ($environment !== []) {
+                foreach ($environment as $name => $value) {
+                    $normalizedName = preg_replace('/[^A-Za-z0-9_]/', '', $name) ?? '';
+                    if ($normalizedName === '') {
+                        continue;
+                    }
+
+                    $prefixParts[] = 'set "' . $normalizedName . '=' . str_replace('"', '""', (string) $value) . '"';
+                }
+            }
+
+            if ($prefixParts !== []) {
+                $commandLine = implode(' && ', $prefixParts) . ' && ' . $commandLine;
+            }
+
+            return 'cmd /d /c ' . escapeshellarg($commandLine);
+        }
+
+        $environmentPrefix = '';
+        if ($environment !== []) {
+            $assignments = [];
+            foreach ($environment as $name => $value) {
+                $normalizedName = preg_replace('/[^A-Za-z0-9_]/', '', $name) ?? '';
+                if ($normalizedName === '') {
+                    continue;
+                }
+
+                $assignments[] = $normalizedName . '=' . escapeshellarg((string) $value);
+            }
+
+            if ($assignments !== []) {
+                $environmentPrefix = implode(' ', $assignments) . ' ';
+            }
+        }
+
+        if ($workingDirectory !== null && trim($workingDirectory) !== '') {
+            return 'cd ' . escapeshellarg($workingDirectory) . ' && ' . $environmentPrefix . $commandLine;
+        }
+
+        return $environmentPrefix . $commandLine;
+    }
+
+    private function isPhpFunctionAvailable(string $functionName): bool
+    {
+        if (!function_exists($functionName)) {
+            return false;
+        }
+
+        $disabledFunctions = preg_split('/[\s,]+/', (string) ini_get('disable_functions')) ?: [];
+
+        return !in_array($functionName, array_filter($disabledFunctions, static fn ($value): bool => is_string($value) && $value !== ''), true);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getLibreOfficeEnvironment(string $outputDirectory): array
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            return [];
+        }
+
+        $currentHome = trim((string) ($_ENV['HOME'] ?? $_SERVER['HOME'] ?? ''));
+        if ($currentHome !== '' && is_dir($currentHome) && is_writable($currentHome)) {
+            return [];
+        }
+
+        $fallbackHome = trim((string) sys_get_temp_dir());
+        if ($fallbackHome === '' || !is_dir($fallbackHome) || !is_writable($fallbackHome)) {
+            $fallbackHome = $outputDirectory;
+        }
+
+        return ['HOME' => $fallbackHome];
+    }
+
+    private function getLibreOfficeWorkingDirectory(string $outputDirectory): ?string
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            return null;
+        }
+
+        $temporaryDirectory = trim((string) sys_get_temp_dir());
+        if ($temporaryDirectory !== '' && is_dir($temporaryDirectory) && is_writable($temporaryDirectory)) {
+            return $temporaryDirectory;
+        }
+
+        return $outputDirectory;
     }
 }
