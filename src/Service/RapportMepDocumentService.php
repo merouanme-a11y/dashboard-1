@@ -137,7 +137,7 @@ final class RapportMepDocumentService
         );
 
         return [
-            'protocolUrl' => 'dashboardoutlook:?report=' . rawurlencode($reportId),
+            'protocolUrl' => 'dashboardoutlook://open?report=' . rawurlencode($reportId),
             'payloadPath' => $payloadPath,
             'pdf' => $pdfDocument,
         ];
