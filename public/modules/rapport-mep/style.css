@@ -84,6 +84,39 @@
     margin: 0.2rem 0 0;
 }
 
+.rmep-outlook-launcher {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(108, 138, 196, 0.18);
+    border-radius: 8px;
+    background: rgba(28, 39, 61, 0.78);
+}
+
+.rmep-outlook-launcher.is-pending {
+    border-color: rgba(126, 174, 248, 0.4);
+    background: rgba(31, 45, 73, 0.9);
+}
+
+.rmep-outlook-launcher-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.rmep-outlook-launcher-copy strong {
+    color: #f4f7ff;
+    font-size: 0.98rem;
+}
+
+.rmep-outlook-launcher-copy p {
+    margin: 0;
+    color: rgba(220, 229, 245, 0.78);
+}
+
 .rmep-stats {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -217,6 +250,21 @@
 .rmep-field textarea {
     resize: vertical;
     min-height: 120px;
+}
+
+.rmep-file-import-control {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.rmep-file-import-control input[type="file"] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.rmep-file-import-control .rmep-button[hidden] {
+    display: none;
 }
 
 .rmep-info-grid {
@@ -477,6 +525,7 @@
 @media (max-width: 720px) {
     .rmep-hero,
     .rmep-panel-head,
+    .rmep-outlook-launcher,
     .rmep-history-item {
         flex-direction: column;
     }
@@ -485,6 +534,11 @@
     .rmep-info-grid,
     .rmep-stats {
         grid-template-columns: 1fr;
+    }
+
+    .rmep-file-import-control {
+        flex-direction: column;
+        align-items: stretch;
     }
 
     .rmep-history-item {

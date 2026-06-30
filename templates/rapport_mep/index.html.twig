@@ -8,6 +8,7 @@
 
 {% block body %}
     {% set report = selectedReport %}
+    {% set canOpenOutlook = app.request and app.request.host in ['localhost', '127.0.0.1', '::1'] %}
     <div class="rmep-page">
         <section class="rmep-hero">
             <div>
@@ -44,6 +45,37 @@
                             {% endif %}
                         </div>
 
+                        {% if canOpenOutlook and outlookProtocolUrl %}
+                            <div class="rmep-outlook-launcher{% if autoOpenOutlook %} is-pending{% endif %}">
+                                <div class="rmep-outlook-launcher-copy">
+                                    <strong>Outlook</strong>
+                                    <p>
+                                        {% if autoOpenOutlook %}
+                                            Le rapport est enregistre. Si le brouillon ne s ouvre pas tout seul, cliquez sur le bouton ci-contre.
+                                        {% else %}
+                                            Ouvre le brouillon Outlook du rapport avec la piece jointe PDF.
+                                        {% endif %}
+                                    </p>
+                                </div>
+
+                                <div class="rmep-actions">
+                                    <a
+                                        id="rmep-outlook-launch-link"
+                                        href="{{ outlookProtocolUrl }}"
+                                        class="rmep-button rmep-button-primary"
+                                    >
+                                        Ouvrir le brouillon Outlook
+                                    </a>
+                                    <a
+                                        href="{{ path('app_rapport_mep_mail_draft_download', { reportId: report.id }) }}"
+                                        class="rmep-button rmep-button-secondary"
+                                    >
+                                        Telecharger le brouillon EML
+                                    </a>
+                                </div>
+                            </div>
+                        {% endif %}
+
                         <form method="post" enctype="multipart/form-data" class="rmep-form-grid">
                             <input type="hidden" name="_token" value="{{ csrf_token('rapport_mep_form') }}">
                             <input type="hidden" name="reportId" value="{{ report.id }}">
@@ -65,7 +97,26 @@
 
                             <div class="rmep-field">
                                 <label for="sourceFile">Importer la source</label>
-                                <input id="sourceFile" type="file" name="sourceFile" accept=".xlsx,.xlsm">
+                                <div class="rmep-file-import-control">
+                                    <input
+                                        id="sourceFile"
+                                        type="file"
+                                        name="sourceFile"
+                                        accept=".xlsx,.xlsm"
+                                        data-rmep-source-file
+                                    >
+                                    <button
+                                        type="submit"
+                                        name="action"
+                                        value="import"
+                                        class="rmep-button rmep-button-secondary"
+                                        data-rmep-import-button
+                                        hidden
+                                        disabled
+                                    >
+                                        Importer
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="rmep-field rmep-field-full">
@@ -97,7 +148,6 @@
 
                             <div class="rmep-actions rmep-field-full">
                                 <button type="submit" name="action" value="save" class="rmep-button rmep-button-primary">Enregistrer</button>
-                                <button type="submit" name="action" value="import" class="rmep-button rmep-button-secondary">Importer la source Excel</button>
                                 <button type="submit" name="action" value="open_outlook" class="rmep-button rmep-button-primary">Ouvrir dans Outlook</button>
                             </div>
                         </form>
@@ -252,15 +302,20 @@
         })();
 
         (function initRapportMepOutlookAutoOpen() {
-            const shouldAutoOpen = {{ autoOpenOutlook and outlookProtocolUrl ? 'true' : 'false' }};
+            const shouldAutoOpen = {{ autoOpenOutlook and outlookProtocolUrl and canOpenOutlook ? 'true' : 'false' }};
             const protocolUrl = {{ outlookProtocolUrl ? outlookProtocolUrl|json_encode|raw : '""' }};
+            const launchLink = document.getElementById('rmep-outlook-launch-link');
 
-            if (!shouldAutoOpen || !protocolUrl) {
+            if (!shouldAutoOpen || !protocolUrl || !launchLink) {
                 return;
             }
 
             window.setTimeout(function () {
-                window.location.href = protocolUrl;
+                try {
+                    launchLink.click();
+                } catch (error) {
+                    window.location.href = protocolUrl;
+                }
 
                 if (window.history && typeof window.history.replaceState === 'function') {
                     const url = new URL(window.location.href);
@@ -268,6 +323,24 @@
                     window.history.replaceState({}, document.title, url.toString());
                 }
             }, 120);
+        })();
+
+        (function initRapportMepImportButton() {
+            const fileInput = document.querySelector('[data-rmep-source-file]');
+            const importButton = document.querySelector('[data-rmep-import-button]');
+
+            if (!fileInput || !importButton) {
+                return;
+            }
+
+            const syncImportButton = function () {
+                const hasFile = !!(fileInput.files && fileInput.files.length > 0);
+                importButton.hidden = !hasFile;
+                importButton.disabled = !hasFile;
+            };
+
+            fileInput.addEventListener('change', syncImportButton);
+            syncImportButton();
         })();
     </script>
 {% endblock %}
