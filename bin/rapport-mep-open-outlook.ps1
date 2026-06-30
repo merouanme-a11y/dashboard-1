@@ -61,6 +61,24 @@ function Add-LogLine {
     Add-Content -LiteralPath $Path -Value ((Get-Date -Format o) + ' ' + $Message)
 }
 
+function Get-SafeFileName {
+    param(
+        [string] $Value,
+        [string] $Fallback
+    )
+
+    $candidate = [string] $Value
+    if ([string]::IsNullOrWhiteSpace($candidate)) {
+        $candidate = $Fallback
+    }
+
+    foreach ($invalidChar in [System.IO.Path]::GetInvalidFileNameChars()) {
+        $candidate = $candidate.Replace([string] $invalidChar, '_')
+    }
+
+    return $candidate
+}
+
 function Get-OutlookExecutablePath {
     $registryCandidates = @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\OUTLOOK.EXE',
@@ -180,28 +198,108 @@ function Open-OutlookComposeWindow {
     return $false
 }
 
+function Get-RemotePayload {
+    param(
+        [string] $PayloadUrl,
+        [string] $ProjectDir,
+        [string] $InitialLogPath
+    )
+
+    Add-LogLine -Path $InitialLogPath -Message ('FETCH ' + $PayloadUrl)
+    $response = Invoke-WebRequest -Uri $PayloadUrl -Method Get -UseBasicParsing -TimeoutSec 45
+    $reader = New-Object System.IO.StreamReader($response.RawContentStream, [System.Text.Encoding]::UTF8, $true)
+    try {
+        $jsonContent = $reader.ReadToEnd()
+    } finally {
+        $reader.Dispose()
+    }
+    $payload = $jsonContent | ConvertFrom-Json
+    if ($null -eq $payload) {
+        throw 'Le payload Outlook recu est vide.'
+    }
+
+    $reportId = [string] $payload.reportId
+    $targetDirectory = if ([string]::IsNullOrWhiteSpace($reportId)) {
+        Join-Path $env:TEMP 'dashboard-rapport-mep'
+    } else {
+        Join-Path $ProjectDir ('var\rapport-mep\exports\' + $reportId)
+    }
+
+    if (-not (Test-Path -LiteralPath $targetDirectory)) {
+        New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
+    }
+
+    $logPath = Join-Path $targetDirectory 'outlook-open.log'
+    Add-LogLine -Path $logPath -Message 'START protocol handler (remote payload)'
+
+    $localPayload = [ordered]@{
+        reportId = $reportId
+        recipients = $payload.recipients
+        subject = [string] $payload.subject
+        textBody = [string] $payload.textBody
+        htmlBody = [string] $payload.htmlBody
+        pdfPath = ''
+        pdfFileName = [string] $payload.pdfFileName
+        emlPath = ''
+    }
+
+    $pdfContentBase64 = [string] $payload.pdfContentBase64
+    if (-not [string]::IsNullOrWhiteSpace($pdfContentBase64)) {
+        $pdfFileName = Get-SafeFileName -Value ([string] $payload.pdfFileName) -Fallback 'rapport-mep.pdf'
+        $pdfPath = Join-Path $targetDirectory $pdfFileName
+        [System.IO.File]::WriteAllBytes($pdfPath, [System.Convert]::FromBase64String($pdfContentBase64))
+        $localPayload.pdfPath = $pdfPath
+        $localPayload.pdfFileName = $pdfFileName
+        Add-LogLine -Path $logPath -Message ('OK pdf reconstruit: ' + $pdfPath)
+    }
+
+    $emlContentBase64 = [string] $payload.emlContentBase64
+    if (-not [string]::IsNullOrWhiteSpace($emlContentBase64)) {
+        $emlFileName = Get-SafeFileName -Value ([string] $payload.emlFileName) -Fallback 'rapport-mep.eml'
+        $emlPath = Join-Path $targetDirectory $emlFileName
+        [System.IO.File]::WriteAllBytes($emlPath, [System.Convert]::FromBase64String($emlContentBase64))
+        $localPayload.emlPath = $emlPath
+        Add-LogLine -Path $logPath -Message ('OK eml reconstruit: ' + $emlPath)
+    }
+
+    return @{
+        Payload = [pscustomobject] $localPayload
+        LogPath = $logPath
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($Uri) -and $args.Count -gt 0) {
     $Uri = [string] $args[0]
 }
 
 $projectDir = Split-Path -Parent $PSScriptRoot
+$payloadUrl = Get-ProtocolQueryParameter -InputUri $Uri -Name 'payloadUrl'
 $reportId = Get-ProtocolQueryParameter -InputUri $Uri -Name 'report'
-if ([string]::IsNullOrWhiteSpace($reportId)) {
-    throw 'Identifiant de rapport manquant dans l''URL dashboardoutlook.'
+$payload = $null
+$logPath = Join-Path $env:TEMP 'dashboard-rapport-mep-outlook.log'
+
+if (-not [string]::IsNullOrWhiteSpace($payloadUrl)) {
+    $remotePayload = Get-RemotePayload -PayloadUrl $payloadUrl -ProjectDir $projectDir -InitialLogPath $logPath
+    $payload = $remotePayload.Payload
+    $logPath = $remotePayload.LogPath
+} else {
+    if ([string]::IsNullOrWhiteSpace($reportId)) {
+        throw 'Identifiant de rapport manquant dans l''URL dashboardoutlook.'
+    }
+
+    $exportDir = Join-Path $projectDir ('var\rapport-mep\exports\' + $reportId)
+    $payloadPath = Join-Path $exportDir 'outlook-payload.json'
+    $logPath = Join-Path $exportDir 'outlook-open.log'
+
+    Add-LogLine -Path $logPath -Message 'START protocol handler'
+
+    if (-not (Test-Path -LiteralPath $payloadPath)) {
+        Add-LogLine -Path $logPath -Message ('ERROR payload introuvable: ' + $payloadPath)
+        throw 'Payload Outlook introuvable pour le rapport demande.'
+    }
+
+    $payload = Get-Content -LiteralPath $payloadPath -Raw | ConvertFrom-Json
 }
-
-$exportDir = Join-Path $projectDir ('var\rapport-mep\exports\' + $reportId)
-$payloadPath = Join-Path $exportDir 'outlook-payload.json'
-$logPath = Join-Path $exportDir 'outlook-open.log'
-
-Add-LogLine -Path $logPath -Message 'START protocol handler'
-
-if (-not (Test-Path -LiteralPath $payloadPath)) {
-    Add-LogLine -Path $logPath -Message ('ERROR payload introuvable: ' + $payloadPath)
-    throw 'Payload Outlook introuvable pour le rapport demande.'
-}
-
-$payload = Get-Content -LiteralPath $payloadPath -Raw | ConvertFrom-Json
 
 try {
     if (-not (Open-OutlookComposeWindow -Payload $payload -LogPath $logPath)) {
@@ -212,7 +310,12 @@ try {
 
     $emlPath = [string] $payload.emlPath
     if ([string]::IsNullOrWhiteSpace($emlPath)) {
-        $emlPath = Join-Path $exportDir 'rapport-mep.eml'
+        $fallbackDirectory = if ($payload -and -not [string]::IsNullOrWhiteSpace([string] $payload.reportId)) {
+            Join-Path $projectDir ('var\rapport-mep\exports\' + [string] $payload.reportId)
+        } else {
+            Split-Path -Parent $logPath
+        }
+        $emlPath = Join-Path $fallbackDirectory 'rapport-mep.eml'
     }
 
     if (-not (Test-Path -LiteralPath $emlPath)) {

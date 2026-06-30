@@ -15,6 +15,7 @@ final class RapportMepDocumentService
         private Environment $twig,
         private RapportMepService $rapportMepService,
         private string $mailerFrom,
+        private string $appSecret,
     ) {}
 
     public function ensureReportPdf(array $report): array
@@ -102,7 +103,19 @@ final class RapportMepDocumentService
         ];
     }
 
-    public function prepareOutlookLaunch(array $report): array
+    public function prepareOutlookLaunch(array $report, string $payloadUrl): array
+    {
+        $reportId = trim((string) ($report['id'] ?? ''));
+        if ($reportId === '') {
+            throw new \RuntimeException('Identifiant de rapport MEP manquant.');
+        }
+
+        return [
+            'protocolUrl' => 'dashboardoutlook://open?payloadUrl=' . rawurlencode($payloadUrl),
+        ];
+    }
+
+    public function buildOutlookRemotePayload(array $report): array
     {
         $reportId = trim((string) ($report['id'] ?? ''));
         if ($reportId === '') {
@@ -111,36 +124,44 @@ final class RapportMepDocumentService
 
         $draft = $this->buildEmailDraft($report);
         $pdfDocument = $draft['pdf'];
-        $directory = $this->getExportDirectory($reportId);
-        if (!is_dir($directory) && !@mkdir($directory, 0775, true) && !is_dir($directory)) {
-            throw new \RuntimeException('Impossible de preparer le dossier Outlook du rapport MEP.');
+        $pdfContent = '';
+        $pdfPath = (string) ($pdfDocument['path'] ?? '');
+        if ($pdfPath !== '' && is_file($pdfPath)) {
+            $pdfContent = (string) file_get_contents($pdfPath);
         }
 
-        $emlPath = $directory . '/rapport-mep.eml';
-        $payloadPath = $directory . '/outlook-payload.json';
-        file_put_contents($emlPath, (string) ($draft['content'] ?? ''));
-        $payload = [
+        return [
             'reportId' => $reportId,
             'recipients' => $this->rapportMepService->getEmailRecipients($report),
             'subject' => trim((string) ($report['emailSubject'] ?? '')) ?: (string) ($report['title'] ?? 'Rapport MEP'),
             'textBody' => $this->rapportMepService->buildEmailTextBody($report),
             'htmlBody' => $this->rapportMepService->buildEmailHtmlBody($report),
-            'pdfPath' => (string) ($pdfDocument['path'] ?? ''),
             'pdfFileName' => (string) ($pdfDocument['fileName'] ?? ''),
-            'emlPath' => $emlPath,
+            'pdfContentBase64' => $pdfContent !== '' ? base64_encode($pdfContent) : '',
+            'emlFileName' => (string) ($draft['fileName'] ?? ''),
+            'emlContentBase64' => base64_encode((string) ($draft['content'] ?? '')),
             'generatedAt' => date(DATE_ATOM),
         ];
+    }
 
-        file_put_contents(
-            $payloadPath,
-            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-        );
+    public function createOutlookPayloadToken(string $reportId, int $expiresAt): string
+    {
+        return hash_hmac('sha256', $reportId . '|' . $expiresAt, $this->appSecret);
+    }
 
-        return [
-            'protocolUrl' => 'dashboardoutlook://open?report=' . rawurlencode($reportId),
-            'payloadPath' => $payloadPath,
-            'pdf' => $pdfDocument,
-        ];
+    public function isValidOutlookPayloadToken(string $reportId, int $expiresAt, string $token): bool
+    {
+        if ($reportId === '' || $token === '' || $expiresAt <= 0) {
+            return false;
+        }
+
+        if ($expiresAt < (time() - 60)) {
+            return false;
+        }
+
+        $expectedToken = $this->createOutlookPayloadToken($reportId, $expiresAt);
+
+        return hash_equals($expectedToken, $token);
     }
 
     private function shouldRegeneratePdf(array $report, string $pdfPath): bool

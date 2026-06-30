@@ -8,7 +8,7 @@
 
 {% block body %}
     {% set report = selectedReport %}
-    {% set canOpenOutlook = app.request and app.request.host in ['localhost', '127.0.0.1', '::1'] %}
+    {% set canOpenOutlook = outlookProtocolUrl is not empty %}
     <div class="rmep-page">
         <section class="rmep-hero">
             <div>
@@ -44,6 +44,31 @@
                                 </div>
                             {% endif %}
                         </div>
+
+                        {% if canOpenOutlook and autoOpenOutlook %}
+                            <div class="rmep-outlook-launcher is-pending">
+                                <div class="rmep-outlook-launcher-copy">
+                                    <strong>Outlook</strong>
+                                    <p>Le rapport est enregistre. Si rien ne s ouvre, cliquez sur le bouton ci-contre.</p>
+                                </div>
+
+                                <div class="rmep-actions">
+                                    <a
+                                        id="rmep-outlook-launch-link"
+                                        href="{{ outlookProtocolUrl }}"
+                                        class="rmep-button rmep-button-primary"
+                                    >
+                                        Ouvrir Outlook
+                                    </a>
+                                    <a
+                                        href="{{ path('app_rapport_mep_mail_draft_download', { reportId: report.id }) }}"
+                                        class="rmep-button rmep-button-secondary"
+                                    >
+                                        Telecharger le brouillon EML
+                                    </a>
+                                </div>
+                            </div>
+                        {% endif %}
 
                         <form method="post" enctype="multipart/form-data" class="rmep-form-grid">
                             <input type="hidden" name="_token" value="{{ csrf_token('rapport_mep_form') }}">
@@ -117,22 +142,14 @@
 
                             <div class="rmep-actions rmep-field-full">
                                 <button type="submit" name="action" value="save" class="rmep-button rmep-button-primary">Enregistrer</button>
-                                {% if canOpenOutlook and outlookProtocolUrl %}
-                                    <a
-                                        id="rmep-outlook-launch-link"
-                                        href="{{ outlookProtocolUrl }}"
-                                        class="rmep-button rmep-button-primary"
-                                    >
-                                        Ouvrir dans Outlook
-                                    </a>
+                                <button type="submit" name="action" value="open_outlook" class="rmep-button rmep-button-primary">Ouvrir dans Outlook</button>
+                                {% if canOpenOutlook %}
                                     <a
                                         href="{{ path('app_rapport_mep_mail_draft_download', { reportId: report.id }) }}"
                                         class="rmep-button rmep-button-secondary"
                                     >
                                         Telecharger le brouillon EML
                                     </a>
-                                {% else %}
-                                    <button type="submit" name="action" value="open_outlook" class="rmep-button rmep-button-primary">Ouvrir dans Outlook</button>
                                 {% endif %}
                             </div>
                         </form>
@@ -302,6 +319,25 @@
 
             fileInput.addEventListener('change', syncImportButton);
             syncImportButton();
+        })();
+
+        (function initRapportMepOutlookAutoOpen() {
+            const shouldAutoOpen = {{ autoOpenOutlook and canOpenOutlook ? 'true' : 'false' }};
+            const protocolUrl = {{ outlookProtocolUrl ? outlookProtocolUrl|json_encode|raw : '""' }};
+
+            if (!shouldAutoOpen || !protocolUrl) {
+                return;
+            }
+
+            window.setTimeout(function () {
+                window.location.href = protocolUrl;
+
+                if (window.history && typeof window.history.replaceState === 'function') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('openOutlook');
+                    window.history.replaceState({}, document.title, url.toString());
+                }
+            }, 120);
         })();
     </script>
 {% endblock %}

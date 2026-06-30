@@ -12,6 +12,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 
@@ -195,7 +196,8 @@ final class RapportMepController extends AbstractController
         $outlookProtocolUrl = '';
         if (is_array($selectedReport)) {
             try {
-                $outlookLaunch = $this->rapportMepDocumentService->prepareOutlookLaunch($selectedReport);
+                $outlookPayloadUrl = $this->buildOutlookPayloadUrl($selectedReport);
+                $outlookLaunch = $this->rapportMepDocumentService->prepareOutlookLaunch($selectedReport, $outlookPayloadUrl);
                 $outlookProtocolUrl = (string) ($outlookLaunch['protocolUrl'] ?? '');
             } catch (\Throwable $exception) {
                 $this->addFlash('danger', $exception->getMessage());
@@ -222,6 +224,23 @@ final class RapportMepController extends AbstractController
         }
 
         return $report;
+    }
+
+    private function buildOutlookPayloadUrl(array $report): string
+    {
+        $reportId = trim((string) ($report['id'] ?? ''));
+        if ($reportId === '') {
+            throw new \RuntimeException('Identifiant de rapport MEP manquant.');
+        }
+
+        $expiresAt = time() + 900;
+        $token = $this->rapportMepDocumentService->createOutlookPayloadToken($reportId, $expiresAt);
+
+        return $this->generateUrl('app_rapport_mep_outlook_payload', [
+            'reportId' => $reportId,
+            'expires' => $expiresAt,
+            'token' => $token,
+        ], UrlGeneratorInterface::ABSOLUTE_URL);
     }
 
     private function getRequiredUser(): Utilisateur

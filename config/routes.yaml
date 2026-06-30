@@ -9,3 +9,8 @@
 
 controllers:
     resource: routing.controllers
+
+app_rapport_mep_outlook_payload:
+    path: /rapport-mep/{reportId}/outlook-payload
+    controller: App\Controller\RapportMepOutlookPayloadController
+    methods: GET
